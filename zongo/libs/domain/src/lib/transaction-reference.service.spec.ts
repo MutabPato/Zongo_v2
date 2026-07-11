@@ -13,4 +13,18 @@ describe('TransactionReferenceService', () => {
     expect(first).not.toContain('KE');
     expect(first).not.toContain('UG');
   });
+
+  it('is lexically ordered by creation time and has no corridor input', () => {
+    jest
+      .spyOn(Date, 'now')
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(2_000);
+    const service = new TransactionReferenceService();
+
+    const first = service.generate();
+    const second = service.generate();
+
+    expect(first.localeCompare(second)).toBeLessThan(0);
+    jest.restoreAllMocks();
+  });
 });

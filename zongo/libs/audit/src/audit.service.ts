@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@app/db';
-import { AuditEvent } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import { type AuditLogPort, type NewAuditEvent } from '@app/domain';
 
 @Injectable()
-export class AuditService {
+export class AuditService implements AuditLogPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  async append(event: AuditEvent): Promise<void> {
+  async append(event: NewAuditEvent): Promise<void> {
     await this.prisma.auditEvent.create({
       data: {
         id: event.id,

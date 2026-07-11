@@ -6,6 +6,7 @@ import { AuditModule } from '@app/audit';
 import { DbModule } from '@app/db';
 import { DomainModule } from '@app/domain';
 import { PartnerModule } from '@app/partner';
+import { WorkerJobProcessor } from './worker-job.processor';
 
 @Module({
   imports: [
@@ -16,6 +17,6 @@ import { PartnerModule } from '@app/partner';
     DbModule,
   ],
   controllers: [WorkerController],
-  providers: [WorkerService],
+  providers: [WorkerService, WorkerJobProcessor],
 })
 export class WorkerModule {}

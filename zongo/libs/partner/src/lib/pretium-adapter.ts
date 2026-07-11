@@ -13,3 +13,10 @@ export interface PretiumClient {
     beneficiaryId: string;
   }): Promise<{ partnerReference: string }>;
 }
+
+export const PRETIUM_CLIENT = Symbol('PRETIUM_CLIENT');
+
+export const unavailablePretiumClient: PretiumClient = {
+  collect: () => Promise.reject(new Error('Pretium client is not configured')),
+  payout: () => Promise.reject(new Error('Pretium client is not configured')),
+};

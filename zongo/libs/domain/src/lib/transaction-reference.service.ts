@@ -6,7 +6,7 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789';
 @Injectable()
 export class TransactionReferenceService {
   generate(): string {
-    const timePart = Date.now().toString(36).toUpperCase();
+    const timePart = Date.now().toString(36).toUpperCase().padStart(10, '0');
     const randomPart = Array.from(
       { length: 8 },
       () => ALPHABET[randomInt(ALPHABET.length)],

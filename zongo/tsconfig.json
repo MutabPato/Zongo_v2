@@ -23,36 +23,18 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "paths": {
-      "@app/audit": [
-        "libs/audit/src"
-      ],
-      "@app/audit/*": [
-        "libs/audit/src/*"
-      ],
-      "@app/config": [
-        "libs/config/src"
-      ],
-      "@app/config/*": [
-        "libs/config/src/*"
-      ],
-      "@app/db": [
-        "libs/db/src"
-      ],
-      "@app/db/*": [
-        "libs/db/src/*"
-      ],
-      "@app/domain": [
-        "libs/domain/src"
-      ],
-      "@app/domain/*": [
-        "libs/domain/src/*"
-      ],
-      "@app/partner": [
-        "libs/partner/src"
-      ],
-      "@app/partner/*": [
-        "libs/partner/src/*"
-      ]
+      "@app/audit": ["libs/audit/src"],
+      "@app/audit/*": ["libs/audit/src/*"],
+      "@app/config": ["libs/config/src"],
+      "@app/config/*": ["libs/config/src/*"],
+      "@app/db": ["libs/db/src"],
+      "@app/db/*": ["libs/db/src/*"],
+      "@app/domain": ["libs/domain/src"],
+      "@app/domain/*": ["libs/domain/src/*"],
+      "@app/partner": ["libs/partner/src"],
+      "@app/partner/*": ["libs/partner/src/*"],
+      "@app/profile": ["libs/profile/src"],
+      "@app/profile/*": ["libs/profile/src/*"]
     }
   }
 }

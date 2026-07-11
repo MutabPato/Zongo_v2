@@ -48,6 +48,25 @@ enum JobStatus {
   FAILED
 }
 
+enum KycTier {
+  TIER_0
+  TIER_1
+  TIER_2
+}
+
+enum VerificationStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum ContactChannel {
+  WHATSAPP
+  SMS
+  EMAIL
+  MOBILE_APP
+}
+
 model Corridor {
   id String @id @default(cuid())
   code String @unique
@@ -190,4 +209,113 @@ model ProcessedJob {
   processedAt DateTime @default(now())
 
   @@unique([transactionReference, jobType])
+}
+
+/// Durable, channel-agnostic sender identity. Email remains optional for WhatsApp onboarding.
+model SenderProfile {
+  id String @id @default(cuid())
+  userId String @unique
+  legalName String?
+  email String? @unique
+  senderPhoneNumber String? @unique
+  whatsappPhoneNumber String
+  backupPhoneNumber String?
+  tier KycTier @default(TIER_0)
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verificationHistory SenderVerification[]
+  phoneReplacementHistory SenderPhoneReplacement[]
+  contactPreferences ContactPreference?
+  channelMigrations ChannelMigration[]
+  tierLimitOverride SenderTierLimitOverride?
+
+  @@index([senderPhoneNumber])
+  @@index([tier, createdAt])
+}
+
+/// Smile ID outcomes are immutable facts; the latest successful one may promote the profile.
+model SenderVerification {
+  id String @id @default(cuid())
+  senderProfileId String
+  provider String @default("SMILE_ID")
+  providerReference String @unique
+  status VerificationStatus
+  verifiedPhoneNumber String?
+  failureReason String?
+  completedAt DateTime?
+  createdAt DateTime @default(now())
+
+  senderProfile SenderProfile @relation(fields: [senderProfileId], references: [id], onDelete: Restrict)
+
+  @@index([senderProfileId, createdAt])
+  @@index([status, createdAt])
+}
+
+model SenderPhoneReplacement {
+  id String @id @default(cuid())
+  senderProfileId String
+  previousPhoneNumber String
+  replacementPhoneNumber String
+  verificationId String @unique
+  replacedAt DateTime @default(now())
+
+  senderProfile SenderProfile @relation(fields: [senderProfileId], references: [id], onDelete: Restrict)
+
+  @@index([senderProfileId, replacedAt])
+}
+
+/// Global defaults are intentionally simple rows, suitable for an AdminJS resource.
+model TierLimitPolicy {
+  id String @id @default(cuid())
+  tier KycTier @unique
+  perTransferLimitMinor BigInt
+  dailyLimitMinor BigInt
+  updatedByAdminId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Rare support/admin exception for a single sender; null means use global policy.
+model SenderTierLimitOverride {
+  id String @id @default(cuid())
+  senderProfileId String @unique
+  perTransferLimitMinor BigInt?
+  dailyLimitMinor BigInt?
+  reason String
+  updatedByAdminId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  senderProfile SenderProfile @relation(fields: [senderProfileId], references: [id], onDelete: Restrict)
+}
+
+model ContactPreference {
+  id String @id @default(cuid())
+  senderProfileId String @unique
+  preferredChannel ContactChannel @default(WHATSAPP)
+  preferredLanguage String @default("en")
+  notificationsOptedIn Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  senderProfile SenderProfile @relation(fields: [senderProfileId], references: [id], onDelete: Restrict)
+}
+
+/// Explicit record of a profile's migration to a future channel without changing identity shape.
+model ChannelMigration {
+  id String @id @default(cuid())
+  senderProfileId String
+  fromChannel ContactChannel @default(WHATSAPP)
+  toChannel ContactChannel
+  status String @default("PENDING")
+  externalReference String?
+  migratedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  senderProfile SenderProfile @relation(fields: [senderProfileId], references: [id], onDelete: Restrict)
+
+  @@index([senderProfileId, createdAt])
 }

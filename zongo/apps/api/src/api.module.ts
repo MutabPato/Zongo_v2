@@ -6,12 +6,14 @@ import { AuditModule } from '@app/audit';
 import { DbModule } from '@app/db';
 import { DomainModule } from '@app/domain';
 import { PartnerModule } from '@app/partner';
+import { ProfileModule } from '@app/profile';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     DomainModule,
     PartnerModule,
+    ProfileModule,
     AuditModule,
     DbModule,
   ],

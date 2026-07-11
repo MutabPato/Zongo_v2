@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/zongo/src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "webpack": true,
+    "tsConfigPath": "apps/zongo/tsconfig.app.json"
+  },
+  "monorepo": true,
+  "root": "apps/zongo",
+  "projects": {
+    "admin": {
+      "type": "application",
+      "root": "apps/admin",
+      "entryFile": "main",
+      "sourceRoot": "apps/admin/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/admin/tsconfig.app.json"
+      }
+    },
+    "api": {
+      "type": "application",
+      "root": "apps/api",
+      "entryFile": "main",
+      "sourceRoot": "apps/api/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/api/tsconfig.app.json"
+      }
+    },
+    "audit": {
+      "type": "library",
+      "root": "libs/audit",
+      "entryFile": "index",
+      "sourceRoot": "libs/audit/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/audit/tsconfig.lib.json"
+      }
+    },
+    "config": {
+      "type": "library",
+      "root": "libs/config",
+      "entryFile": "index",
+      "sourceRoot": "libs/config/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/config/tsconfig.lib.json"
+      }
+    },
+    "db": {
+      "type": "library",
+      "root": "libs/db",
+      "entryFile": "index",
+      "sourceRoot": "libs/db/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/db/tsconfig.lib.json"
+      }
+    },
+    "domain": {
+      "type": "library",
+      "root": "libs/domain",
+      "entryFile": "index",
+      "sourceRoot": "libs/domain/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/domain/tsconfig.lib.json"
+      }
+    },
+    "partner": {
+      "type": "library",
+      "root": "libs/partner",
+      "entryFile": "index",
+      "sourceRoot": "libs/partner/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/partner/tsconfig.lib.json"
+      }
+    },
+    "worker": {
+      "type": "application",
+      "root": "apps/worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/worker/tsconfig.app.json"
+      }
+    },
+    "zongo": {
+      "type": "application",
+      "root": "apps/zongo",
+      "entryFile": "main",
+      "sourceRoot": "apps/zongo/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/zongo/tsconfig.app.json"
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+services:
+  postgress:
+    image: postgres:16
+    container_name: zongo-postgres
+    environment:
+      POSTGRES_USER: zongo
+      POSTGRES_PASSWORD: zongo
+      POSTGRES_DB: zongo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: zongo-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

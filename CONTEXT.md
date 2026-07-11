@@ -1,0 +1,123 @@
+# Context
+
+## Terms
+
+- Technology orchestrator: a software platform that captures transfer intent and coordinates licensed financial partners to execute collection and payout. It is not the regulated money transmitter of record.
+- Licensed partner: a regulated financial institution or aggregator that executes the actual movement of funds.
+- DRC to Kenya corridor: the initial remittance corridor for the product, with send-side amounts denominated in USD or CDF and payout settled in KES.
+- Pretium partner layer: Pretium is the single integration partner used by the MVP to handle both collection and payout.
+- Fiat-only user experience: users see only fiat amounts and transfer outcomes; stablecoin or internal rail details are hidden from the customer flow.
+- Verified sender identity: a user must complete verification and link it to a specific sender phone number before initiating transfers.
+- Sender phone replacement: a verified user may replace their linked sender phone number only through a controlled re-verification flow.
+- Beneficiary: a saved recipient that a user can reuse across multiple transfers.
+- Beneficiary versioning: changes to payout details create a new beneficiary record; existing beneficiary records remain unchanged.
+- Transaction lifecycle: `INITIATED`, `PENDING_COLLECTION`, `COLLECTION_SUCCESS`, `COLLECTION_FAILED`, `PENDING_PAYOUT`, `PAYOUT_SUCCESS`, `PAYOUT_FAILED`.
+- Payout recovery: the MVP uses manual retry only and does not include an automatic refund flow.
+- Retry model: payout retries happen on the same transaction record.
+- Retry target: a payout retry keeps the original failed beneficiary on record and attaches the corrected beneficiary as the retry target.
+- WhatsApp interface: WhatsApp is the customer interface only; canonical transaction identity is internal.
+- Session policy: a WhatsApp chat may have exactly one active transfer at a time.
+- Concurrent transfer handling: if a second transfer is started while one is active, the bot blocks it and asks the user to finish or cancel the active transfer first.
+- Session timeout: an unresolved active transfer can automatically free the WhatsApp session after a fixed timeout.
+- Session timeout window: the fixed timeout is 15 minutes.
+- Session timeout check: before freeing the session, the bot re-checks partner status.
+- Waiting state: if the timeout re-check is still ambiguous, the session switches to a waiting state and the user may continue later.
+- Waiting state restriction: while waiting, the user can only check the status of the existing transfer.
+- Waiting state resolution: if the transfer resolves while waiting, the bot proactively notifies the user.
+- Notification failures are separate from transfer state.
+- Notification retries are automatic.
+- Notification retry cap: automatic notification retries are capped at 3 attempts.
+- Notification retries use backoff.
+- Notification backoff is exponential.
+- Collection timeout: if the user does not complete the collection prompt in time, the transaction becomes `COLLECTION_FAILED`.
+- Late collection success after timeout is rejected as too late.
+- Late collection webhooks are logged for audit only and do not change transaction state.
+- Payout timeout: if payout does not complete in time, the transaction becomes `PAYOUT_FAILED`.
+- Late payout success after timeout is logged for audit only and does not change transaction state.
+- Collection and payout share the same 15-minute timeout.
+- Payout retries are manual only.
+- Deferred implementations: bill payments, KE -> DRC, DRC -> UG, and UG -> DRC are out of MVP scope.
+- KYC tiering: `TIER_0` means account created with no transfers allowed; `TIER_1` means verified sender identity allowed to send within MVP limits; `TIER_2` is deferred for later when higher limits or enhanced due diligence are needed.
+- Pretium role: Pretium is the single compliance and rail abstraction layer for the MVP.
+- Backend architecture: the MVP uses an asynchronous, event-driven backend.
+- Runtime: the MVP backend is built in TypeScript/Node.js.
+- HTTP framework: the MVP backend uses Fastify.
+- Service shape: the backend is split into separate API and worker services.
+- Persistence: Postgres stores durable state; Redis handles queueing and short-lived orchestration state.
+- API surface: the MVP exposes a minimal REST API in addition to WhatsApp webhooks.
+- Transfer initiation: transfer creation is WhatsApp-only.
+- Minimal REST API: health checks, transaction status lookup, beneficiary lookup/listing for support or admin use, and internal ops actions such as manual retry or status recheck.
+- Minimal REST API access: internal/admin-only.
+- Admin API authentication: simple bearer-token authentication for MVP.
+- Admin API token model: one shared admin token for the MVP.
+- WhatsApp webhook verification: Meta signature verification only for MVP.
+- Audit retention: retain webhook payloads and transaction audit records long enough for ops and reconciliation; no hard purge policy is defined in MVP.
+- Secrets management: use environment variables in local/dev and a proper secrets manager in deployment.
+- Repository shape: the rebuilt system uses a monorepo.
+- Architecture style: the rebuilt system uses a pragmatic modular architecture with clean boundaries where they matter.
+- Infrastructure: GCP is the primary cloud.
+- Reconciliation: operational monitoring of transaction and ledger consistency.
+- Ledger: the financial record of entries and balances.
+- Compute: GCE is the preferred primary compute layer.
+- Deployment shape: the API and worker run as different Docker containers on the same GCE VM.
+- Observability baseline: structured logs, metrics, and alerting are required from day one.
+- Observability stack: start with GCP-native tooling and move to open source if cost becomes too high.
+- Security posture: defense in depth, but pragmatic.
+- IAM: separate service accounts for API, worker, and admin operations; least privilege; no shared credentials between services.
+- Environments: dev, staging, and prod are separated.
+- Secrets: use environment variables locally and managed secrets in deployment.
+- Data handling: sensitive data is minimized and segmented where practical.
+- KYC provider: Smile ID is the KYC verification provider.
+- Future-channel-ready user profile: store the minimum durable profile needed to contact the user and migrate them later, plus verification history and contact preferences, including legal name, KYC status, linked phone number, WhatsApp number, backup phone, optional email, verification timestamps, provider reference IDs, change history, preferred channel, language, and notification opt-in.
+- Email is optional at onboarding.
+- Migration path: user migration to future channels is modeled explicitly in the domain model.
+- Scaling strategy: the platform expands corridor by corridor with strong abstraction boundaries.
+- Corridor: a first-class domain concept in the core model.
+- Corridor-specific rules such as KYC thresholds and payout methods live in separate policy objects.
+- Partner integrations are isolated behind adapters with a stable interface.
+- Partner-specific errors are normalized into domain errors inside the adapter.
+- MVP persistence stores transaction state changes only; it does not use domain events as the primary model.
+- The MVP keeps a separate append-only audit log.
+- The audit log includes both business actions and technical events.
+- The audit trail is a single typed append-only table.
+- The data layer is designed for partitioning and archival from day one, but those mechanisms are implemented only when needed.
+- The system uses single-region Postgres for now, but the schema and model do not block future sharding.
+- Queue processing is designed for horizontal worker scaling from day one.
+- Worker jobs are idempotent by design.
+- Worker deduplication uses internal transaction reference plus job type.
+- Internal transaction references are human-readable, unique, monotonic enough for support, and not guessable.
+- Internal transaction references stay opaque and do not encode corridor identity.
+- Admin panel: the ops/support control plane excludes configuration controls in the MVP.
+- Admin panel implementation preference: use a secure open-source tool if it can cleanly cover the required ops workflows.
+- Admin panel customization strategy: build a thin custom layer around the chosen open-source tool.
+- Admin panel foundation: use an internal admin tool / back-office platform.
+- Admin panel deployment: fully self-hosted.
+- Admin authentication: self-hosted identity with strong role-based access control.
+- Admin authentication includes MFA from day one.
+- Admin MFA: TOTP as the minimum, with hardware keys for privileged roles where practical.
+- Admin ledger/reconciliation view shows transaction state, ledger entries, audit trail, and reconciliation status side by side.
+- Admin reconciliation view: manual notes only in MVP; no reconciliation state mutations from the UI.
+- Admin actions in MVP: manual retry, status recheck, user block/unblock, beneficiary review, and note taking on transactions and reconciliation items.
+- Admin actions are role-limited.
+- Admin auth uses a simple role split.
+- Admin roles are `support`, `ops`, and `admin`.
+- `admin` is the highest privilege role for MVP.
+- Admin tool and backend share the same identity store.
+- Deployment layer: Coolify runs on top of GCE.
+- Coolify handles app deployment, secrets injection, health checks, and rollbacks.
+- Coolify auto-rolls back on failed health checks.
+- Health checks include readiness and dependency checks, not just liveness.
+- Logs and metrics are centralized in GCP initially, with alerts on transaction and reconciliation anomalies.
+- Alerts cover both failures and slow drift signals.
+- Warnings go to Slack/email; pages are reserved for urgent operational failures.
+- Sensitive fields use application-level encryption plus storage encryption at rest.
+- Encryption keys are managed in restricted storage with a rotation policy.
+- Keys are separated per data class where practical.
+- Backups cover Postgres, audit logs, and critical configuration, with regular restore testing.
+- RPO/RTO targets are deferred to the runbook.
+- Every privileged admin action is audited.
+- Audit records are immutable.
+- Privileged actions are tied to the actor, role, timestamp, and target object.
+- Sensitive admin actions trigger alerts.
+- Emergency access is minimized and logged.
+- Emergency access uses a minimal break-glass path that is heavily logged and rarely used.

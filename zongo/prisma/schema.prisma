@@ -1,0 +1,191 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CurrencyCode {
+  USD
+  CDF
+  KES
+  UGX
+}
+
+enum TransactionStatus {
+  INITIATED
+  PENDING_COLLECTION
+  COLLECTION_SUCCESS
+  COLLECTION_FAILED
+  PENDING_PAYOUT
+  PAYOUT_SUCCESS
+  PAYOUT_FAILED
+}
+
+enum AuditEventType {
+  BUSINESS
+  TECHNICAL
+}
+
+enum JobType {
+  COLLECTION
+  PAYOUT
+  STATUS_RECHECK
+  NOTIFICATION
+  RETRY
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model Corridor {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  policies CorridorPolicy[]
+  beneficiaries Beneficiary[]
+  transactions TransferTransaction[]
+  auditEvents AuditEvent[]
+
+  @@index([isActive, code])
+}
+
+model CorridorPolicy {
+  id String @id @default(cuid()) 
+  corridorId String
+  version Int 
+  isActive Boolean @default(true)
+  sendCurrency CurrencyCode
+  payoutCurrency CurrencyCode
+  collectionTimeoutMinutes Int @default(15)
+  payoutTimeoutMinutes Int @default(15)
+  minSendAmountMinor BigInt?
+  maxSendAmountMinor BigInt?
+  rules Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict)
+
+  @@unique([corridorId, version])
+  @@index([corridorId, isActive])
+}
+
+model Beneficiary {
+  id String @id @default(cuid())
+  corridorId String
+  userId String
+  displayName String
+  payoutCountryCode String
+  payoutCurrency CurrencyCode
+  phoneNumber String
+  payoutAccount Json?
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict)
+  transactions TransferTransaction[] @relation("BeneficiaryTransactions")
+
+  @@index([userId, corridorId])
+  @@index([corridorId, phoneNumber])
+}
+
+model TransferTransaction {
+  id String @id @default(cuid())
+  reference String @unique
+  corridorId String
+  senderUserId String
+  beneficiaryId String?
+  status TransactionStatus @default(INITIATED)
+  region String?
+  partitionKey String?
+  sendAmountMinor BigInt
+  sendCurrency CurrencyCode
+  payoutAmountMinor BigInt?
+  payoutCurrency CurrencyCode?
+  partnerReference String?
+  idempotencyKey String @unique
+  activeJobKey String?
+  collectionRequestAt DateTime?
+  collectionCompletedAt DateTime?
+  payoutRequestedAt DateTime?
+  payoutCompletedAt DateTime?
+  failedReason String?
+  metadata Json?
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict)
+  beneficiary Beneficiary? @relation("BeneficiaryTransactions", fields: [beneficiaryId], references: [id], onDelete: SetNull)
+  auditEvents AuditEvent[]
+  workerJobs WorkerJob[]
+
+  @@index([corridorId, createdAt])
+  @@index([senderUserId, status])
+  @@index([status, updatedAt])
+}
+
+model AuditEvent {
+  id String @id @default(cuid())
+  eventType AuditEventType
+  name String
+  actorType String?
+  actorId String?
+  corridorId String?
+  transactionId String?
+  payload Json
+  createdAt DateTime @default(now())
+
+  corridor Corridor? @relation(fields: [corridorId], references: [id], onDelete: SetNull)
+  transaction TransferTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([transactionId, createdAt])
+  @@index([corridorId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model WorkerJob {
+  id String @id @default(cuid())
+  dedupKey String @unique
+  jobType JobType
+  transactionReference String
+  transactionId String?
+  status JobStatus @default(PENDING)
+  payload Json
+  attempts Int @default(0)
+  lockedAt DateTime?
+  processedAt DateTime?
+  lastError String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction TransferTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([transactionReference, jobType])
+  @@index([status, createdAt])
+}
+
+model ProcessedJob {
+  id String @id @default(cuid())
+  transactionReference String
+  jobType String
+  processedAt DateTime @default(now())
+
+  @@unique([transactionReference, jobType])
+}

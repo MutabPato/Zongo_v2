@@ -90,7 +90,8 @@
       "^@app/db(|/.*)$": "<rootDir>/libs/db/src/$1",
       "^@app/domain(|/.*)$": "<rootDir>/libs/domain/src/$1",
       "^@app/partner(|/.*)$": "<rootDir>/libs/partner/src/$1",
-      "^@app/profile(|/.*)$": "<rootDir>/libs/profile/src/$1"
+      "^@app/profile(|/.*)$": "<rootDir>/libs/profile/src/$1",
+      "^@app/beneficiary(|/.*)$": "<rootDir>/libs/beneficiary/src/$1"
     }
   }
 }

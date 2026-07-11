@@ -106,6 +106,7 @@ model CorridorPolicy {
 
 model Beneficiary {
   id String @id @default(cuid())
+  familyId String @default(cuid())
   corridorId String
   userId String
   displayName String
@@ -114,14 +115,21 @@ model Beneficiary {
   phoneNumber String
   payoutAccount Json?
   version Int @default(1)
+  supersedesId String?
+  isCurrent Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict)
   transactions TransferTransaction[] @relation("BeneficiaryTransactions")
+  retryTransactions TransferTransaction[] @relation("RetryBeneficiaryTransactions")
+  supersedes Beneficiary? @relation("BeneficiaryVersions", fields: [supersedesId], references: [id], onDelete: Restrict)
+  revisions Beneficiary[] @relation("BeneficiaryVersions")
 
   @@index([userId, corridorId])
   @@index([corridorId, phoneNumber])
+  @@index([userId, corridorId, isCurrent])
+  @@unique([familyId, version])
 }
 
 model TransferTransaction {
@@ -130,6 +138,7 @@ model TransferTransaction {
   corridorId String
   senderUserId String
   beneficiaryId String?
+  retryBeneficiaryId String?
   status TransactionStatus @default(INITIATED)
   region String?
   partitionKey String?
@@ -152,6 +161,7 @@ model TransferTransaction {
 
   corridor Corridor @relation(fields: [corridorId], references: [id], onDelete: Restrict)
   beneficiary Beneficiary? @relation("BeneficiaryTransactions", fields: [beneficiaryId], references: [id], onDelete: SetNull)
+  retryBeneficiary Beneficiary? @relation("RetryBeneficiaryTransactions", fields: [retryBeneficiaryId], references: [id], onDelete: SetNull)
   auditEvents AuditEvent[]
   workerJobs WorkerJob[]
 

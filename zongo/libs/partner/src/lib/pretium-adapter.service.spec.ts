@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { PretiumPartnerAdapter } from './pretium-adapter.service';
 import type { PretiumClient } from './pretium-adapter';
 
@@ -12,7 +13,7 @@ describe('PretiumPartnerAdapter', () => {
     await expect(
       adapter.collect({
         reference: 'tx_1',
-        amount: 100,
+        amountMinor: 100n,
         currency: 'USD',
         beneficiaryId: 'ben_1',
       }),
@@ -39,14 +40,16 @@ describe('PretiumPartnerAdapter', () => {
     await expect(
       adapter.collect({
         reference: 'tx_1',
-        amount: 100,
+        amountMinor: 100n,
         currency: 'USD',
         beneficiaryId: 'ben_1',
       }),
     ).resolves.toEqual({
       success: false,
-      errorCode: 'PARTNER_UNKNOWN',
-      errorMessage: 'Gateway timeout',
+      error: expect.objectContaining({
+        code: 'PARTNER_TEMPORARY_FAILURE',
+        retryable: true,
+      }),
     });
   });
 
@@ -60,14 +63,16 @@ describe('PretiumPartnerAdapter', () => {
     await expect(
       adapter.payout({
         reference: 'tx_2',
-        amount: 250,
+        amountMinor: 250n,
         currency: 'KES',
         beneficiaryId: 'ben_2',
       }),
     ).resolves.toEqual({
       success: false,
-      errorCode: 'PARTNER_UNKNOWN',
-      errorMessage: 'Unknown partner error',
+      error: expect.objectContaining({
+        code: 'PARTNER_REQUEST_FAILED',
+        retryable: false,
+      }),
     });
   });
 });

@@ -170,6 +170,7 @@ model WorkerJob {
   payload Json
   attempts Int @default(0)
   lockedAt DateTime?
+  leaseExpiresAt DateTime?
   processedAt DateTime?
   lastError String?
   createdAt DateTime @default(now())
@@ -179,6 +180,7 @@ model WorkerJob {
 
   @@index([transactionReference, jobType])
   @@index([status, createdAt])
+  @@index([status, leaseExpiresAt])
 }
 
 model ProcessedJob {

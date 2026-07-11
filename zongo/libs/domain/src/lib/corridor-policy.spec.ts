@@ -1,4 +1,5 @@
 import type { Corridor } from './corridor';
+import type { CorridorPolicy } from './corridor-policy';
 
 describe('Corridor policy', () => {
   it('is independent from the corridor entity', () => {
@@ -9,10 +10,10 @@ describe('Corridor policy', () => {
       active: true,
     };
 
-    const policy = {
+    const policy: CorridorPolicy = {
       corridorCode: 'DRC-KE',
       maxAmount: 1000,
-      supportCollection: true,
+      supportsCollection: true,
       supportsPayout: false,
       requiresManualReview: true,
     };
@@ -22,5 +23,9 @@ describe('Corridor policy', () => {
     expect(policy.corridorCode).toBe(corridor.code);
     expect(corridor).not.toHaveProperty('maxAmount');
     expect(corridor).not.toHaveProperty('supportsPayout');
+
+    const changedPolicy: CorridorPolicy = { ...policy, maxAmount: 2_000 };
+    expect(changedPolicy.maxAmount).toBe(2_000);
+    expect(corridor).toEqual(expect.objectContaining({ code: 'DRC-KE' }));
   });
 });

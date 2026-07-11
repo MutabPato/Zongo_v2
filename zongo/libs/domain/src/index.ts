@@ -4,5 +4,7 @@ export * from './lib/corridor';
 export * from './lib/transfer-transaction';
 export * from './lib/beneficiary';
 export * from './lib/domain-error';
+export * from './lib/partner-port';
+export * from './lib/audit-log-port';
 export * from './lib/transaction-reference';
 export * from './lib/transaction-reference.service';

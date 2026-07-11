@@ -7,3 +7,14 @@ export class DomainError extends Error {
     this.name = 'DomainError';
   }
 }
+
+export class PartnerError extends DomainError {
+  constructor(
+    code: string,
+    message: string,
+    public readonly retryable: boolean,
+  ) {
+    super(`PARTNER_${code}`, message);
+    this.name = 'PartnerError';
+  }
+}

@@ -5,14 +5,22 @@ import {
   PartnerResult,
 } from './partner-port';
 import { normalizePartnerError } from './partner-error';
-import { PretiumClient } from './pretium-adapter';
+import type { PretiumClient } from './pretium-adapter';
+import { Inject, Injectable } from '@nestjs/common';
+import { PRETIUM_CLIENT } from './pretium-adapter';
 
+@Injectable()
 export class PretiumPartnerAdapter implements PartnerPort {
-  constructor(private readonly client: PretiumClient) {}
+  constructor(@Inject(PRETIUM_CLIENT) private readonly client: PretiumClient) {}
 
   async collect(request: PartnerCollectionRequest): Promise<PartnerResult> {
     try {
-      const response = await this.client.collect(request);
+      const response = await this.client.collect({
+        reference: request.reference,
+        amount: Number(request.amountMinor),
+        currency: request.currency,
+        beneficiaryId: request.beneficiaryId,
+      });
       return {
         success: true,
         partnerReference: response.partnerReference,
@@ -24,7 +32,12 @@ export class PretiumPartnerAdapter implements PartnerPort {
 
   async payout(request: PartnerPayoutRequest): Promise<PartnerResult> {
     try {
-      const response = await this.client.payout(request);
+      const response = await this.client.payout({
+        reference: request.reference,
+        amount: Number(request.amountMinor),
+        currency: request.currency,
+        beneficiaryId: request.beneficiaryId,
+      });
       return {
         success: true,
         partnerReference: response.partnerReference,
@@ -35,14 +48,9 @@ export class PretiumPartnerAdapter implements PartnerPort {
   }
 
   private fail(error: unknown): PartnerResult {
-    const message =
-      error instanceof Error ? error.message : 'Unknown partner error';
-    const normalized = normalizePartnerError('UNKNOWN', message);
-
     return {
       success: false,
-      errorCode: normalized.code,
-      errorMessage: normalized.message,
+      error: normalizePartnerError(error),
     };
   }
 }

@@ -82,6 +82,15 @@
         "tsConfigPath": "libs/profile/tsconfig.lib.json"
       }
     },
+    "beneficiary": {
+      "type": "library",
+      "root": "libs/beneficiary",
+      "entryFile": "index",
+      "sourceRoot": "libs/beneficiary/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/beneficiary/tsconfig.lib.json"
+      }
+    },
     "worker": {
       "type": "application",
       "root": "apps/worker",

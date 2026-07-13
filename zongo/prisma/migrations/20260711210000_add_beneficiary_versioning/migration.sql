@@ -1,0 +1,10 @@
+ALTER TABLE "Beneficiary" ADD COLUMN "familyId" TEXT;
+UPDATE "Beneficiary" SET "familyId" = "id" WHERE "familyId" IS NULL;
+ALTER TABLE "Beneficiary" ALTER COLUMN "familyId" SET NOT NULL;
+ALTER TABLE "Beneficiary" ADD COLUMN "supersedesId" TEXT;
+ALTER TABLE "Beneficiary" ADD COLUMN "isCurrent" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "TransferTransaction" ADD COLUMN "retryBeneficiaryId" TEXT;
+CREATE UNIQUE INDEX "Beneficiary_familyId_version_key" ON "Beneficiary"("familyId", "version");
+CREATE INDEX "Beneficiary_userId_corridorId_isCurrent_idx" ON "Beneficiary"("userId", "corridorId", "isCurrent");
+ALTER TABLE "Beneficiary" ADD CONSTRAINT "Beneficiary_supersedesId_fkey" FOREIGN KEY ("supersedesId") REFERENCES "Beneficiary"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TransferTransaction" ADD CONSTRAINT "TransferTransaction_retryBeneficiaryId_fkey" FOREIGN KEY ("retryBeneficiaryId") REFERENCES "Beneficiary"("id") ON DELETE SET NULL ON UPDATE CASCADE;

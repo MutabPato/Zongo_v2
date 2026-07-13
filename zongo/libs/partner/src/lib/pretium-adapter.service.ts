@@ -47,6 +47,12 @@ export class PretiumPartnerAdapter implements PartnerPort {
     }
   }
 
+  async getTransferStatus(
+    reference: string,
+  ): Promise<'RESOLVED' | 'AMBIGUOUS'> {
+    return this.client.getTransferStatus(reference);
+  }
+
   private fail(error: unknown): PartnerResult {
     return {
       success: false,

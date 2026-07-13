@@ -23,6 +23,7 @@ describe('WorkerJobProcessor', () => {
     const partner = {
       collect: jest.fn(),
       payout: jest.fn(),
+      getTransferStatus: jest.fn(),
     } as unknown as PartnerPort;
     const audit = { append: jest.fn() } as unknown as AuditLogPort;
     const prisma = {
@@ -56,6 +57,7 @@ describe('WorkerJobProcessor', () => {
           partnerReference: 'partner_1',
         }),
       payout: jest.fn(),
+      getTransferStatus: jest.fn(),
     };
     const update = jest.fn().mockResolvedValue({});
     const prisma = {

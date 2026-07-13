@@ -91,6 +91,15 @@
         "tsConfigPath": "libs/beneficiary/tsconfig.lib.json"
       }
     },
+    "whatsapp": {
+      "type": "library",
+      "root": "libs/whatsapp",
+      "entryFile": "index",
+      "sourceRoot": "libs/whatsapp/src",
+      "compilerOptions": {
+        "tsConfigPath": "libs/whatsapp/tsconfig.lib.json"
+      }
+    },
     "worker": {
       "type": "application",
       "root": "apps/worker",

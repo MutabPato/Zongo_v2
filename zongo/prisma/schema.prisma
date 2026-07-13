@@ -67,6 +67,18 @@ enum ContactChannel {
   MOBILE_APP
 }
 
+enum TransferInitiationChannel {
+  WHATSAPP
+  API
+  ADMIN
+}
+
+enum WhatsappSessionState {
+  ACTIVE
+  WAITING
+  RELEASED
+}
+
 model Corridor {
   id String @id @default(cuid())
   code String @unique
@@ -137,6 +149,8 @@ model TransferTransaction {
   reference String @unique
   corridorId String
   senderUserId String
+  initiationChannel TransferInitiationChannel @default(WHATSAPP)
+  whatsappChatId String?
   beneficiaryId String?
   retryBeneficiaryId String?
   status TransactionStatus @default(INITIATED)
@@ -164,10 +178,29 @@ model TransferTransaction {
   retryBeneficiary Beneficiary? @relation("RetryBeneficiaryTransactions", fields: [retryBeneficiaryId], references: [id], onDelete: SetNull)
   auditEvents AuditEvent[]
   workerJobs WorkerJob[]
+  whatsappSession WhatsappSession?
 
   @@index([corridorId, createdAt])
   @@index([senderUserId, status])
   @@index([status, updatedAt])
+}
+
+model WhatsappSession {
+  id String @id @default(cuid())
+  chatId String @unique
+  senderUserId String
+  transactionId String @unique
+  state WhatsappSessionState @default(ACTIVE)
+  expiresAt DateTime
+  waitingSince DateTime?
+  releasedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction TransferTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([state, expiresAt])
+  @@index([senderUserId, state])
 }
 
 model AuditEvent {

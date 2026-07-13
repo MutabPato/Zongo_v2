@@ -36,7 +36,9 @@
       "@app/profile": ["libs/profile/src"],
       "@app/profile/*": ["libs/profile/src/*"],
       "@app/beneficiary": ["libs/beneficiary/src"],
-      "@app/beneficiary/*": ["libs/beneficiary/src/*"]
+      "@app/beneficiary/*": ["libs/beneficiary/src/*"],
+      "@app/whatsapp": ["libs/whatsapp/src"],
+      "@app/whatsapp/*": ["libs/whatsapp/src/*"]
     }
   }
 }

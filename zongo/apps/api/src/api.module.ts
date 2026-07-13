@@ -8,6 +8,7 @@ import { DomainModule } from '@app/domain';
 import { PartnerModule } from '@app/partner';
 import { ProfileModule } from '@app/profile';
 import { BeneficiaryModule } from '@app/beneficiary';
+import { LedgerModule } from '@app/ledger';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { BeneficiaryModule } from '@app/beneficiary';
     PartnerModule,
     ProfileModule,
     BeneficiaryModule,
+    LedgerModule,
     AuditModule,
     DbModule,
   ],

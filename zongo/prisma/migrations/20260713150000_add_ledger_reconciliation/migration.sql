@@ -1,0 +1,11 @@
+CREATE TYPE "LedgerAccount" AS ENUM ('CUSTOMER_COLLECTION', 'PARTNER_CLEARING', 'BENEFICIARY_PAYOUT');
+CREATE TYPE "LedgerDirection" AS ENUM ('DEBIT', 'CREDIT');
+CREATE TYPE "ReconciliationStatus" AS ENUM ('PENDING', 'CONSISTENT', 'MISSING_COLLECTION_ENTRY', 'MISSING_PAYOUT_ENTRY', 'MISMATCH');
+CREATE TABLE "LedgerEntry" ("id" TEXT NOT NULL, "transactionId" TEXT NOT NULL, "account" "LedgerAccount" NOT NULL, "direction" "LedgerDirection" NOT NULL, "amountMinor" BIGINT NOT NULL, "currency" "CurrencyCode" NOT NULL, "eventName" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "LedgerEntry_pkey" PRIMARY KEY ("id"));
+CREATE TABLE "TransactionReconciliation" ("id" TEXT NOT NULL, "transactionId" TEXT NOT NULL, "status" "ReconciliationStatus" NOT NULL DEFAULT 'PENDING', "reason" TEXT, "checkedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL, CONSTRAINT "TransactionReconciliation_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "TransactionReconciliation_transactionId_key" ON "TransactionReconciliation"("transactionId");
+CREATE INDEX "LedgerEntry_transactionId_createdAt_idx" ON "LedgerEntry"("transactionId", "createdAt");
+CREATE INDEX "LedgerEntry_account_createdAt_idx" ON "LedgerEntry"("account", "createdAt");
+CREATE INDEX "TransactionReconciliation_status_checkedAt_idx" ON "TransactionReconciliation"("status", "checkedAt");
+ALTER TABLE "LedgerEntry" ADD CONSTRAINT "LedgerEntry_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "TransferTransaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "TransactionReconciliation" ADD CONSTRAINT "TransactionReconciliation_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "TransferTransaction"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

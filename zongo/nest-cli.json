@@ -91,6 +91,13 @@
         "tsConfigPath": "libs/beneficiary/tsconfig.lib.json"
       }
     },
+    "ledger": {
+      "type": "library",
+      "root": "libs/ledger",
+      "entryFile": "index",
+      "sourceRoot": "libs/ledger/src",
+      "compilerOptions": { "tsConfigPath": "libs/ledger/tsconfig.lib.json" }
+    },
     "worker": {
       "type": "application",
       "root": "apps/worker",

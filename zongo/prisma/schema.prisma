@@ -67,6 +67,25 @@ enum ContactChannel {
   MOBILE_APP
 }
 
+enum LedgerAccount {
+  CUSTOMER_COLLECTION
+  PARTNER_CLEARING
+  BENEFICIARY_PAYOUT
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum ReconciliationStatus {
+  PENDING
+  CONSISTENT
+  MISSING_COLLECTION_ENTRY
+  MISSING_PAYOUT_ENTRY
+  MISMATCH
+}
+
 model Corridor {
   id String @id @default(cuid())
   code String @unique
@@ -164,10 +183,42 @@ model TransferTransaction {
   retryBeneficiary Beneficiary? @relation("RetryBeneficiaryTransactions", fields: [retryBeneficiaryId], references: [id], onDelete: SetNull)
   auditEvents AuditEvent[]
   workerJobs WorkerJob[]
+  ledgerEntries LedgerEntry[]
+  reconciliation TransactionReconciliation?
 
   @@index([corridorId, createdAt])
   @@index([senderUserId, status])
   @@index([status, updatedAt])
+}
+
+model LedgerEntry {
+  id String @id @default(cuid())
+  transactionId String
+  account LedgerAccount
+  direction LedgerDirection
+  amountMinor BigInt
+  currency CurrencyCode
+  eventName String
+  createdAt DateTime @default(now())
+
+  transaction TransferTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId, createdAt])
+  @@index([account, createdAt])
+}
+
+model TransactionReconciliation {
+  id String @id @default(cuid())
+  transactionId String @unique
+  status ReconciliationStatus @default(PENDING)
+  reason String?
+  checkedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction TransferTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([status, checkedAt])
 }
 
 model AuditEvent {

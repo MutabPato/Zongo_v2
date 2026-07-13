@@ -1,0 +1,1 @@
+{ "extends": "../../tsconfig.json", "compilerOptions": { "outDir": "../../dist/libs/ledger" }, "include": ["src/**/*.ts"] }

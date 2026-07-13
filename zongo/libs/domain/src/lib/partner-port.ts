@@ -17,6 +17,7 @@ export type PartnerResult =
 export interface PartnerPort {
   collect(request: PartnerCollectionRequest): Promise<PartnerResult>;
   payout(request: PartnerPayoutRequest): Promise<PartnerResult>;
+  getTransferStatus(reference: string): Promise<'RESOLVED' | 'AMBIGUOUS'>;
 }
 
 export const PARTNER_PORT = Symbol('PARTNER_PORT');

@@ -80,6 +80,7 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
         .fn()
         .mockResolvedValue({ success: true, partnerReference: 'pt-db-1' }),
       payout: jest.fn(),
+      getTransferStatus: jest.fn(),
     };
     const processor = new WorkerJobProcessor(prisma, partner, audit);
 

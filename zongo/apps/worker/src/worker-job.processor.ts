@@ -3,7 +3,7 @@ import { AUDIT_LOG_PORT, PARTNER_PORT } from '@app/domain';
 import type { AuditLogPort, PartnerPort } from '@app/domain';
 import { PrismaService as PrismaServiceToken } from '@app/db';
 import type { PrismaService } from '@app/db';
-import { JobType, JobStatus, Prisma } from '@prisma/client';
+import { JobType, JobStatus, Prisma, TransactionStatus } from '@prisma/client';
 
 export interface WorkerJobInput {
   transactionReference: string;
@@ -81,11 +81,15 @@ export class WorkerJobProcessor {
         throw new Error('A beneficiary is required to process a transfer');
       }
 
+      const beneficiaryId =
+        job.jobType === JobType.PAYOUT && transaction.retryBeneficiaryId
+          ? transaction.retryBeneficiaryId
+          : transaction.beneficiaryId;
       const request = {
         reference: transaction.reference,
         amountMinor: transaction.sendAmountMinor,
         currency: transaction.sendCurrency,
-        beneficiaryId: transaction.beneficiaryId,
+        beneficiaryId,
       };
       const result =
         job.jobType === JobType.COLLECTION
@@ -93,7 +97,12 @@ export class WorkerJobProcessor {
           : await this.partner.payout(request);
 
       if (!result.success) {
-        await this.fail(durableJob.id, result.error.message);
+        await this.fail(
+          durableJob.id,
+          transaction,
+          job.jobType,
+          result.error.message,
+        );
         return { skipped: false, status: 'FAILED' };
       }
 
@@ -138,12 +147,137 @@ export class WorkerJobProcessor {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Worker execution failed';
-      await this.fail(durableJob.id, message);
+      const transaction = await this.prisma.transferTransaction.findUnique({
+        where: { reference: job.transactionReference },
+      });
+      if (transaction)
+        await this.fail(durableJob.id, transaction, job.jobType, message);
+      else await this.failJob(durableJob.id, message);
       return { skipped: false, status: 'FAILED' };
     }
   }
 
-  private async fail(id: string, message: string): Promise<void> {
+  /** Explicit support action; no automatic refund or automatic payout retry exists. */
+  async prepareManualPayoutRetry(
+    transactionReference: string,
+    correctedBeneficiaryId?: string,
+  ): Promise<WorkerJobInput> {
+    const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
+      {
+        where: { reference: transactionReference },
+      },
+    );
+    if (transaction.status !== TransactionStatus.PAYOUT_FAILED) {
+      throw new Error('Only a failed payout can be manually retried');
+    }
+    await this.prisma.transferTransaction.update({
+      where: { id: transaction.id },
+      data: {
+        status: TransactionStatus.PENDING_PAYOUT,
+        retryBeneficiaryId:
+          correctedBeneficiaryId ?? transaction.retryBeneficiaryId,
+        failedReason: null,
+      },
+    });
+    await this.audit.append({
+      id: crypto.randomUUID(),
+      eventType: 'BUSINESS',
+      name: 'transfer.payout.manual-retry.prepared',
+      transactionId: transaction.id,
+      corridorId: transaction.corridorId,
+      payload: {
+        reference: transaction.reference,
+        retryBeneficiaryId:
+          correctedBeneficiaryId ?? transaction.retryBeneficiaryId,
+      },
+      createdAt: new Date(),
+    });
+    return {
+      transactionReference: transaction.reference,
+      jobType: JobType.PAYOUT,
+      payload: { manual: true },
+    };
+  }
+
+  async handlePartnerCallback(
+    transactionReference: string,
+    status: TransactionStatus,
+    partnerReference: string,
+  ): Promise<{ applied: boolean }> {
+    const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
+      { where: { reference: transactionReference } },
+    );
+    const closed = (
+      [
+        TransactionStatus.COLLECTION_FAILED,
+        TransactionStatus.PAYOUT_FAILED,
+        TransactionStatus.PAYOUT_SUCCESS,
+      ] as TransactionStatus[]
+    ).includes(transaction.status);
+    if (closed) {
+      await this.audit.append({
+        id: crypto.randomUUID(),
+        eventType: 'TECHNICAL',
+        name: 'transfer.callback.late',
+        transactionId: transaction.id,
+        corridorId: transaction.corridorId,
+        payload: { receivedStatus: status, partnerReference },
+        createdAt: new Date(),
+      });
+      return { applied: false };
+    }
+    await this.prisma.transferTransaction.update({
+      where: { id: transaction.id },
+      data: { status, partnerReference },
+    });
+    await this.audit.append({
+      id: crypto.randomUUID(),
+      eventType: 'BUSINESS',
+      name: 'transfer.callback.applied',
+      transactionId: transaction.id,
+      corridorId: transaction.corridorId,
+      payload: { status, partnerReference },
+      createdAt: new Date(),
+    });
+    return { applied: true };
+  }
+
+  private async fail(
+    id: string,
+    transaction: { id: string; corridorId: string },
+    jobType: WorkerJobInput['jobType'],
+    message: string,
+  ): Promise<void> {
+    const status =
+      jobType === JobType.COLLECTION
+        ? TransactionStatus.COLLECTION_FAILED
+        : TransactionStatus.PAYOUT_FAILED;
+    await this.prisma.$transaction([
+      this.prisma.transferTransaction.update({
+        where: { id: transaction.id },
+        data: { status, failedReason: message },
+      }),
+      this.prisma.workerJob.update({
+        where: { id },
+        data: {
+          status: JobStatus.FAILED,
+          lastError: message,
+          leaseExpiresAt: null,
+        },
+      }),
+    ]);
+    await this.audit.append({
+      id: crypto.randomUUID(),
+      eventType: 'BUSINESS',
+      name: `transfer.${jobType.toLowerCase()}.failed`,
+      transactionId: transaction.id,
+      corridorId: transaction.corridorId,
+      payload: { failureReason: message },
+      createdAt: new Date(),
+    });
+  }
+
+  private async failJob(id: string, message: string): Promise<void> {
     await this.prisma.workerJob.update({
       where: { id },
       data: {

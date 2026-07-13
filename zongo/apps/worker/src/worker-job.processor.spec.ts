@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
-import { JobStatus } from '@prisma/client';
+import { JobStatus, TransactionStatus } from '@prisma/client';
 import type { AuditLogPort, PartnerPort } from '@app/domain';
 import type { PrismaService } from '@app/db';
 import { WorkerJobProcessor } from './worker-job.processor';
@@ -99,5 +99,71 @@ describe('WorkerJobProcessor', () => {
       currency: 'USD',
       beneficiaryId: 'ben_1',
     });
+  });
+
+  it('prepares a manual payout retry on the original reference without refunding', async () => {
+    const failedTransaction = {
+      ...transaction,
+      status: TransactionStatus.PAYOUT_FAILED,
+      retryBeneficiaryId: null,
+    };
+    const update = jest.fn().mockResolvedValue({});
+    const prisma = {
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue(failedTransaction),
+        update,
+      },
+    } as unknown as PrismaService;
+    const processor = new WorkerJobProcessor(prisma, {} as PartnerPort, {
+      append: jest.fn().mockResolvedValue(undefined),
+    });
+
+    await expect(
+      processor.prepareManualPayoutRetry(
+        transaction.reference,
+        'ben_corrected',
+      ),
+    ).resolves.toEqual({
+      transactionReference: transaction.reference,
+      jobType: 'PAYOUT',
+      payload: { manual: true },
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: transaction.id },
+      data: expect.objectContaining({
+        status: TransactionStatus.PENDING_PAYOUT,
+        retryBeneficiaryId: 'ben_corrected',
+      }),
+    });
+  });
+
+  it('records a late callback as audit-only without changing a closed transfer', async () => {
+    const closedTransaction = {
+      ...transaction,
+      status: TransactionStatus.PAYOUT_FAILED,
+    };
+    const update = jest.fn();
+    const prisma = {
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue(closedTransaction),
+        update,
+      },
+    } as unknown as PrismaService;
+    const auditAppend = jest.fn().mockResolvedValue(undefined);
+    const processor = new WorkerJobProcessor(prisma, {} as PartnerPort, {
+      append: auditAppend,
+    });
+
+    await expect(
+      processor.handlePartnerCallback(
+        transaction.reference,
+        TransactionStatus.PAYOUT_SUCCESS,
+        'partner_late',
+      ),
+    ).resolves.toEqual({ applied: false });
+    expect(update).not.toHaveBeenCalled();
+    expect(auditAppend).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'transfer.callback.late' }),
+    );
   });
 });

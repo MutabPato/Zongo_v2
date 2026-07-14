@@ -16,7 +16,8 @@
       "entryFile": "main",
       "sourceRoot": "apps/admin/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/admin/tsconfig.app.json"
+        "tsConfigPath": "apps/admin/tsconfig.app.json",
+        "webpack": false
       }
     },
     "api": {

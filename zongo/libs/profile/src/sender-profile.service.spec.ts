@@ -100,6 +100,7 @@ describe('SenderProfileService', () => {
       senderProfile: {
         findUniqueOrThrow: jest.fn().mockResolvedValue(profile),
       },
+      platformIdentity: { findUnique: jest.fn().mockResolvedValue(null) },
       tierLimitPolicy: {
         findUnique: jest.fn().mockResolvedValue({
           perTransferLimitMinor: 100n,
@@ -133,5 +134,30 @@ describe('SenderProfileService', () => {
     ).resolves.toEqual(
       expect.objectContaining({ eligible: true, tier: KycTier.TIER_0 }),
     );
+  });
+
+  it('denies transfer eligibility when the shared platform identity is blocked', async () => {
+    const prisma = {
+      senderProfile: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'profile_1',
+          userId: 'user_1',
+          senderPhoneNumber: '+254700000001',
+          tier: KycTier.TIER_0,
+          tierLimitOverride: null,
+        }),
+      },
+      platformIdentity: {
+        findUnique: jest.fn().mockResolvedValue({ blockedAt: new Date() }),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new SenderProfileService(prisma, audit).checkTransferEligibility(
+        'profile_1',
+        '+254700000001',
+        10n,
+      ),
+    ).resolves.toEqual({ eligible: false, reason: 'USER_BLOCKED' });
   });
 });

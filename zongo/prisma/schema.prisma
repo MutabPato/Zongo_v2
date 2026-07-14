@@ -39,6 +39,13 @@ enum JobType {
   STATUS_RECHECK
   NOTIFICATION
   RETRY
+  ADMIN_ALERT
+}
+
+enum AdminAlertDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
 }
 
 enum JobStatus {
@@ -84,6 +91,13 @@ enum ReconciliationStatus {
   MISSING_COLLECTION_ENTRY
   MISSING_PAYOUT_ENTRY
   MISMATCH
+}
+
+enum AdminRole {
+  CUSTOMER
+  SUPPORT
+  OPS
+  ADMIN
 }
 
 model Corridor {
@@ -173,6 +187,8 @@ model TransferTransaction {
   payoutRequestedAt DateTime?
   payoutCompletedAt DateTime?
   failedReason String?
+  lastStatusRecheckAt DateTime?
+  lastStatusRecheckResult String?
   metadata Json?
   archivedAt DateTime?
   createdAt DateTime @default(now())
@@ -185,10 +201,63 @@ model TransferTransaction {
   workerJobs WorkerJob[]
   ledgerEntries LedgerEntry[]
   reconciliation TransactionReconciliation?
+  adminNotes AdminNote[]
 
   @@index([corridorId, createdAt])
   @@index([senderUserId, status])
   @@index([status, updatedAt])
+}
+
+/// Shared platform identity store used by backend authorization and the self-hosted admin app.
+model PlatformIdentity {
+  id String @id @default(cuid())
+  userId String @unique
+  displayName String?
+  role AdminRole @default(CUSTOMER)
+  totpSecret String?
+  hardwareKeyCredentialId String?
+  mfaVerifiedAt DateTime?
+  blockedAt DateTime?
+  blockedReason String?
+  blockedById String?
+  breakGlassUsedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions AdminSession[]
+  notes AdminNote[] @relation("AuthoredAdminNote")
+
+  @@index([role, blockedAt])
+}
+
+/// Short-lived, hashed sessions. Raw bearer tokens are never stored.
+model AdminSession {
+  id String @id @default(cuid())
+  identityId String
+  tokenHash String @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  identity PlatformIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+
+  @@index([identityId, expiresAt])
+}
+
+/// Notes are append-only investigation context. The linked AuditEvent is the immutable accountability record.
+model AdminNote {
+  id String @id @default(cuid())
+  transactionId String?
+  reconciliationId String?
+  authorIdentityId String
+  body String
+  createdAt DateTime @default(now())
+
+  transaction TransferTransaction? @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  reconciliation TransactionReconciliation? @relation(fields: [reconciliationId], references: [id], onDelete: Restrict)
+  author PlatformIdentity @relation("AuthoredAdminNote", fields: [authorIdentityId], references: [id], onDelete: Restrict)
+
+  @@index([transactionId, createdAt])
+  @@index([reconciliationId, createdAt])
 }
 
 model LedgerEntry {
@@ -217,6 +286,7 @@ model TransactionReconciliation {
   updatedAt DateTime @updatedAt
 
   transaction TransferTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  adminNotes AdminNote[]
 
   @@index([status, checkedAt])
 }
@@ -234,10 +304,31 @@ model AuditEvent {
 
   corridor Corridor? @relation(fields: [corridorId], references: [id], onDelete: SetNull)
   transaction TransferTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  alertDeliveries AdminAlertDelivery[]
 
   @@index([transactionId, createdAt])
   @@index([corridorId, createdAt])
   @@index([eventType, createdAt])
+}
+
+/// Durable visibility and retry state for sensitive control-plane alerts.
+model AdminAlertDelivery {
+  id String @id @default(cuid())
+  auditEventId String
+  actionName String
+  payload Json
+  status AdminAlertDeliveryStatus @default(PENDING)
+  attempts Int @default(0)
+  nextAttemptAt DateTime?
+  lastError String?
+  deliveredAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditEvent AuditEvent @relation(fields: [auditEventId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+  @@index([auditEventId])
 }
 
 model WorkerJob {

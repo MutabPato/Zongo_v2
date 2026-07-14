@@ -18,5 +18,6 @@ import { WorkerJobProcessor } from './worker-job.processor';
   ],
   controllers: [WorkerController],
   providers: [WorkerService, WorkerJobProcessor],
+  exports: [WorkerJobProcessor],
 })
 export class WorkerModule {}

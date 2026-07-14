@@ -23,6 +23,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@adminjs/express": "^6.1.1",
+    "@adminjs/prisma": "^5.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -31,6 +33,10 @@
     "@nestjs/platform-fastify": "^11.1.27",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@tiptap/core": "2.27.2",
+    "@tiptap/pm": "2.27.2",
+    "adminjs": "^7.8.17",
+    "express": "^5.2.1",
     "fastify": "^5.8.5",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",

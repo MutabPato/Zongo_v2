@@ -16,9 +16,12 @@ describe('AdminController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('/admin (GET)', () => {
     const httpServer: Server = app.getHttpServer() as Server;
 
-    return request(httpServer).get('/').expect(200).expect('Hello World!');
+    return request(httpServer)
+      .get('/admin')
+      .expect(200)
+      .expect({ service: 'zongo-admin', selfHosted: true, mfaRequired: true });
   });
 });

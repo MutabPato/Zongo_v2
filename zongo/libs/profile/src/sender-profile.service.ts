@@ -31,6 +31,7 @@ export type TransferEligibility =
       eligible: false;
       reason:
         | 'PHONE_NOT_BOUND'
+        | 'USER_BLOCKED'
         | 'PER_TRANSFER_LIMIT_EXCEEDED'
         | 'DAILY_LIMIT_EXCEEDED';
     };
@@ -192,6 +193,11 @@ export class SenderProfileService {
       where: { id: senderProfileId },
       include: { tierLimitOverride: true },
     });
+    const identity = await this.prisma.platformIdentity.findUnique({
+      where: { userId: profile.userId },
+      select: { blockedAt: true },
+    });
+    if (identity?.blockedAt) return { eligible: false, reason: 'USER_BLOCKED' };
     if (profile.senderPhoneNumber !== senderPhoneNumber)
       return { eligible: false, reason: 'PHONE_NOT_BOUND' };
 

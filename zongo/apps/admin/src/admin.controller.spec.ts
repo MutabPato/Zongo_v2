@@ -8,15 +8,19 @@ describe('AdminController', () => {
   beforeEach(async () => {
     const app: TestingModule = await Test.createTestingModule({
       controllers: [AdminController],
-      providers: [AdminService],
+      providers: [{ provide: AdminService, useValue: {} }],
     }).compile();
 
     adminController = app.get<AdminController>(AdminController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(adminController.getHello()).toBe('Hello World!');
+  describe('control plane', () => {
+    it('declares the self-hosted MFA requirement', () => {
+      expect(adminController.getControlPlane()).toEqual({
+        service: 'zongo-admin',
+        selfHosted: true,
+        mfaRequired: true,
+      });
     });
   });
 });

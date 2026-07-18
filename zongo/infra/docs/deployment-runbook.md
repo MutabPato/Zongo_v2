@@ -12,6 +12,23 @@ GitHub Actions publishes `ghcr.io/mutabpato/zongo` for every push to
 `develop` and `main`. Each release has both `sha-<commit>` and its branch
 alias tag. Coolify must run `sha-<commit>`; aliases are only convenience tags.
 
+## Compose Contract
+
+Each environment has one self-contained Compose file. Do not layer the files
+together:
+
+| Environment | Compose command/file | Source branch | Notes |
+| --- | --- | --- | --- |
+| Local | `docker compose -f docker-compose.local.yml up -d` | Current checkout | Builds locally, applies migrations, and seeds the local admin. |
+| Development | `docker compose -f docker-compose.dev.yml up -d` | `develop` | Managed by Coolify; pulls a published GHCR image. |
+| Production | `docker compose -f docker-compose.yml up -d` | `main` | Managed by Coolify; pulls a published GHCR image. |
+
+The remote files assemble the application image as
+`$ZONGO_IMAGE:$ZONGO_IMAGE_TAG`. `ZONGO_IMAGE_TAG` must therefore be a Docker
+tag in the form `sha-<full-git-commit-sha>`, never an image digest in the form
+`sha256:<digest>`. A digest would produce an invalid image reference with two
+colons.
+
 ## Local Operation
 
 ```sh
@@ -62,26 +79,51 @@ and bootstrap credentials after the command succeeds.
 1. Install Coolify on the self-hosted development server and the GCE VM. Keep
    inbound access limited to `80`, `443`, and restricted SSH; do not publish
    application, Postgres, or Redis ports.
-2. Configure GHCR credentials on each server so Coolify can pull the private
+2. Confirm Docker Compose v2 is available on each host with
+   `docker compose version`. If the command is unavailable, install the
+   `docker-compose-plugin` from Docker's official APT repository before
+   debugging Coolify's Compose configuration errors.
+3. Configure GHCR credentials on each server so Coolify can pull the private
    image. The token needs package read access only.
-3. Create one Docker Compose application per remote environment using this
+4. Create one Docker Compose application per remote environment using this
    repository and base directory `/zongo`: use `docker-compose.dev.yml` with
    the `develop` branch for development, and `docker-compose.yml` with the
    `main` branch for production. Disable automatic deploys because migration is
    a release gate.
-4. Populate Coolify runtime variables from the matching file in `infra/env/`.
+   Configure the Compose resource as follows:
+
+   | Coolify field | Value |
+   | --- | --- |
+   | Build pack | Docker Compose |
+   | Base directory | `/zongo` |
+   | Compose location, development | `docker-compose.dev.yml` |
+   | Compose location, production | `docker-compose.yml` |
+   | Raw Compose content, custom build/start commands, pre/post commands, container name | Leave empty |
+   | Preserve repository during deployment | Off |
+   | Escape special characters in labels | Off; Traefik labels interpolate hostnames |
+
+5. Populate Coolify runtime variables from the matching file in `infra/env/`.
    Mark passwords and admin secrets as runtime-only and secret. Use URL-encoded
-   Postgres/Redis passwords because they are embedded in connection URLs.
-5. Create separate public DNS records for `API_HOSTNAME`. Configure
+   Postgres/Redis passwords because they are embedded in connection URLs. Do
+   not define `DATABASE_URL` in Coolify: Compose builds it from the Postgres
+   values. Keep `NODE_ENV` runtime-only; setting it at build time can omit Node
+   development dependencies needed to build the image.
+6. Create separate public DNS records for `API_HOSTNAME`. Configure
    `ADMIN_HOSTNAME` only in Tailscale split DNS, pointing at the target
    server's Tailnet address; do not create a public DNS record for it.
-6. Add `infra/coolify/zongo-admin-vpn.yaml` in each Coolify server's Proxy >
+7. Add `infra/coolify/zongo-admin-vpn.yaml` in each Coolify server's Proxy >
    Dynamic Configurations. This supplies the `zongo-admin-vpn@file` middleware
    referenced by the Compose stack. Install Tailscale on every admin client and
    each deployment server.
-7. In GitHub, create `development` and `production` Environments. Add
-   `COOLIFY_URL`, `COOLIFY_TOKEN`, and `COOLIFY_RESOURCE_UUID` to each. The
-   token needs only `write` and `deploy` permissions for that environment.
+8. In GitHub, create `development` and `production` Environments. Add
+   `COOLIFY_URL`, `COOLIFY_TOKEN`, and `COOLIFY_RESOURCE_UUID` to each as
+   environment secrets. `COOLIFY_URL` is the publicly reachable Coolify base
+   URL without `/api/v1`; create `COOLIFY_TOKEN` under **Keys & Tokens > API
+   Tokens**; and obtain the resource UUID from the application URL, Coolify API,
+   or a deployment log. Use one token per environment and rotate it regularly.
+
+If a host has no public inbound address, use the procedure in
+`coolify-github-cloudflare-tunnel.md` for the Coolify dashboard and GitHub App.
 
 Coolify provides the isolated Compose network and Traefik proxy. Do not add a
 custom Compose network or direct host port mapping to remote deployments.
@@ -129,3 +171,13 @@ Accept a remote deployment only when:
 - Postgres and Redis are healthy and have no host-published ports;
 - the worker is healthy but has no domain or host port; and
 - Coolify reports successful health checks before routing traffic.
+
+## Known Deployment Failure Modes
+
+| Symptom | Cause | Resolution |
+| --- | --- | --- |
+| `invalid reference format` with `image:sha256:...` | An image digest was entered in `ZONGO_IMAGE_TAG`. | Set it to the GitHub Actions-published `sha-<full-commit-sha>` tag. |
+| Coolify warns that `NODE_ENV=production` is available at build time | Build-time production mode can omit development dependencies. | Mark `NODE_ENV` runtime-only in Coolify. |
+| Admin repeatedly restarts with `EACCES: permission denied, mkdir '.adminjs'` | AdminJS creates runtime assets in `/app/.adminjs`; an older image lacks a writable directory for the `node` user. | Deploy an image built from the current Dockerfile, which creates and owns `/app/.adminjs`. |
+| Redis warns that `vm.overcommit_memory` is disabled | Host kernel tuning is incomplete. The warning does not prevent startup but can affect persistence under memory pressure. | On the server, set `vm.overcommit_memory = 1` using the host's standard sysctl configuration and reload it. |
+| AdminJS warns about `connect.session()` MemoryStore | The current browser-session store is process-local and unsuitable for a scaled production control plane. | Treat this as a production hardening item: replace it with a persistent session store before scaling AdminJS beyond one process. |

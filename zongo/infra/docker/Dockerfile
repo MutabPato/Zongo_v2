@@ -45,6 +45,10 @@ RUN mkdir -p node_modules/@app \
   && ln -s /app/dist/apps/admin/libs/partner/src node_modules/@app/partner \
   && ln -s /app/dist/apps/admin/libs/profile/src node_modules/@app/profile
 
+# AdminJS builds its runtime asset bundle here when the Admin service starts.
+RUN mkdir -p /app/.adminjs \
+  && chown node:node /app/.adminjs
+
 USER node
 
 CMD ["node", "dist/apps/api/main"]

@@ -7,6 +7,7 @@ import { DbModule } from '@app/db';
 import { DomainModule } from '@app/domain';
 import { PartnerModule } from '@app/partner';
 import { WorkerJobProcessor } from './worker-job.processor';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { WorkerJobProcessor } from './worker-job.processor';
     AuditModule,
     DbModule,
   ],
-  controllers: [WorkerController],
+  controllers: [WorkerController, HealthController],
   providers: [WorkerService, WorkerJobProcessor],
   exports: [WorkerJobProcessor],
 })

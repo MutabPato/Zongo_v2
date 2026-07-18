@@ -1,21 +1,108 @@
+name: zongo-local
+
+x-local-environment: &local-environment
+  NODE_ENV: development
+  DATABASE_URL: "postgresql://${POSTGRES_USER:-zongo}:${POSTGRES_PASSWORD:-zongo-local-only}@postgres:5432/${POSTGRES_DB:-zongo}?schema=public"
+  REDIS_URL: "redis://:${REDIS_PASSWORD:-zongo-local-only}@redis:6379"
+
+x-local-app: &local-app
+  build:
+    context: .
+    dockerfile: infra/docker/Dockerfile
+  image: zongo:local
+  restart: unless-stopped
+  environment: *local-environment
+
 services:
-  postgress:
-    image: postgres:16
-    container_name: zongo-postgres
+  postgres:
+    image: postgres:16.9-bookworm
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: zongo
-      POSTGRES_PASSWORD: zongo
-      POSTGRES_DB: zongo
+      POSTGRES_USER: ${POSTGRES_USER:-zongo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zongo-local-only}
+      POSTGRES_DB: ${POSTGRES_DB:-zongo}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-15432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres-local-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
   redis:
-    image: redis:7
-    container_name: zongo-redis
+    image: redis:7.4-bookworm
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-zongo-local-only}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-zongo-local-only}
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-16379}:6379"
+    volumes:
+      - redis-local-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    <<: *local-app
+    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api:
+    <<: *local-app
+    command: ["node", "dist/apps/api/main"]
+    environment:
+      <<: *local-environment
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *local-app
+    command: ["node", "dist/apps/worker/main"]
+    environment:
+      <<: *local-environment
+      PORT: "3001"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  admin:
+    <<: *local-app
+    command:
+      [
+        "sh",
+        "-c",
+        "node dist/apps/admin/apps/admin/src/local-admin-seed.js && exec node dist/apps/admin/apps/admin/src/main.js",
+      ]
+    env_file:
+      - .env.local
+    environment:
+      <<: *local-environment
+      PORT: "3002"
+      BREAK_GLASS_SECRET: ${BREAK_GLASS_SECRET:-local-break-glass-secret-not-for-remote-use}
+      ADMINJS_COOKIE_SECRET: ${ADMINJS_COOKIE_SECRET:-local-cookie-secret-not-for-remote-use}
+      ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
+    ports:
+      - "127.0.0.1:3002:3002"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
-  pgdata:
+  postgres-local-data:
+  redis-local-data:

@@ -7,6 +7,7 @@ import { WorkerModule } from '../../worker/src/worker.module';
 import { AdminController } from './admin.controller';
 import { ADMIN_ALERTS, AdminService } from './admin.service';
 import { AdminAlertService } from './admin-alert.service';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { AdminAlertService } from './admin-alert.service';
     BeneficiaryModule,
     WorkerModule,
   ],
-  controllers: [AdminController],
+  controllers: [AdminController, HealthController],
   providers: [
     AdminService,
     {

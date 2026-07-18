@@ -1,0 +1,62 @@
+name: Promote Zongo release
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Coolify target environment
+        required: true
+        type: choice
+        options: [development, production]
+      sha:
+        description: Full commit SHA already published to GHCR and migrated on the target host
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate branch and image tag
+        env:
+          TARGET: ${{ inputs.environment }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          case "$TARGET" in
+            development) branch=develop ;;
+            production) branch=main ;;
+            *) echo "Unsupported environment: $TARGET" >&2; exit 1 ;;
+          esac
+          git cat-file -e "$SHA^{commit}"
+          git branch -r --contains "$SHA" | grep -Eq "origin/$branch$" || {
+            echo "$SHA is not reachable from $branch" >&2
+            exit 1
+          }
+
+      - name: Pin Coolify to the immutable image and deploy
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_RESOURCE_UUID: ${{ secrets.COOLIFY_RESOURCE_UUID }}
+          SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$COOLIFY_URL"
+          test -n "$COOLIFY_TOKEN"
+          test -n "$COOLIFY_RESOURCE_UUID"
+          api="$COOLIFY_URL/api/v1/applications/$COOLIFY_RESOURCE_UUID"
+          curl --fail-with-body --request PATCH "$api/envs" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{\"key\":\"ZONGO_IMAGE_TAG\",\"value\":\"sha-$SHA\",\"is_literal\":true}"
+          curl --fail-with-body --request POST "$api/start" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN"

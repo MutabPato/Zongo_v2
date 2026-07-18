@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+.adminjs
+.env
+.env.*
+!*.env.example
+.git
+infra/env
+*.log

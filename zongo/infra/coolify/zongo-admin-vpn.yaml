@@ -1,0 +1,9 @@
+# Install this file in each Coolify server's Proxy > Dynamic Configurations.
+# Tailscale split DNS must resolve the admin hostname to the server's Tailnet IP.
+http:
+  middlewares:
+    zongo-admin-vpn:
+      ipAllowList:
+        sourceRange:
+          - 100.64.0.0/10
+          - fd7a:115c:a1e0::/48

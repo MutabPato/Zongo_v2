@@ -10,6 +10,6 @@ async function bootstrap(): Promise<void> {
     ApiModule,
     new FastifyAdapter(),
   );
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(Number(process.env.PORT ?? 3000), '0.0.0.0');
 }
 void bootstrap();

@@ -63,6 +63,9 @@ services:
       BREAK_GLASS_SECRET: ${BREAK_GLASS_SECRET:?BREAK_GLASS_SECRET is required}
       ADMINJS_COOKIE_SECRET: ${ADMINJS_COOKIE_SECRET:?ADMINJS_COOKIE_SECRET is required}
       ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
+      # AdminJS defaults to a relative .adminjs directory; use a writable,
+      # absolute container path because Coolify does not guarantee the CWD.
+      ADMIN_JS_TMP_DIR: /tmp/adminjs
     expose:
       - "3002"
     labels:

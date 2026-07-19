@@ -16,6 +16,9 @@ x-app-service: &app-service
   restart: unless-stopped
   depends_on: *app-depends-on
   environment: *app-environment
+  networks:
+    - default
+    - coolify
 
 services:
   api:
@@ -122,3 +125,7 @@ services:
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  coolify:
+    external: true

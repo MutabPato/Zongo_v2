@@ -29,6 +29,10 @@ tag in the form `sha-<full-git-commit-sha>`, never an image digest in the form
 `sha256:<digest>`. A digest would produce an invalid image reference with two
 colons.
 
+Remote API, worker, and Admin services also join Coolify's external `coolify`
+Docker network. This lets the Coolify Traefik proxy resolve their labelled
+backends; do not remove that network attachment.
+
 ## Local Operation
 
 ```sh

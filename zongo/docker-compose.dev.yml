@@ -2,8 +2,11 @@ name: zongo-development
 
 x-app-environment: &app-environment
   NODE_ENV: ${NODE_ENV:-production}
-  DATABASE_URL: "postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public"
-  REDIS_URL: "redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379"
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: '5432'
+  POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
 
 x-infrastructure-depends-on: &infrastructure-depends-on
   postgres:
@@ -28,20 +31,21 @@ x-app-service: &app-service
 services:
   api:
     <<: *app-service
-    command: ["node", "dist/apps/api/main"]
+    command: ['node', 'dist/apps/api/main']
     environment:
       <<: *app-environment
-      PORT: "3000"
+      PORT: '3000'
     expose:
-      - "3000"
+      - '3000'
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.zongo-dev-api.rule=Host(`${API_HOSTNAME:?API_HOSTNAME is required}`)"
-      - "traefik.http.routers.zongo-dev-api.entrypoints=websecure"
-      - "traefik.http.routers.zongo-dev-api.tls=true"
-      - "traefik.http.services.zongo-dev-api.loadbalancer.server.port=3000"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.zongo-dev-api.rule=Host(`${API_HOSTNAME:?API_HOSTNAME is required}`)'
+      - 'traefik.http.routers.zongo-dev-api.entrypoints=websecure'
+      - 'traefik.http.routers.zongo-dev-api.tls=true'
+      - 'traefik.http.services.zongo-dev-api.loadbalancer.server.port=3000'
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/health/ready || exit 1"]
+      test:
+        ['CMD-SHELL', 'curl -fsS http://localhost:3000/health/ready || exit 1']
       interval: 15s
       timeout: 5s
       retries: 5
@@ -49,14 +53,15 @@ services:
 
   worker:
     <<: *app-service
-    command: ["node", "dist/apps/worker/main"]
+    command: ['node', 'dist/apps/worker/main']
     environment:
       <<: *app-environment
-      PORT: "3001"
+      PORT: '3001'
     expose:
-      - "3001"
+      - '3001'
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/health/ready || exit 1"]
+      test:
+        ['CMD-SHELL', 'curl -fsS http://localhost:3001/health/ready || exit 1']
       interval: 15s
       timeout: 5s
       retries: 5
@@ -64,10 +69,10 @@ services:
 
   admin:
     <<: *app-service
-    command: ["node", "dist/apps/admin/apps/admin/src/main.js"]
+    command: ['node', 'dist/apps/admin/apps/admin/src/main.js']
     environment:
       <<: *app-environment
-      PORT: "3002"
+      PORT: '3002'
       BREAK_GLASS_SECRET: ${BREAK_GLASS_SECRET:?BREAK_GLASS_SECRET is required}
       ADMINJS_COOKIE_SECRET: ${ADMINJS_COOKIE_SECRET:?ADMINJS_COOKIE_SECRET is required}
       ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
@@ -75,16 +80,17 @@ services:
       # absolute container path because Coolify does not guarantee the CWD.
       ADMIN_JS_TMP_DIR: /tmp/adminjs
     expose:
-      - "3002"
+      - '3002'
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.zongo-dev-admin.rule=Host(`${ADMIN_HOSTNAME:?ADMIN_HOSTNAME is required}`)"
-      - "traefik.http.routers.zongo-dev-admin.entrypoints=websecure"
-      - "traefik.http.routers.zongo-dev-admin.tls=true"
-      - "traefik.http.routers.zongo-dev-admin.middlewares=zongo-admin-vpn@file"
-      - "traefik.http.services.zongo-dev-admin.loadbalancer.server.port=3002"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.zongo-dev-admin.rule=Host(`${ADMIN_HOSTNAME:?ADMIN_HOSTNAME is required}`)'
+      - 'traefik.http.routers.zongo-dev-admin.entrypoints=websecure'
+      - 'traefik.http.routers.zongo-dev-admin.tls=true'
+      - 'traefik.http.routers.zongo-dev-admin.middlewares=zongo-admin-vpn@file'
+      - 'traefik.http.services.zongo-dev-admin.loadbalancer.server.port=3002'
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:3002/health/ready || exit 1"]
+      test:
+        ['CMD-SHELL', 'curl -fsS http://localhost:3002/health/ready || exit 1']
       interval: 15s
       timeout: 5s
       retries: 5
@@ -100,7 +106,7 @@ services:
     volumes:
       - postgres-development-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -109,11 +115,22 @@ services:
   redis:
     image: redis:7.4-bookworm
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--requirepass',
+        '${REDIS_PASSWORD:?REDIS_PASSWORD is required}',
+      ]
     volumes:
       - redis-development-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      test:
+        [
+          'CMD-SHELL',
+          'redis-cli --no-auth-warning -a "$$REDIS_PASSWORD" ping | grep -q PONG',
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -123,8 +140,8 @@ services:
 
   migrate:
     image: ${ZONGO_IMAGE:?ZONGO_IMAGE is required}:${ZONGO_IMAGE_TAG:?ZONGO_IMAGE_TAG is required}
-    command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
-    restart: "no"
+    command: ['pnpm', 'exec', 'prisma', 'migrate', 'deploy']
+    restart: 'no'
     depends_on: *infrastructure-depends-on
     environment: *app-environment
 

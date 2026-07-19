@@ -2,11 +2,11 @@
 
 ## Environment Model
 
-| Environment | Host | Branch | Coolify environment |
-| --- | --- | --- | --- |
-| `local` | Developer workstation | Current checkout | None |
-| `development` | Self-hosted server | `develop` | `development` |
-| `production` | GCE VM | `main` | `production` |
+| Environment   | Host                  | Branch           | Coolify environment |
+| ------------- | --------------------- | ---------------- | ------------------- |
+| `local`       | Developer workstation | Current checkout | None                |
+| `development` | Self-hosted server    | `develop`        | `development`       |
+| `production`  | GCE VM                | `main`           | `production`        |
 
 GitHub Actions publishes `ghcr.io/mutabpato/zongo` for every push to
 `develop` and `main`. Each release has both `sha-<commit>` and its branch
@@ -17,11 +17,11 @@ alias tag. Coolify must run `sha-<commit>`; aliases are only convenience tags.
 Each environment has one self-contained Compose file. Do not layer the files
 together:
 
-| Environment | Compose command/file | Source branch | Notes |
-| --- | --- | --- | --- |
-| Local | `docker compose -f docker-compose.local.yml up -d` | Current checkout | Builds locally, applies migrations, and seeds the local admin. |
-| Development | `docker compose -f docker-compose.dev.yml up -d` | `develop` | Managed by Coolify; applies committed migrations, then pulls and runs a published GHCR image. |
-| Production | `docker compose -f docker-compose.yml up -d` | `main` | Managed by Coolify; pulls a published GHCR image. |
+| Environment | Compose command/file                               | Source branch    | Notes                                                                                         |
+| ----------- | -------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------- |
+| Local       | `docker compose -f docker-compose.local.yml up -d` | Current checkout | Builds locally, applies migrations, and seeds the local admin.                                |
+| Development | `docker compose -f docker-compose.dev.yml up -d`   | `develop`        | Managed by Coolify; applies committed migrations, then pulls and runs a published GHCR image. |
+| Production  | `docker compose -f docker-compose.yml up -d`       | `main`           | Managed by Coolify; pulls a published GHCR image.                                             |
 
 The remote files assemble the application image as
 `$ZONGO_IMAGE:$ZONGO_IMAGE_TAG`. `ZONGO_IMAGE_TAG` must therefore be a Docker
@@ -67,7 +67,9 @@ and a unique Base32 TOTP secret in the environment's secret manager, then run
 the command with `ALLOW_ADMIN_BOOTSTRAP=true`. The bootstrap event is recorded
 in the append-only audit log and never includes the TOTP secret.
 
-From a source checkout with `DATABASE_URL` configured:
+From a source checkout with `DATABASE_URL` configured, or with the raw
+`POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DB`
+variables configured:
 
 ```sh
 ALLOW_ADMIN_BOOTSTRAP=true pnpm bootstrap:admin
@@ -98,21 +100,21 @@ and bootstrap credentials after the command succeeds.
    remain a release gate.
    Configure the Compose resource as follows:
 
-   | Coolify field | Value |
-   | --- | --- |
-   | Build pack | Docker Compose |
-   | Base directory | `/zongo` |
-   | Compose location, development | `docker-compose.dev.yml` |
-   | Compose location, production | `docker-compose.yml` |
-   | Raw Compose content, custom build/start commands, pre/post commands, container name | Leave empty |
-   | Preserve repository during deployment | Off |
-   | Escape special characters in labels | Off; Traefik labels interpolate hostnames |
+   | Coolify field                                                                       | Value                                     |
+   | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+   | Build pack                                                                          | Docker Compose                            |
+   | Base directory                                                                      | `/zongo`                                  |
+   | Compose location, development                                                       | `docker-compose.dev.yml`                  |
+   | Compose location, production                                                        | `docker-compose.yml`                      |
+   | Raw Compose content, custom build/start commands, pre/post commands, container name | Leave empty                               |
+   | Preserve repository during deployment                                               | Off                                       |
+   | Escape special characters in labels                                                 | Off; Traefik labels interpolate hostnames |
 
 5. Populate Coolify runtime variables from the matching file in `infra/env/`.
-   Mark passwords and admin secrets as runtime-only and secret. Use URL-encoded
-   Postgres/Redis passwords because they are embedded in connection URLs. Do
-   not define `DATABASE_URL` in Coolify: Compose builds it from the Postgres
-   values. Keep `NODE_ENV` runtime-only; setting it at build time can omit Node
+   Mark passwords and admin secrets as runtime-only and secret. Enter raw,
+   unencoded passwords: Zongo encodes Postgres credentials only when Prisma
+   requires a URL, while runtime services receive the password as a discrete
+   connection field. Do not define `DATABASE_URL` in Coolify. Keep `NODE_ENV` runtime-only; setting it at build time can omit Node
    development dependencies needed to build the image.
 6. Create separate public DNS records for `API_HOSTNAME`. Configure
    `ADMIN_HOSTNAME` only in Tailscale split DNS, pointing at the target
@@ -149,13 +151,17 @@ custom Compose network or direct host port mapping to remote deployments.
 1. Merge to `main`; wait for **Publish Zongo image** to publish
    `sha-<commit>` to GHCR.
 2. SSH to the production host and source its root-owned release environment file
-   that contains `DATABASE_URL`. Pull and run the immutable migration image on
-   the Coolify application network:
+   that contains the raw `POSTGRES_*` variables. Pull and run the immutable
+   migration image on the Coolify application network:
 
    ```sh
    docker pull ghcr.io/mutabpato/zongo:sha-<commit>
    docker run --rm --network <coolify-application-network> \
-     --env DATABASE_URL="$DATABASE_URL" \
+     --env POSTGRES_HOST=postgres \
+     --env POSTGRES_PORT=5432 \
+     --env POSTGRES_USER="$POSTGRES_USER" \
+     --env POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+     --env POSTGRES_DB="$POSTGRES_DB" \
      ghcr.io/mutabpato/zongo:sha-<commit> \
      pnpm exec prisma migrate deploy
    ```
@@ -163,6 +169,7 @@ custom Compose network or direct host port mapping to remote deployments.
    Obtain `<coolify-application-network>` from `docker network ls` before the
    first release and record it in the host release notes. Do not run a branch
    alias for migrations.
+
 3. Verify the migration succeeded and take a database backup if the migration
    is non-trivial.
 4. Run **Promote Zongo release** with `production` and the full SHA. The
@@ -190,10 +197,10 @@ Accept a remote deployment only when:
 
 ## Known Deployment Failure Modes
 
-| Symptom | Cause | Resolution |
-| --- | --- | --- |
-| `invalid reference format` with `image:sha256:...` | An image digest was entered in `ZONGO_IMAGE_TAG`. | Set it to the GitHub Actions-published `sha-<full-commit-sha>` tag. |
-| Coolify warns that `NODE_ENV=production` is available at build time | Build-time production mode can omit development dependencies. | Mark `NODE_ENV` runtime-only in Coolify. |
+| Symptom                                                                      | Cause                                                                                                                                                            | Resolution                                                                                                                                                          |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid reference format` with `image:sha256:...`                           | An image digest was entered in `ZONGO_IMAGE_TAG`.                                                                                                                | Set it to the GitHub Actions-published `sha-<full-commit-sha>` tag.                                                                                                 |
+| Coolify warns that `NODE_ENV=production` is available at build time          | Build-time production mode can omit development dependencies.                                                                                                    | Mark `NODE_ENV` runtime-only in Coolify.                                                                                                                            |
 | Admin repeatedly restarts with `EACCES: permission denied, mkdir '.adminjs'` | AdminJS defaults to a relative `.adminjs` asset directory. The working directory supplied by an orchestrator can be unwritable for the unprivileged `node` user. | Keep `ADMIN_JS_TMP_DIR=/tmp/adminjs` on the `admin` Compose service. This is an absolute, container-writable location; it requires no Coolify environment variable. |
-| Redis warns that `vm.overcommit_memory` is disabled | Host kernel tuning is incomplete. The warning does not prevent startup but can affect persistence under memory pressure. | On the server, set `vm.overcommit_memory = 1` using the host's standard sysctl configuration and reload it. |
-| AdminJS warns about `connect.session()` MemoryStore | The current browser-session store is process-local and unsuitable for a scaled production control plane. | Treat this as a production hardening item: replace it with a persistent session store before scaling AdminJS beyond one process. |
+| Redis warns that `vm.overcommit_memory` is disabled                          | Host kernel tuning is incomplete. The warning does not prevent startup but can affect persistence under memory pressure.                                         | On the server, set `vm.overcommit_memory = 1` using the host's standard sysctl configuration and reload it.                                                         |
+| AdminJS warns about `connect.session()` MemoryStore                          | The current browser-session store is process-local and unsuitable for a scaled production control plane.                                                         | Treat this as a production hardening item: replace it with a persistent session store before scaling AdminJS beyond one process.                                    |

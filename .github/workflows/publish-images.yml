@@ -39,3 +39,32 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy-development:
+    name: Deploy development
+    needs: publish
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: development
+    concurrency:
+      group: coolify-development
+      cancel-in-progress: true
+    steps:
+      - name: Pin Coolify to the immutable image and deploy
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_RESOURCE_UUID: ${{ secrets.COOLIFY_RESOURCE_UUID }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test -n "$COOLIFY_URL"
+          test -n "$COOLIFY_TOKEN"
+          test -n "$COOLIFY_RESOURCE_UUID"
+          api="$COOLIFY_URL/api/v1/applications/$COOLIFY_RESOURCE_UUID"
+          curl --fail-with-body --request PATCH "$api/envs" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data "{\"key\":\"ZONGO_IMAGE_TAG\",\"value\":\"sha-$SHA\",\"is_literal\":true}"
+          curl --fail-with-body --request POST "$api/start" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN"

@@ -5,11 +5,16 @@ x-app-environment: &app-environment
   DATABASE_URL: "postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}?schema=public"
   REDIS_URL: "redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379"
 
-x-app-depends-on: &app-depends-on
+x-infrastructure-depends-on: &infrastructure-depends-on
   postgres:
     condition: service_healthy
   redis:
     condition: service_healthy
+
+x-app-depends-on: &app-depends-on
+  <<: *infrastructure-depends-on
+  migrate:
+    condition: service_completed_successfully
 
 x-app-service: &app-service
   image: ${ZONGO_IMAGE:?ZONGO_IMAGE is required}:${ZONGO_IMAGE_TAG:?ZONGO_IMAGE_TAG is required}
@@ -114,10 +119,11 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
 
   migrate:
-    <<: *app-service
+    image: ${ZONGO_IMAGE:?ZONGO_IMAGE is required}:${ZONGO_IMAGE_TAG:?ZONGO_IMAGE_TAG is required}
     command: ["pnpm", "exec", "prisma", "migrate", "deploy"]
     restart: "no"
-    profiles: ["migration"]
+    depends_on: *infrastructure-depends-on
+    environment: *app-environment
 
 volumes:
   postgres-development-data:

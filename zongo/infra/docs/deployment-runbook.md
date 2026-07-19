@@ -20,7 +20,7 @@ together:
 | Environment | Compose command/file | Source branch | Notes |
 | --- | --- | --- | --- |
 | Local | `docker compose -f docker-compose.local.yml up -d` | Current checkout | Builds locally, applies migrations, and seeds the local admin. |
-| Development | `docker compose -f docker-compose.dev.yml up -d` | `develop` | Managed by Coolify; pulls a published GHCR image. |
+| Development | `docker compose -f docker-compose.dev.yml up -d` | `develop` | Managed by Coolify; applies committed migrations, then pulls and runs a published GHCR image. |
 | Production | `docker compose -f docker-compose.yml up -d` | `main` | Managed by Coolify; pulls a published GHCR image. |
 
 The remote files assemble the application image as
@@ -88,8 +88,10 @@ and bootstrap credentials after the command succeeds.
 4. Create one Docker Compose application per remote environment using this
    repository and base directory `/zongo`: use `docker-compose.dev.yml` with
    the `develop` branch for development, and `docker-compose.yml` with the
-   `main` branch for production. Disable automatic deploys because migration is
-   a release gate.
+   `main` branch for production. Keep Coolify's own Git-push auto-deploy off:
+   GitHub Actions pins and deploys the immutable image after it has been
+   published. Development migrations are automatic; production migrations
+   remain a release gate.
    Configure the Compose resource as follows:
 
    | Coolify field | Value |
@@ -130,9 +132,19 @@ custom Compose network or direct host port mapping to remote deployments.
 
 ## Release Procedure
 
-1. Merge to `develop` or `main`; wait for **Publish Zongo image** to publish
+### Development
+
+1. Merge to `develop`. **Publish Zongo image** publishes `sha-<commit>`, then
+   automatically runs the `development` deployment job. That job pins
+   `ZONGO_IMAGE_TAG` to the immutable tag and asks Coolify to deploy.
+2. `docker-compose.dev.yml` runs `prisma migrate deploy` before API, worker,
+   and Admin start. Verify the deployment job and the Coolify health checks.
+
+### Production
+
+1. Merge to `main`; wait for **Publish Zongo image** to publish
    `sha-<commit>` to GHCR.
-2. SSH to the matching host and source its root-owned release environment file
+2. SSH to the production host and source its root-owned release environment file
    that contains `DATABASE_URL`. Pull and run the immutable migration image on
    the Coolify application network:
 
@@ -149,9 +161,9 @@ custom Compose network or direct host port mapping to remote deployments.
    alias for migrations.
 3. Verify the migration succeeded and take a database backup if the migration
    is non-trivial.
-4. Run **Promote Zongo release** with the matching environment and full SHA.
-   The workflow rejects SHAs not reachable from `develop` or `main`, pins
-   `ZONGO_IMAGE_TAG`, then asks Coolify to deploy.
+4. Run **Promote Zongo release** with `production` and the full SHA. The
+   workflow rejects SHAs not reachable from `main`, pins `ZONGO_IMAGE_TAG`,
+   then asks Coolify to deploy.
 5. Confirm `/health/live` and `/health/ready` for API and admin via their
    intended routes. Confirm the worker is healthy in Coolify and has no
    externally routed hostname.

@@ -19,15 +19,12 @@ x-app-depends-on: &app-depends-on
   migrate:
     condition: service_completed_successfully
 
-x-application-image: &application-image
-  image: zongo-production:latest
-
 x-application-build: &application-build
   context: .
   dockerfile: infra/docker/Dockerfile
 
 x-app-service: &app-service
-  <<: *application-image
+  build: *application-build
   restart: unless-stopped
   depends_on: *app-depends-on
   environment: *app-environment
@@ -38,8 +35,7 @@ x-app-service: &app-service
 services:
   api:
     <<: *app-service
-    # Build once; worker, admin, and migrate reuse this image.
-    build: *application-build
+    image: zongo-production-api:latest
     command: ['node', 'dist/apps/api/main']
     environment:
       <<: *app-environment
@@ -62,6 +58,7 @@ services:
 
   worker:
     <<: *app-service
+    image: zongo-production-worker:latest
     command: ['node', 'dist/apps/worker/main']
     environment:
       <<: *app-environment
@@ -78,6 +75,7 @@ services:
 
   admin:
     <<: *app-service
+    image: zongo-production-admin:latest
     command: ['node', 'dist/apps/admin/apps/admin/src/main.js']
     environment:
       <<: *app-environment
@@ -148,7 +146,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
 
   migrate:
-    <<: *application-image
+    build: *application-build
+    image: zongo-production-migrate:latest
     command: ['pnpm', 'exec', 'prisma', 'migrate', 'deploy']
     restart: 'no'
     depends_on: *infrastructure-depends-on

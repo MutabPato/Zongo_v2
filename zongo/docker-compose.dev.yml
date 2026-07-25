@@ -19,16 +19,12 @@ x-app-depends-on: &app-depends-on
   migrate:
     condition: service_completed_successfully
 
-x-application-image:
-  &application-image # All application services use the same locally built image.
-  image: zongo-development:latest
-
 x-application-build: &application-build
   context: .
   dockerfile: infra/docker/Dockerfile
 
 x-app-service: &app-service
-  <<: *application-image
+  build: *application-build
   restart: unless-stopped
   depends_on: *app-depends-on
   environment: *app-environment
@@ -39,9 +35,7 @@ x-app-service: &app-service
 services:
   api:
     <<: *app-service
-    # Build once; the other services reuse zongo-development:latest. Defining
-    # the same build target on every service races BuildKit on the shared tag.
-    build: *application-build
+    image: zongo-development-api:latest
     command: ['node', 'dist/apps/api/main']
     environment:
       <<: *app-environment
@@ -64,6 +58,7 @@ services:
 
   worker:
     <<: *app-service
+    image: zongo-development-worker:latest
     command: ['node', 'dist/apps/worker/main']
     environment:
       <<: *app-environment
@@ -80,6 +75,7 @@ services:
 
   admin:
     <<: *app-service
+    image: zongo-development-admin:latest
     command: ['node', 'dist/apps/admin/apps/admin/src/main.js']
     environment:
       <<: *app-environment
@@ -150,7 +146,8 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
 
   migrate:
-    <<: *application-image
+    build: *application-build
+    image: zongo-development-migrate:latest
     command: ['pnpm', 'exec', 'prisma', 'migrate', 'deploy']
     restart: 'no'
     depends_on: *infrastructure-depends-on

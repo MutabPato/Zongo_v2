@@ -24,9 +24,9 @@ together:
 | Development | `docker compose -f docker-compose.dev.yml up -d`   | `develop`        | Managed by Coolify; builds the checked-out commit, then applies committed migrations. |
 | Production  | `docker compose -f docker-compose.yml up -d`       | `main`           | Managed by Coolify; builds the checked-out commit, then applies committed migrations. |
 
-The remote Compose files build local `zongo-development:latest` and
-`zongo-production:latest` images from their repository checkouts. The API is
-the sole builder; worker, admin, and migration services reuse the same image.
+The remote Compose files build a local image for each application service from
+their repository checkouts. Each service has a distinct local tag so Coolify
+can build it independently; BuildKit reuses the common Dockerfile layers.
 
 Remote API, worker, and Admin services also join Coolify's external `coolify`
 Docker network. This lets the Coolify Traefik proxy resolve their labelled

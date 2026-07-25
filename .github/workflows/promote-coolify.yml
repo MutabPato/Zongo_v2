@@ -7,7 +7,7 @@ on:
         description: Coolify target environment
         required: true
         type: choice
-        options: [development, production]
+        options: [production]
       sha:
         description: Full commit SHA already published to GHCR and migrated on the target host
         required: true
@@ -32,7 +32,6 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET" in
-            development) branch=develop ;;
             production) branch=main ;;
             *) echo "Unsupported environment: $TARGET" >&2; exit 1 ;;
           esac
@@ -42,7 +41,7 @@ jobs:
             exit 1
           }
 
-      - name: Pin Coolify to the immutable image and deploy
+      - name: Pin Coolify production to the immutable image and deploy
         env:
           COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}

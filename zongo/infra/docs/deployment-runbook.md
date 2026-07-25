@@ -9,8 +9,9 @@
 | `production`  | GCE VM                | `main`           | `production`        |
 
 GitHub Actions publishes `ghcr.io/mutabpato/zongo` for every push to
-`develop` and `main`. Each release has both `sha-<commit>` and its branch
-alias tag. Coolify must run `sha-<commit>`; aliases are only convenience tags.
+`develop` and `main`. Development deployments are built by Coolify from the
+checked-out `develop` commit. Production runs an immutable `sha-<commit>`
+image; branch aliases are only convenience tags.
 
 ## Compose Contract
 
@@ -20,14 +21,14 @@ together:
 | Environment | Compose command/file                               | Source branch    | Notes                                                                                         |
 | ----------- | -------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------- |
 | Local       | `docker compose -f docker-compose.local.yml up -d` | Current checkout | Builds locally, applies migrations, and seeds the local admin.                                |
-| Development | `docker compose -f docker-compose.dev.yml up -d`   | `develop`        | Managed by Coolify; applies committed migrations, then pulls and runs a published GHCR image. |
+| Development | `docker compose -f docker-compose.dev.yml up -d`   | `develop`        | Managed by Coolify; builds the checked-out commit, then applies committed migrations.          |
 | Production  | `docker compose -f docker-compose.yml up -d`       | `main`           | Managed by Coolify; pulls a published GHCR image.                                             |
 
-The remote files assemble the application image as
-`$ZONGO_IMAGE:$ZONGO_IMAGE_TAG`. `ZONGO_IMAGE_TAG` must therefore be a Docker
-tag in the form `sha-<full-git-commit-sha>`, never an image digest in the form
-`sha256:<digest>`. A digest would produce an invalid image reference with two
-colons.
+The development Compose file builds a local `zongo-development:latest` image
+from the repository checkout. Production assembles its application image as
+`$ZONGO_IMAGE:$ZONGO_IMAGE_TAG`; `ZONGO_IMAGE_TAG` must be a Docker tag in the
+form `sha-<full-git-commit-sha>`, never an image digest in the form
+`sha256:<digest>`.
 
 Remote API, worker, and Admin services also join Coolify's external `coolify`
 Docker network. This lets the Coolify Traefik proxy resolve their labelled
@@ -89,15 +90,15 @@ and bootstrap credentials after the command succeeds.
    `docker compose version`. If the command is unavailable, install the
    `docker-compose-plugin` from Docker's official APT repository before
    debugging Coolify's Compose configuration errors.
-3. Configure GHCR credentials on each server so Coolify can pull the private
-   image. The token needs package read access only.
+3. Configure GHCR credentials on the production server so Coolify can pull
+   the private immutable image. The token needs package read access only.
 4. Create one Docker Compose application per remote environment using this
    repository and base directory `/zongo`: use `docker-compose.dev.yml` with
    the `develop` branch for development, and `docker-compose.yml` with the
-   `main` branch for production. Keep Coolify's own Git-push auto-deploy off:
-   GitHub Actions pins and deploys the immutable image after it has been
-   published. Development migrations are automatic; production migrations
-   remain a release gate.
+   `main` branch for production. Enable Coolify Git-push auto-deploy for the
+   development resource so each push to `develop` builds and deploys that
+   checked-out commit. Keep it off for production: GitHub Actions pins and
+   deploys an immutable image after the production migration gate.
    Configure the Compose resource as follows:
 
    | Coolify field                                                                       | Value                                     |
@@ -140,9 +141,9 @@ custom Compose network or direct host port mapping to remote deployments.
 
 ### Development
 
-1. Merge to `develop`. **Publish Zongo image** publishes `sha-<commit>`, then
-   automatically runs the `development` deployment job. That job pins
-   `ZONGO_IMAGE_TAG` to the immutable tag and asks Coolify to deploy.
+1. Push or merge to `develop`. Coolify receives the Git webhook, checks out
+   that commit, and builds the development Compose image locally. GitHub may
+   still publish a matching image for traceability, but it does not deploy it.
 2. `docker-compose.dev.yml` runs `prisma migrate deploy` before API, worker,
    and Admin start. Verify the deployment job and the Coolify health checks.
 
@@ -199,7 +200,7 @@ Accept a remote deployment only when:
 
 | Symptom                                                                      | Cause                                                                                                                                                            | Resolution                                                                                                                                                          |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid reference format` with `image:sha256:...`                           | An image digest was entered in `ZONGO_IMAGE_TAG`.                                                                                                                | Set it to the GitHub Actions-published `sha-<full-commit-sha>` tag.                                                                                                 |
+| `invalid reference format` with `image:sha256:...`                           | An image digest was entered in the production `ZONGO_IMAGE_TAG`.                                                                                                 | Set it to the GitHub Actions-published `sha-<full-commit-sha>` tag.                                                                                                 |
 | Coolify warns that `NODE_ENV=production` is available at build time          | Build-time production mode can omit development dependencies.                                                                                                    | Mark `NODE_ENV` runtime-only in Coolify.                                                                                                                            |
 | Admin repeatedly restarts with `EACCES: permission denied, mkdir '.adminjs'` | AdminJS defaults to a relative `.adminjs` asset directory. The working directory supplied by an orchestrator can be unwritable for the unprivileged `node` user. | Keep `ADMIN_JS_TMP_DIR=/tmp/adminjs` on the `admin` Compose service. This is an absolute, container-writable location; it requires no Coolify environment variable. |
 | Redis warns that `vm.overcommit_memory` is disabled                          | Host kernel tuning is incomplete. The warning does not prevent startup but can affect persistence under memory pressure.                                         | On the server, set `vm.overcommit_memory = 1` using the host's standard sysctl configuration and reload it.                                                         |

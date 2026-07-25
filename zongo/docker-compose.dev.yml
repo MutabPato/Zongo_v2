@@ -19,8 +19,16 @@ x-app-depends-on: &app-depends-on
   migrate:
     condition: service_completed_successfully
 
+x-application-image: &application-image
+  # Coolify builds this image from the checked-out develop commit. All
+  # application services use the same locally built image.
+  image: zongo-development:latest
+  build:
+    context: .
+    dockerfile: infra/docker/Dockerfile
+
 x-app-service: &app-service
-  image: ${ZONGO_IMAGE:?ZONGO_IMAGE is required}:${ZONGO_IMAGE_TAG:?ZONGO_IMAGE_TAG is required}
+  <<: *application-image
   restart: unless-stopped
   depends_on: *app-depends-on
   environment: *app-environment
@@ -139,7 +147,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
 
   migrate:
-    image: ${ZONGO_IMAGE:?ZONGO_IMAGE is required}:${ZONGO_IMAGE_TAG:?ZONGO_IMAGE_TAG is required}
+    <<: *application-image
     command: ['pnpm', 'exec', 'prisma', 'migrate', 'deploy']
     restart: 'no'
     depends_on: *infrastructure-depends-on

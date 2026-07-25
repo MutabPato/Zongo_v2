@@ -195,6 +195,7 @@ describe('AdminService', () => {
     expect(alerts.sensitiveAction).toHaveBeenCalledWith(
       'admin.policy.tier-0-caps.updated',
       expect.any(Object),
+      expect.any(String),
     );
   });
 

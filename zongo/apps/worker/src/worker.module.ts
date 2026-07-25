@@ -5,6 +5,8 @@ import { ConfigModule } from '@nestjs/config';
 import { DbModule } from '@app/db';
 import { HealthController } from './health.controller';
 import { WorkerJobsModule } from './worker-jobs.module';
+import { DurableJobDispatcher } from './durable-job-dispatcher.service';
+import { AdminAlertDispatcher } from './admin-alert-dispatcher.service';
 
 @Module({
   imports: [
@@ -13,6 +15,6 @@ import { WorkerJobsModule } from './worker-jobs.module';
     WorkerJobsModule,
   ],
   controllers: [WorkerController, HealthController],
-  providers: [WorkerService],
+  providers: [WorkerService, DurableJobDispatcher, AdminAlertDispatcher],
 })
 export class WorkerModule {}

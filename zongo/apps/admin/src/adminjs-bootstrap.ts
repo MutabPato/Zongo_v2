@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { PrismaService } from '@app/db';
 import { AdminService } from './admin.service';
 
@@ -75,9 +76,21 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
     import('@adminjs/express'),
     import('express'),
   ]);
-  const { default: AdminJS, Router: AdminRouter } = adminJsModule;
+  const {
+    default: AdminJS,
+    Router: AdminRouter,
+    ComponentLoader,
+  } = adminJsModule;
   const { Database, Resource, getModelByName } = prismaAdapter;
   AdminJS.registerAdapter({ Database, Resource });
+  const componentLoader = new ComponentLoader();
+  const operationsDashboard = componentLoader.add(
+    'OperationsDashboard',
+    join(
+      __dirname,
+      '../../../../../../apps/admin/src/components/operations-dashboard.jsx',
+    ),
+  );
 
   const prisma = app.get(PrismaService);
   const controlPlane = app.get(AdminService);
@@ -135,6 +148,35 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
     edit: { isAccessible: false },
     delete: { isAccessible: false },
     bulkDelete: { isAccessible: false },
+    addNote: {
+      actionType: 'record',
+      icon: 'Document',
+      isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+        ['SUPPORT', 'OPS', 'ADMIN'].includes(currentAdmin?.role ?? ''),
+      handler: async (
+        request: AdminJsRequest,
+        _response: unknown,
+        context: AdminJsContext,
+      ) => {
+        if (!context.record || !context.currentAdmin?.id)
+          throw new Error(
+            'An authenticated support user and transfer are required',
+          );
+        const body = request.payload?.body?.trim();
+        if (request.method === 'post') {
+          if (!body) throw new Error('A note body is required');
+          await controlPlane.addTransactionNote(
+            context.currentAdmin.id,
+            String(context.record.params.reference),
+            body,
+          );
+        }
+        return {
+          record: context.record.toJSON(context.currentAdmin),
+          notice: { message: 'Note added and audited', type: 'success' },
+        };
+      },
+    },
     statusRecheck: {
       actionType: 'record',
       icon: 'Refresh',
@@ -190,6 +232,41 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
             message: 'Eligible payout retry prepared and audited',
             type: 'success',
           },
+        };
+      },
+    },
+  };
+  const reconciliationActions = {
+    new: { isAccessible: false },
+    edit: { isAccessible: false },
+    delete: { isAccessible: false },
+    bulkDelete: { isAccessible: false },
+    addNote: {
+      actionType: 'record',
+      icon: 'Document',
+      isAccessible: ({ currentAdmin }: { currentAdmin?: { role?: string } }) =>
+        ['SUPPORT', 'OPS', 'ADMIN'].includes(currentAdmin?.role ?? ''),
+      handler: async (
+        request: AdminJsRequest,
+        _response: unknown,
+        context: AdminJsContext,
+      ) => {
+        if (!context.record || !context.currentAdmin?.id)
+          throw new Error(
+            'An authenticated support user and reconciliation are required',
+          );
+        const body = request.payload?.body?.trim();
+        if (request.method === 'post') {
+          if (!body) throw new Error('A note body is required');
+          await controlPlane.addReconciliationNote(
+            context.currentAdmin.id,
+            String(context.record.params.id),
+            body,
+          );
+        }
+        return {
+          record: context.record.toJSON(context.currentAdmin),
+          notice: { message: 'Note added and audited', type: 'success' },
         };
       },
     },
@@ -259,6 +336,19 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
     loginPath: '/backoffice/login',
     logoutPath: '/backoffice/logout',
     branding: { companyName: 'Zongo Operations (MFA required)' },
+    componentLoader,
+    dashboard: {
+      component: operationsDashboard,
+      handler: async (
+        _request: unknown,
+        _response: unknown,
+        context: { currentAdmin?: { id?: string } },
+      ) => {
+        if (!context.currentAdmin?.id)
+          throw new Error('An authenticated admin is required');
+        return controlPlane.dashboard(context.currentAdmin.id);
+      },
+    },
     resources: [
       'TransferTransaction',
       'Beneficiary',
@@ -277,14 +367,16 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
             ? tierPolicyActions
             : model === 'TransferTransaction'
               ? transferActions
-              : model === 'PlatformIdentity'
-                ? identityActions
-                : {
-                    new: { isAccessible: false },
-                    edit: { isAccessible: false },
-                    delete: { isAccessible: false },
-                    bulkDelete: { isAccessible: false },
-                  },
+              : model === 'TransactionReconciliation'
+                ? reconciliationActions
+                : model === 'PlatformIdentity'
+                  ? identityActions
+                  : {
+                      new: { isAccessible: false },
+                      edit: { isAccessible: false },
+                      delete: { isAccessible: false },
+                      bulkDelete: { isAccessible: false },
+                    },
       },
     })),
   });

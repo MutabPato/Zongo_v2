@@ -8,6 +8,7 @@ import { AdminController } from './admin.controller';
 import { ADMIN_ALERTS, AdminService } from './admin.service';
 import { AdminAlertService } from './admin-alert.service';
 import { HealthController } from './health.controller';
+import { WebAuthnService } from './webauthn.service';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { HealthController } from './health.controller';
       useExisting: AdminAlertService,
     },
     AdminAlertService,
+    WebAuthnService,
   ],
 })
 export class AdminModule {}

@@ -7,8 +7,10 @@ import { JobType, JobStatus, Prisma, TransactionStatus } from '@prisma/client';
 
 export interface WorkerJobInput {
   transactionReference: string;
-  jobType: Extract<JobType, 'COLLECTION' | 'PAYOUT'>;
+  jobType: Extract<JobType, 'COLLECTION' | 'PAYOUT' | 'STATUS_RECHECK'>;
   payload: Prisma.InputJsonValue;
+  /** Set by the dispatcher so the exact durable operational job is claimed. */
+  persistedJobId?: string;
 }
 
 export type WorkerJobResult =
@@ -32,16 +34,18 @@ export class WorkerJobProcessor {
 
   async process(job: WorkerJobInput): Promise<WorkerJobResult> {
     const dedupKey = `${job.transactionReference}:${job.jobType}`;
-    const durableJob = await this.prisma.workerJob.upsert({
-      where: { dedupKey },
-      create: {
-        dedupKey,
-        jobType: job.jobType,
-        transactionReference: job.transactionReference,
-        payload: job.payload,
-      },
-      update: {},
-    });
+    const durableJob = job.persistedJobId
+      ? { id: job.persistedJobId }
+      : await this.prisma.workerJob.upsert({
+          where: { dedupKey },
+          create: {
+            dedupKey,
+            jobType: job.jobType,
+            transactionReference: job.transactionReference,
+            payload: job.payload,
+          },
+          update: {},
+        });
 
     const now = new Date();
     const leaseExpiresAt = new Date(now.getTime() + this.leaseMs);
@@ -77,6 +81,74 @@ export class WorkerJobProcessor {
         await this.prisma.transferTransaction.findUniqueOrThrow({
           where: { reference: job.transactionReference },
         });
+      if (job.jobType === JobType.STATUS_RECHECK) {
+        const result = await this.partner.status(transaction.reference);
+        if (!result.success) {
+          await this.prisma.$transaction([
+            this.prisma.transferTransaction.update({
+              where: { id: transaction.id },
+              data: {
+                lastStatusRecheckAt: new Date(),
+                lastStatusRecheckResult: `FAILED:${result.error.code}`,
+              },
+            }),
+            this.prisma.workerJob.update({
+              where: { id: durableJob.id },
+              data: {
+                status: JobStatus.FAILED,
+                lastError: result.error.message,
+                leaseExpiresAt: null,
+              },
+            }),
+          ]);
+          await this.audit.append({
+            id: crypto.randomUUID(),
+            eventType: 'BUSINESS',
+            name: 'admin.transfer.status-recheck.failed',
+            transactionId: transaction.id,
+            corridorId: transaction.corridorId,
+            payload: {
+              reference: transaction.reference,
+              reason: result.error.message,
+            },
+            createdAt: new Date(),
+          });
+          return { skipped: false, status: 'FAILED' };
+        }
+        await this.prisma.$transaction([
+          this.prisma.transferTransaction.update({
+            where: { id: transaction.id },
+            data: {
+              status: result.status,
+              partnerReference: result.partnerReference,
+              lastStatusRecheckAt: new Date(),
+              lastStatusRecheckResult: result.status,
+            },
+          }),
+          this.prisma.workerJob.update({
+            where: { id: durableJob.id },
+            data: {
+              status: JobStatus.SUCCEEDED,
+              processedAt: new Date(),
+              leaseExpiresAt: null,
+            },
+          }),
+        ]);
+        await this.audit.append({
+          id: crypto.randomUUID(),
+          eventType: 'BUSINESS',
+          name: 'admin.transfer.status-recheck.completed',
+          transactionId: transaction.id,
+          corridorId: transaction.corridorId,
+          payload: {
+            reference: transaction.reference,
+            result: result.status,
+            partnerReference: result.partnerReference,
+          },
+          createdAt: new Date(),
+        });
+        return { skipped: false, status: 'SUCCEEDED' };
+      }
       if (!transaction.beneficiaryId) {
         throw new Error('A beneficiary is required to process a transfer');
       }
@@ -179,6 +251,20 @@ export class WorkerJobProcessor {
         failedReason: null,
       },
     });
+    const job = await this.prisma.workerJob.create({
+      data: {
+        dedupKey: `manual-payout-retry:${transaction.id}:${Date.now()}`,
+        transactionReference: transaction.reference,
+        transactionId: transaction.id,
+        jobType: JobType.PAYOUT,
+        payload: {
+          manual: true,
+          originalTransactionId: transaction.id,
+          correctedBeneficiaryId:
+            correctedBeneficiaryId ?? transaction.retryBeneficiaryId,
+        },
+      },
+    });
     await this.audit.append({
       id: crypto.randomUUID(),
       eventType: 'BUSINESS',
@@ -196,6 +282,7 @@ export class WorkerJobProcessor {
       transactionReference: transaction.reference,
       jobType: JobType.PAYOUT,
       payload: { manual: true },
+      persistedJobId: job.id,
     };
   }
 

@@ -9,11 +9,15 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { WebAuthnService } from './webauthn.service';
 import { TransactionStatus } from '@prisma/client';
 
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly webauthn: WebAuthnService,
+  ) {}
 
   @Get()
   getControlPlane() {
@@ -23,6 +27,44 @@ export class AdminController {
   @Post('auth/login')
   login(@Body() body: { userId: string; totpCode: string }) {
     return this.adminService.login(body.userId, body.totpCode);
+  }
+
+  @Post('auth/hardware-key/register/options')
+  async hardwareKeyRegistrationOptions(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    const actor = await this.actor(authorization);
+    return this.webauthn.registrationOptions(actor.id);
+  }
+
+  @Post('auth/hardware-key/register/verify')
+  async verifyHardwareKeyRegistration(
+    @Headers('authorization') authorization: string | undefined,
+    @Body()
+    body: { response: Parameters<WebAuthnService['verifyRegistration']>[1] },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.webauthn.verifyRegistration(actor.id, body.response);
+  }
+
+  @Post('auth/hardware-key/login/options')
+  hardwareKeyLoginOptions(@Body() body: { userId: string }) {
+    return this.webauthn.authenticationOptions(body.userId);
+  }
+
+  @Post('auth/hardware-key/login/verify')
+  async verifyHardwareKeyLogin(
+    @Body()
+    body: {
+      userId: string;
+      response: Parameters<WebAuthnService['verifyAuthentication']>[1];
+    },
+  ) {
+    const identityId = await this.webauthn.verifyAuthentication(
+      body.userId,
+      body.response,
+    );
+    return this.adminService.loginWithHardwareKey(identityId);
   }
 
   @Post('auth/break-glass')

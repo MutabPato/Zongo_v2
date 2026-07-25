@@ -159,6 +159,10 @@ services:
     restart: 'no'
     depends_on: *infrastructure-depends-on
     environment: *app-environment
+    # Coolify attaches one-off services to its resource network unless this is
+    # explicit. PostgreSQL's private alias lives on the Compose default network.
+    networks:
+      - default
 
 volumes:
   postgres-development-data:

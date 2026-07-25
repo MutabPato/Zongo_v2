@@ -64,8 +64,8 @@
 - Observability stack: start with GCP-native tooling and move to open source if cost becomes too high.
 - Security posture: defense in depth, but pragmatic.
 - IAM: separate service accounts for API, worker, and admin operations; least privilege; no shared credentials between services.
-- Environments: dev, staging, and prod are separated.
-- Secrets: use environment variables locally and managed secrets in deployment.
+- Environments: `local` runs on the developer machine, `development` runs on the self-hosted local server, and `production` runs on the GCE VM.
+- Secrets: use environment variables in `local` and managed secrets in `development` and `production`.
 - Data handling: sensitive data is minimized and segmented where practical.
 - KYC provider: Smile ID is the KYC verification provider.
 - Future-channel-ready user profile: store the minimum durable profile needed to contact the user and migrate them later, plus verification history and contact preferences, including legal name, KYC status, linked phone number, WhatsApp number, backup phone, optional email, verification timestamps, provider reference IDs, change history, preferred channel, language, and notification opt-in.

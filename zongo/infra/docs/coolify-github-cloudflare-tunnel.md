@@ -148,8 +148,8 @@ and keep the Compose services themselves without host-published ports.
 
 For this project, keep `ADMIN_HOSTNAME` private to the Tailscale network unless
 the access model is intentionally changed. Do not put the admin hostname on a
-public Cloudflare route without revisiting the VPN middleware and security
-assumptions.
+public Cloudflare route without revisiting the email-and-TOTP protection and
+exposure assumptions.
 
 ## Security and operations
 

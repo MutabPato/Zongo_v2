@@ -112,11 +112,12 @@ and bootstrap credentials after the command succeeds.
    connection field. Do not define `DATABASE_URL` in Coolify. Keep `NODE_ENV` runtime-only; setting it at build time can omit Node
    development dependencies needed to build the image.
 5. Create separate public DNS records for `API_HOSTNAME`. Configure
-   `ADMIN_HOSTNAME` only in Tailscale split DNS, pointing at the target
-   server's Tailnet address; do not create a public DNS record for it.
-6. Install Tailscale on every admin client and each deployment server. The
-   Compose files define the Admin router's Tailscale IP allow-list as Docker
-   labels, so no server-local Traefik dynamic-configuration file is required.
+   `ADMIN_HOSTNAME` in Tailscale split DNS, pointing at the target server's
+   Tailnet address, and do not create a public DNS record for it. This reduces
+   accidental exposure, but it is not an authorization boundary.
+6. Install Tailscale on every admin client and each deployment server. Admin
+   access is authorized by its email-and-TOTP login; Docker source NAT prevents
+   Traefik from reliably enforcing a client Tailscale IP allow-list.
    If a host has no public inbound address, use the procedure in
    `coolify-github-cloudflare-tunnel.md` for the Coolify dashboard and GitHub App.
 
@@ -152,8 +153,8 @@ without a recovery plan.
 Accept a remote deployment only when:
 
 - the public API hostname returns `200` from `/health/ready`;
-- the admin hostname works from a Tailscale client and is rejected outside the
-  Tailnet;
+- the admin hostname works from a Tailscale client and requires a valid
+  email-and-TOTP login;
 - Postgres and Redis are healthy and have no host-published ports;
 - the worker is healthy but has no domain or host port; and
 - Coolify reports successful health checks before routing traffic.

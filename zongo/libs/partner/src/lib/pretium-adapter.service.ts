@@ -3,6 +3,7 @@ import {
   PartnerCollectionRequest,
   PartnerPayoutRequest,
   PartnerResult,
+  PartnerStatusResult,
 } from './partner-port';
 import { normalizePartnerError } from './partner-error';
 import type { PretiumClient } from './pretium-adapter';
@@ -26,7 +27,7 @@ export class PretiumPartnerAdapter implements PartnerPort {
         partnerReference: response.partnerReference,
       };
     } catch (error) {
-      return this.fail(error);
+      return { success: false, error: normalizePartnerError(error) };
     }
   }
 
@@ -44,6 +45,19 @@ export class PretiumPartnerAdapter implements PartnerPort {
       };
     } catch (error) {
       return this.fail(error);
+    }
+  }
+
+  async status(reference: string): Promise<PartnerStatusResult> {
+    try {
+      const response = await this.client.status({ reference });
+      return {
+        success: true,
+        status: response.status,
+        partnerReference: response.partnerReference,
+      };
+    } catch (error) {
+      return { success: false, error: normalizePartnerError(error) };
     }
   }
 

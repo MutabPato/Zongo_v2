@@ -23,6 +23,7 @@ describe('WorkerJobProcessor', () => {
     const partner = {
       collect: jest.fn(),
       payout: jest.fn(),
+      status: jest.fn(),
     } as unknown as PartnerPort;
     const audit = { append: jest.fn() } as unknown as AuditLogPort;
     const prisma = {
@@ -56,6 +57,7 @@ describe('WorkerJobProcessor', () => {
           partnerReference: 'partner_1',
         }),
       payout: jest.fn(),
+      status: jest.fn(),
     };
     const update = jest.fn().mockResolvedValue({});
     const prisma = {
@@ -108,11 +110,13 @@ describe('WorkerJobProcessor', () => {
       retryBeneficiaryId: null,
     };
     const update = jest.fn().mockResolvedValue({});
+    const create = jest.fn().mockResolvedValue({ id: 'manual_job_1' });
     const prisma = {
       transferTransaction: {
         findUniqueOrThrow: jest.fn().mockResolvedValue(failedTransaction),
         update,
       },
+      workerJob: { create },
     } as unknown as PrismaService;
     const processor = new WorkerJobProcessor(prisma, {} as PartnerPort, {
       append: jest.fn().mockResolvedValue(undefined),
@@ -127,6 +131,7 @@ describe('WorkerJobProcessor', () => {
       transactionReference: transaction.reference,
       jobType: 'PAYOUT',
       payload: { manual: true },
+      persistedJobId: 'manual_job_1',
     });
     expect(update).toHaveBeenCalledWith({
       where: { id: transaction.id },

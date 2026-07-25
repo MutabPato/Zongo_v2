@@ -24,6 +24,7 @@ export interface AdminAlertPort {
   sensitiveAction(
     name: string,
     details: Record<string, unknown>,
+    auditEventId: string,
   ): Promise<void>;
 }
 
@@ -71,6 +72,36 @@ export class AdminService {
       }),
     ]);
     await this.record(identity, 'admin.login.mfa-verified', {
+      target: `identity:${identity.id}`,
+    });
+    return {
+      accessToken: token,
+      expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000),
+    };
+  }
+
+  /** Establishes the same short-lived session after a verified WebAuthn ceremony. */
+  async loginWithHardwareKey(identityId: string) {
+    const identity = await this.prisma.platformIdentity.findUniqueOrThrow({
+      where: { id: identityId },
+    });
+    if (identity.blockedAt) throw new ForbiddenException('Identity is blocked');
+    const token = randomBytes(32).toString('base64url');
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.platformIdentity.update({
+        where: { id: identity.id },
+        data: { mfaVerifiedAt: now },
+      }),
+      this.prisma.adminSession.create({
+        data: {
+          identityId: identity.id,
+          tokenHash: this.hashToken(token),
+          expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000),
+        },
+      }),
+    ]);
+    await this.record(identity, 'admin.login.hardware-key-verified', {
       target: `identity:${identity.id}`,
     });
     return {
@@ -486,8 +517,9 @@ export class AdminService {
     payload: Record<string, unknown>,
     sensitive = false,
   ): Promise<void> {
+    const auditEventId = crypto.randomUUID();
     await this.audit?.append({
-      id: crypto.randomUUID(),
+      id: auditEventId,
       eventType: 'BUSINESS',
       name,
       actorType: 'ADMIN',
@@ -496,10 +528,14 @@ export class AdminService {
       createdAt: new Date(),
     });
     if (sensitive)
-      await this.alerts?.sensitiveAction(name, {
-        actorId: actor.id,
-        ...payload,
-      });
+      await this.alerts?.sensitiveAction(
+        name,
+        {
+          actorId: actor.id,
+          ...payload,
+        },
+        auditEventId,
+      );
   }
 
   private hashToken(token: string): string {

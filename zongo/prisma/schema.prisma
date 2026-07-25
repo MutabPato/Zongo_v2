@@ -226,8 +226,38 @@ model PlatformIdentity {
 
   sessions AdminSession[]
   notes AdminNote[] @relation("AuthoredAdminNote")
+  hardwareKeys HardwareKeyCredential[]
+  webAuthnChallenges WebAuthnChallenge[]
 
   @@index([role, blockedAt])
+}
+
+/// Registered WebAuthn hardware authenticators. Public keys and counters never leave the platform.
+model HardwareKeyCredential {
+  id String @id @default(cuid())
+  identityId String
+  credentialId String @unique
+  publicKey Bytes
+  counter Int @default(0)
+  transports String[]
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime?
+
+  identity PlatformIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+  @@index([identityId])
+}
+
+/// Short-lived, single-use server challenges for registration and authentication ceremonies.
+model WebAuthnChallenge {
+  id String @id @default(cuid())
+  identityId String
+  challenge String @unique
+  ceremony String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  identity PlatformIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+  @@index([identityId, ceremony, expiresAt])
 }
 
 /// Short-lived, hashed sessions. Raw bearer tokens are never stored.

@@ -4,4 +4,5 @@ export {
   type PartnerPayoutRequest,
   type PartnerPort,
   type PartnerResult,
+  type PartnerStatusResult,
 } from '@app/domain';

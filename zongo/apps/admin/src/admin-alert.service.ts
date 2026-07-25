@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { AdminAlertPort } from './admin.service';
+import { PrismaService } from '@app/db';
+import { Prisma } from '@prisma/client';
 
 /**
  * Sends sensitive operational events to the deployment's urgent-event
@@ -10,38 +12,33 @@ import type { AdminAlertPort } from './admin.service';
 export class AdminAlertService implements AdminAlertPort {
   private readonly logger = new Logger(AdminAlertService.name);
 
+  constructor(private readonly prisma: PrismaService) {}
+
   async sensitiveAction(
     name: string,
     details: Record<string, unknown>,
+    auditEventId: string,
   ): Promise<void> {
-    const webhookUrl = process.env.ADMIN_ALERT_WEBHOOK_URL;
-    const event = {
-      severity: 'urgent',
-      source: 'zongo-admin-control-plane',
-      name,
-      occurredAt: new Date().toISOString(),
-      details,
-    };
-
-    if (!webhookUrl) {
-      this.logger.warn(`SENSITIVE_ADMIN_ACTION ${JSON.stringify(event)}`);
-      return;
-    }
-
     try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(event),
+      await this.prisma.adminAlertDelivery.create({
+        data: {
+          auditEventId,
+          actionName: name,
+          payload: {
+            severity: 'urgent',
+            source: 'zongo-admin-control-plane',
+            name,
+            occurredAt: new Date().toISOString(),
+            details,
+          } as Prisma.InputJsonValue,
+          nextAttemptAt: new Date(),
+        },
       });
-      if (!response.ok)
-        this.logger.error(
-          `Admin alert delivery failed with HTTP ${response.status}: ${name}`,
-        );
     } catch (error) {
-      // Alerts must not make an already-completed money operation fail. The
-      // structured error keeps the failed alert observable and retryable.
-      this.logger.error(`Admin alert delivery failed: ${name}`, error);
+      this.logger.error(
+        `Could not enqueue sensitive admin alert: ${name}`,
+        error,
+      );
     }
   }
 }

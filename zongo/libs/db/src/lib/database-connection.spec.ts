@@ -9,9 +9,12 @@ describe('database connection configuration', () => {
     POSTGRES_DB: 'zongo',
   };
 
-  it('passes the raw password to the runtime client', () => {
-    expect(databasePoolConfig(environment).password).toBe(
-      environment.POSTGRES_PASSWORD,
+  it('uses the encoded URL for the runtime client', () => {
+    const config = databasePoolConfig(environment);
+
+    expect(config.connectionString).toBe(databaseUrl(environment));
+    expect(new URL(config.connectionString!).password).toBe(
+      encodeURIComponent(environment.POSTGRES_PASSWORD),
     );
   });
 

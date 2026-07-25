@@ -47,6 +47,7 @@ services:
       - '3000'
     labels:
       - 'traefik.enable=true'
+      - 'traefik.docker.network=coolify'
       - 'traefik.http.routers.zongo-api.rule=Host(`${API_HOSTNAME}`)'
       - 'traefik.http.routers.zongo-api.entrypoints=websecure'
       - 'traefik.http.routers.zongo-api.tls=true'
@@ -93,6 +94,7 @@ services:
       - '3002'
     labels:
       - 'traefik.enable=true'
+      - 'traefik.docker.network=coolify'
       - 'traefik.http.routers.zongo-admin.rule=Host(`${ADMIN_HOSTNAME}`)'
       - 'traefik.http.routers.zongo-admin.entrypoints=websecure'
       - 'traefik.http.routers.zongo-admin.tls=true'

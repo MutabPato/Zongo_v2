@@ -47,7 +47,7 @@ services:
       - '3000'
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.zongo-api.rule=Host(`${API_HOSTNAME:?API_HOSTNAME is required}`)'
+      - 'traefik.http.routers.zongo-api.rule=Host(`${API_HOSTNAME}`)'
       - 'traefik.http.routers.zongo-api.entrypoints=websecure'
       - 'traefik.http.routers.zongo-api.tls=true'
       - 'traefik.http.services.zongo-api.loadbalancer.server.port=3000'
@@ -93,7 +93,7 @@ services:
       - '3002'
     labels:
       - 'traefik.enable=true'
-      - 'traefik.http.routers.zongo-admin.rule=Host(`${ADMIN_HOSTNAME:?ADMIN_HOSTNAME is required}`)'
+      - 'traefik.http.routers.zongo-admin.rule=Host(`${ADMIN_HOSTNAME}`)'
       - 'traefik.http.routers.zongo-admin.entrypoints=websecure'
       - 'traefik.http.routers.zongo-admin.tls=true'
       - 'traefik.http.routers.zongo-admin.middlewares=zongo-admin-vpn@file'

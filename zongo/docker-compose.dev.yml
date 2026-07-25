@@ -98,7 +98,8 @@ services:
       - 'traefik.http.routers.zongo-dev-admin.rule=Host(`${ADMIN_HOSTNAME}`)'
       - 'traefik.http.routers.zongo-dev-admin.entrypoints=https'
       - 'traefik.http.routers.zongo-dev-admin.tls=true'
-      - 'traefik.http.routers.zongo-dev-admin.middlewares=zongo-admin-vpn@file'
+      - 'traefik.http.middlewares.zongo-dev-admin-vpn.ipallowlist.sourcerange=100.64.0.0/10,fd7a:115c:a1e0::/48'
+      - 'traefik.http.routers.zongo-dev-admin.middlewares=zongo-dev-admin-vpn'
       - 'traefik.http.services.zongo-dev-admin.loadbalancer.server.port=3002'
     healthcheck:
       test:

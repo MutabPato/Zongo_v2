@@ -114,10 +114,9 @@ and bootstrap credentials after the command succeeds.
 5. Create separate public DNS records for `API_HOSTNAME`. Configure
    `ADMIN_HOSTNAME` only in Tailscale split DNS, pointing at the target
    server's Tailnet address; do not create a public DNS record for it.
-6. Add `infra/coolify/zongo-admin-vpn.yaml` in each Coolify server's Proxy >
-   Dynamic Configurations. This supplies the `zongo-admin-vpn@file` middleware
-   referenced by the Compose stack. Install Tailscale on every admin client and
-   each deployment server.
+6. Install Tailscale on every admin client and each deployment server. The
+   Compose files define the Admin router's Tailscale IP allow-list as Docker
+   labels, so no server-local Traefik dynamic-configuration file is required.
    If a host has no public inbound address, use the procedure in
    `coolify-github-cloudflare-tunnel.md` for the Coolify dashboard and GitHub App.
 

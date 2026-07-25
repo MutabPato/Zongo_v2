@@ -2,23 +2,17 @@ import { Module } from '@nestjs/common';
 import { WorkerController } from './worker.controller';
 import { WorkerService } from './worker.service';
 import { ConfigModule } from '@nestjs/config';
-import { AuditModule } from '@app/audit';
 import { DbModule } from '@app/db';
-import { DomainModule } from '@app/domain';
-import { PartnerModule } from '@app/partner';
-import { WorkerJobProcessor } from './worker-job.processor';
 import { HealthController } from './health.controller';
+import { WorkerJobsModule } from './worker-jobs.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    DomainModule,
-    PartnerModule,
-    AuditModule,
     DbModule,
+    WorkerJobsModule,
   ],
   controllers: [WorkerController, HealthController],
-  providers: [WorkerService, WorkerJobProcessor],
-  exports: [WorkerJobProcessor],
+  providers: [WorkerService],
 })
 export class WorkerModule {}

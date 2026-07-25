@@ -2,7 +2,10 @@ name: zongo
 
 x-app-environment: &app-environment
   NODE_ENV: ${NODE_ENV:-production}
-  POSTGRES_HOST: postgres
+  # This alias exists only on this stack's private default network. The generic
+  # `postgres` name can collide with another Coolify application on the shared
+  # `coolify` network.
+  POSTGRES_HOST: zongo-production-postgres
   POSTGRES_PORT: '5432'
   POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -118,6 +121,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    networks:
+      default:
+        aliases:
+          - zongo-production-postgres
 
   redis:
     image: redis:7.4-bookworm
@@ -154,7 +161,6 @@ services:
     environment: *app-environment
     networks:
       - default
-      - coolify
 
 volumes:
   postgres-data:

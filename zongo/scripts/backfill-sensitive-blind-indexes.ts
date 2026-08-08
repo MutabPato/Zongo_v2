@@ -7,6 +7,58 @@ import { Prisma } from '@prisma/client';
 
 const BATCH_SIZE = 100;
 
+export type SensitiveSenderBackfillRow = {
+  email: string | null;
+  emailCiphertext: string | null;
+  senderPhoneNumber: string | null;
+  senderPhoneCiphertext: string | null;
+  whatsappPhoneNumber: string | null;
+  backupPhoneNumber: string | null;
+  backupPhoneCiphertext: string | null;
+};
+
+export async function buildSenderProfileBackfillData(
+  row: SensitiveSenderBackfillRow,
+  protection: EnvelopeEncryptionService,
+): Promise<Prisma.SenderProfileUpdateInput> {
+  const senderPhone = row.senderPhoneNumber ?? row.whatsappPhoneNumber;
+  return {
+    ...(row.email && !row.emailCiphertext
+      ? {
+          emailCiphertext: JSON.stringify(
+            await protection.encrypt(row.email, 'sender-email'),
+          ),
+          emailBlindIndex: await protection.blindIndex(
+            row.email,
+            'sender-email',
+          ),
+          email: null,
+        }
+      : {}),
+    ...(senderPhone && !row.senderPhoneCiphertext
+      ? {
+          senderPhoneCiphertext: JSON.stringify(
+            await protection.encrypt(senderPhone, 'sender-phone'),
+          ),
+          senderPhoneBlindIndex: await protection.blindIndex(
+            senderPhone,
+            'sender-phone',
+          ),
+          senderPhoneNumber: null,
+          whatsappPhoneNumber: null,
+        }
+      : {}),
+    ...(row.backupPhoneNumber && !row.backupPhoneCiphertext
+      ? {
+          backupPhoneCiphertext: JSON.stringify(
+            await protection.encrypt(row.backupPhoneNumber, 'sender-phone'),
+          ),
+          backupPhoneNumber: null,
+        }
+      : {}),
+  };
+}
+
 async function main(): Promise<void> {
   if (process.env.ALLOW_SENSITIVE_INDEX_BACKFILL !== 'true') {
     throw new Error(
@@ -51,48 +103,9 @@ async function main(): Promise<void> {
       });
       if (rows.length === 0) break;
       for (const row of rows) {
-        const senderPhone =
-          row.senderPhoneNumber ?? row.whatsappPhoneNumber ?? undefined;
         await prisma.senderProfile.update({
           where: { id: row.id },
-          data: {
-            ...(row.email && !row.emailCiphertext
-              ? {
-                  emailCiphertext: JSON.stringify(
-                    await protection.encrypt(row.email, 'sender-email'),
-                  ),
-                  emailBlindIndex: await protection.blindIndex(
-                    row.email,
-                    'sender-email',
-                  ),
-                  email: undefined,
-                }
-              : {}),
-            ...(senderPhone && !row.senderPhoneCiphertext
-              ? {
-                  senderPhoneCiphertext: JSON.stringify(
-                    await protection.encrypt(senderPhone, 'sender-phone'),
-                  ),
-                  senderPhoneBlindIndex: await protection.blindIndex(
-                    senderPhone,
-                    'sender-phone',
-                  ),
-                  senderPhoneNumber: undefined,
-                  whatsappPhoneNumber: undefined,
-                }
-              : {}),
-            ...(row.backupPhoneNumber && !row.backupPhoneCiphertext
-              ? {
-                  backupPhoneCiphertext: JSON.stringify(
-                    await protection.encrypt(
-                      row.backupPhoneNumber,
-                      'sender-phone',
-                    ),
-                  ),
-                  backupPhoneNumber: undefined,
-                }
-              : {}),
-          },
+          data: await buildSenderProfileBackfillData(row, protection),
         });
         senderProfiles += 1;
       }
@@ -120,7 +133,7 @@ async function main(): Promise<void> {
                 'beneficiary-payout-account',
               ),
             ),
-            payoutAccount: undefined,
+            payoutAccount: Prisma.JsonNull,
           },
         });
         beneficiaries += 1;
@@ -200,7 +213,8 @@ async function awaitIndex(
   return protection.blindIndex(value, 'provider-reference');
 }
 
-void main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : 'Backfill failed');
-  process.exitCode = 1;
-});
+if (require.main === module)
+  void main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : 'Backfill failed');
+    process.exitCode = 1;
+  });

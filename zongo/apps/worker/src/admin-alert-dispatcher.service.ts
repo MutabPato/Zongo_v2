@@ -43,6 +43,15 @@ export class AdminAlertDispatcher implements OnModuleInit, OnModuleDestroy {
         take: 20,
       });
       for (const delivery of deliveries) await this.deliver(delivery);
+    } catch (error) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'dependency.failure',
+          dependency: 'postgres',
+          operation: 'admin-alert.dispatch',
+          message: error instanceof Error ? error.message : 'unknown failure',
+        }),
+      );
     } finally {
       this.running = false;
     }

@@ -22,6 +22,8 @@ import {
   JobType,
   PilotControlKey,
   PilotControlState,
+  PilotApprovalRole,
+  PilotReadinessStage,
   TransactionStatus,
   VerificationStatus,
 } from '@prisma/client';
@@ -746,6 +748,88 @@ export class AdminService {
     return approval;
   }
 
+  async recordPilotReadinessStage(
+    actorId: string,
+    stage: string,
+    input: {
+      evidenceRefs: Record<string, string>;
+      approvedCohort?: Record<string, unknown>;
+      numericLimits?: Record<string, unknown>;
+      releaseConfiguration?: Record<string, unknown>;
+      rollbackPlan?: string;
+    },
+  ) {
+    const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
+    if (
+      stage !== PilotReadinessStage.FOUNDATION_COMPLETE &&
+      stage !== PilotReadinessStage.LOCAL_E2E_COMPLETE
+    )
+      throw new ForbiddenException(
+        'Pilot Ready must be published through the final release boundary',
+      );
+    const evidenceRefs = Object.fromEntries(
+      Object.entries(input.evidenceRefs).filter(
+        ([, value]) => typeof value === 'string' && value.trim().length > 0,
+      ),
+    );
+    if (!Object.keys(evidenceRefs).length)
+      throw new ForbiddenException('Stage evidence references are required');
+
+    const requiredRoles: PilotApprovalRole[] =
+      stage === PilotReadinessStage.FOUNDATION_COMPLETE
+        ? [PilotApprovalRole.ENGINEERING]
+        : [PilotApprovalRole.ENGINEERING, PilotApprovalRole.OPERATIONS];
+    const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
+      where: { id: 'pilot' },
+      include: { approvals: true },
+    });
+    const missingRoles = requiredRoles.filter(
+      (role) =>
+        !existingRecord?.approvals.some((approval) => approval.role === role),
+    );
+    if (missingRoles.length)
+      throw new ForbiddenException(
+        `Stage approvals are incomplete: ${missingRoles.join(', ')}`,
+      );
+    const record = await this.prisma.pilotReleaseRecord.upsert({
+      where: { id: 'pilot' },
+      create: { id: 'pilot', stage },
+      update: {
+        stage:
+          this.readinessStageOrder(stage) >=
+          this.readinessStageOrder(
+            existingRecord?.stage ?? PilotReadinessStage.FOUNDATION_COMPLETE,
+          )
+            ? stage
+            : undefined,
+      },
+    });
+    const stageRecord = await this.prisma.pilotReadinessStageRecord.create({
+      data: {
+        recordId: record.id,
+        stage,
+        evidenceRefs,
+        approvedCohort: input.approvedCohort as Prisma.InputJsonValue,
+        numericLimits: input.numericLimits as Prisma.InputJsonValue,
+        releaseConfiguration:
+          input.releaseConfiguration as Prisma.InputJsonValue,
+        rollbackPlan: input.rollbackPlan?.trim() || null,
+        recordedByIdentityId: actor.id,
+      },
+    });
+    await this.record(
+      actor,
+      'admin.pilot-readiness.stage-recorded',
+      {
+        target: `pilot-release:${record.id}`,
+        stage,
+        stageRecordId: stageRecord.id,
+      },
+      true,
+    );
+    return stageRecord;
+  }
+
   async publishPilotReadiness(
     actorId: string,
     input: {
@@ -1065,6 +1149,16 @@ export class AdminService {
       throw new ForbiddenException(
         'Pilot Ready evidence and no-waiver approval are required before global start',
       );
+  }
+
+  private readinessStageOrder(stage: string): number {
+    return (
+      {
+        [PilotReadinessStage.FOUNDATION_COMPLETE]: 1,
+        [PilotReadinessStage.LOCAL_E2E_COMPLETE]: 2,
+        [PilotReadinessStage.PILOT_READY]: 3,
+      }[stage] ?? 0
+    );
   }
 
   private async record(

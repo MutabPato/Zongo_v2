@@ -373,6 +373,49 @@ describe('AdminService', () => {
     delete process.env.ENGINEERING_LEAD_ID;
   });
 
+  it('preserves a separately verifiable Foundation readiness stage snapshot', async () => {
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const stageCreate = jest.fn().mockResolvedValue({ id: 'stage_1' });
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'engineering_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'pilot',
+          stage: 'FOUNDATION_COMPLETE',
+          approvals: [{ role: 'ENGINEERING' }],
+        }),
+        upsert: jest.fn().mockResolvedValue({ id: 'pilot' }),
+      },
+      pilotReadinessStageRecord: { create: stageCreate },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma, audit).recordPilotReadinessStage(
+        'engineering_1',
+        'FOUNDATION_COMPLETE',
+        { evidenceRefs: { unit: 'evidence://unit-tests' } },
+      ),
+    ).resolves.toEqual({ id: 'stage_1' });
+    expect(stageCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recordId: 'pilot',
+          stage: 'FOUNDATION_COMPLETE',
+        }),
+      }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'admin.pilot-readiness.stage-recorded' }),
+    );
+  });
+
   it('allows only the configured engineering lead to isolate provider movement', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const upsert = jest.fn().mockResolvedValue({

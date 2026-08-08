@@ -583,6 +583,26 @@ model PilotReleaseRecord {
   updatedAt DateTime @updatedAt
 
   approvals PilotReleaseApproval[]
+  stageRecords PilotReadinessStageRecord[]
+}
+
+model PilotReadinessStageRecord {
+  id String @id @default(cuid())
+  recordId String @default("pilot")
+  stage PilotReadinessStage
+  evidenceRefs Json
+  approvedCohort Json?
+  numericLimits Json?
+  releaseConfiguration Json?
+  rollbackPlan String?
+  noWaiverConfirmed Boolean @default(false)
+  recordedByIdentityId String
+  recordedAt DateTime @default(now())
+
+  record PilotReleaseRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@index([recordId, stage, recordedAt])
+  @@index([recordedByIdentityId, recordedAt])
 }
 
 model PilotReleaseApproval {

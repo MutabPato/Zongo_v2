@@ -340,6 +340,16 @@ export class AdminController {
     return this.adminService.publishPilotReadiness(actor.id, body);
   }
 
+  @Post('pilot/release/stages/:stage')
+  async recordPilotReadinessStage(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('stage') stage: string,
+    @Body() body: Parameters<AdminService['recordPilotReadinessStage']>[2],
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.recordPilotReadinessStage(actor.id, stage, body);
+  }
+
   @Post('pilot/allowlist/:profileId')
   async setPilotAllowlist(
     @Headers('authorization') authorization: string | undefined,

@@ -754,6 +754,29 @@ export class WorkerJobProcessor {
       { reason: 'MANUAL_PAYOUT_RETRY' },
     );
     const job = await this.prisma.$transaction(async (database) => {
+      if (correctedBeneficiaryId) {
+        const correctedBeneficiary = await database.beneficiary.findUnique({
+          where: { id: correctedBeneficiaryId },
+          select: {
+            id: true,
+            userId: true,
+            corridorId: true,
+            payoutCurrency: true,
+            isCurrent: true,
+          },
+        });
+        if (
+          !correctedBeneficiary ||
+          !correctedBeneficiary.isCurrent ||
+          correctedBeneficiary.userId !== transaction.senderUserId ||
+          correctedBeneficiary.corridorId !== transaction.corridorId ||
+          correctedBeneficiary.payoutCurrency !== transaction.payoutCurrency
+        )
+          throw new DomainError(
+            'BENEFICIARY_NOT_AVAILABLE',
+            'The corrected beneficiary is not valid for this payout',
+          );
+      }
       const retryClaim = await database.transferTransaction.updateMany({
         where: {
           id: transaction.id,

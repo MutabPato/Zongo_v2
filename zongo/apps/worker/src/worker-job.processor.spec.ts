@@ -21,7 +21,9 @@ describe('WorkerJobProcessor', () => {
     id: 'tx_1',
     reference: job.transactionReference,
     beneficiaryId: 'ben_1',
+    senderUserId: 'user_1',
     sendAmountMinor: 100n,
+    payoutCurrency: 'USD',
     sendCurrency: 'USD',
     corridorId: 'corr_1',
     status: TransactionStatus.PENDING_COLLECTION,
@@ -400,6 +402,15 @@ describe('WorkerJobProcessor', () => {
       async (operation: (client: unknown) => Promise<unknown>) =>
         operation({
           transferTransaction: { updateMany: update },
+          beneficiary: {
+            findUnique: jest.fn().mockResolvedValue({
+              id: 'ben_corrected',
+              userId: 'user_1',
+              corridorId: 'corr_1',
+              payoutCurrency: 'USD',
+              isCurrent: true,
+            }),
+          },
           workerJob: { create },
         }),
     );
@@ -458,6 +469,7 @@ describe('WorkerJobProcessor', () => {
             transferTransaction: {
               updateMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
+            beneficiary: { findUnique: jest.fn() },
             workerJob: { create },
           }),
       ),
@@ -473,6 +485,45 @@ describe('WorkerJobProcessor', () => {
       processor.prepareManualPayoutRetry(transaction.reference),
     ).rejects.toThrow('already been prepared');
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a corrected beneficiary outside the sender corridor', async () => {
+    const update = jest.fn();
+    const prisma = {
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ...transaction,
+          status: TransactionStatus.PAYOUT_FAILED,
+        }),
+      },
+      $transaction: jest.fn(
+        async (operation: (client: unknown) => Promise<unknown>) =>
+          operation({
+            beneficiary: {
+              findUnique: jest.fn().mockResolvedValue({
+                id: 'ben_other',
+                userId: 'other-user',
+                corridorId: 'corr_1',
+                payoutCurrency: 'USD',
+                isCurrent: true,
+              }),
+            },
+            transferTransaction: { updateMany: update },
+            workerJob: { create: jest.fn() },
+          }),
+      ),
+    } as unknown as PrismaService;
+    const processor = new WorkerJobProcessor(
+      prisma,
+      {} as PartnerPort,
+      { append: jest.fn().mockResolvedValue(undefined) },
+      noopLedger,
+    );
+
+    await expect(
+      processor.prepareManualPayoutRetry(transaction.reference, 'ben_other'),
+    ).rejects.toMatchObject({ code: 'BENEFICIARY_NOT_AVAILABLE' });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('pays the beneficiary using payout money rather than send money', async () => {

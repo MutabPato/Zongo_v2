@@ -41,4 +41,21 @@ describe('verifyKeyLifecycle', () => {
 
     expect(verifyKeyLifecycle(env, ['sender-phone']).status).toBe('FAIL');
   });
+
+  it('fails when an encryption key is reused for blind indexes', () => {
+    const env = environment();
+    env.ZONGO_BLIND_INDEX_KEY_SENDER_PHONE =
+      env.ZONGO_ENCRYPTION_KEY_SENDER_PHONE_V2;
+
+    const result = verifyKeyLifecycle(env, ['sender-phone']);
+
+    expect(result.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'encryption-blind-index-key-separation',
+          status: 'FAIL',
+        }),
+      ]),
+    );
+  });
 });

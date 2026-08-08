@@ -132,6 +132,14 @@ export function verifyKeyLifecycle(
       uniqueBlindIndexKeys: blindIndexKeys.size,
     },
   });
+  const encryptionBlindIndexOverlap = [...encryptionKeys].some((value) =>
+    blindIndexKeys.has(value),
+  );
+  checks.push({
+    name: 'encryption-blind-index-key-separation',
+    status: encryptionBlindIndexOverlap ? 'FAIL' : 'PASS',
+    details: { overlap: encryptionBlindIndexOverlap },
+  });
 
   return {
     status: checks.every((check) => check.status === 'PASS') ? 'PASS' : 'FAIL',

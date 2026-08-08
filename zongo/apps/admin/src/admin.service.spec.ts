@@ -541,6 +541,105 @@ describe('AdminService', () => {
     delete process.env.PILOT_OPERATOR_ID;
   });
 
+  it('persists and audits a fingerprinted Pilot Ready publication', async () => {
+    process.env.PILOT_OPERATOR_ID = 'operator_1';
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const upsert = jest.fn().mockResolvedValue({
+      id: 'pilot',
+      stage: 'PILOT_READY',
+      publicationHash: 'a'.repeat(64),
+    });
+    const now = new Date('2026-08-08T23:00:00.000Z');
+    const stage = (id: string, stageName: string) => ({
+      id,
+      stage: stageName,
+      evidenceRefs: { evidence: `evidence://${id}` },
+      approvedCohort: null,
+      numericLimits: null,
+      releaseConfiguration: null,
+      rollbackPlan: null,
+      noWaiverConfirmed: false,
+      recordedByIdentityId: 'operator_1',
+      recordedAt: now,
+    });
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'operator_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'pilot',
+          approvals: [
+            'ENGINEERING',
+            'OPERATIONS',
+            'COMPLIANCE_RISK',
+            'RECONCILIATION',
+            'PILOT_OPERATOR',
+          ].map((role) => ({
+            role,
+            actorIdentityId: `${role.toLowerCase()}_1`,
+            note: `${role} approved`,
+            approvedAt: now,
+          })),
+          stageRecords: [
+            stage('foundation_1', 'FOUNDATION_COMPLETE'),
+            stage('e2e_1', 'LOCAL_E2E_COMPLETE'),
+          ],
+        }),
+        upsert,
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma, audit).publishPilotReadiness('operator_1', {
+        approvedCohort: { senderIds: ['sender_1'] },
+        numericLimits: { dailySendMinor: '100000' },
+        releaseConfiguration: { corridor: 'DRC-KENYA' },
+        rollbackPlan: 'Pause movement and reconcile open transfers.',
+        evidenceRefs: {
+          kyc: 'evidence://kyc',
+          provider: 'evidence://provider',
+          security: 'evidence://security',
+          dpiaRetention: 'evidence://dpia',
+          reconciliation: 'evidence://reconciliation',
+          recovery: 'evidence://recovery',
+          observability: 'evidence://observability',
+          incident: 'evidence://incident',
+          customerJourney: 'evidence://journey',
+        },
+        noWaiverConfirmed: true,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ stage: 'PILOT_READY' }));
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          publicationHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+          publishedByIdentityId: 'operator_1',
+          publishedAt: expect.any(Date),
+        }),
+        update: expect.objectContaining({
+          publicationHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+          publishedByIdentityId: 'operator_1',
+        }),
+      }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'admin.pilot-readiness.published',
+        payload: expect.objectContaining({
+          publicationHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        }),
+      }),
+    );
+    delete process.env.PILOT_OPERATOR_ID;
+  });
+
   it('allows only the configured engineering lead to isolate provider movement', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const upsert = jest.fn().mockResolvedValue({

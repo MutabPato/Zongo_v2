@@ -28,6 +28,10 @@ export class WorkerMetricsService {
       mismatchedReconciliations,
       pausedControls,
       pendingAlerts,
+      pendingPartnerRequests,
+      providerCallbackEvents,
+      blockedIdentities,
+      dependencyFailureEvents,
     ] = await Promise.all([
       this.prisma.transferTransaction.count(),
       this.prisma.workerJob.count({
@@ -70,6 +74,26 @@ export class WorkerMetricsService {
             ],
           },
         },
+      }),
+      this.prisma.transferTransaction.count({
+        where: {
+          status: {
+            in: [
+              TransactionStatus.PENDING_COLLECTION,
+              TransactionStatus.PENDING_PAYOUT,
+            ],
+          },
+          partnerReference: { not: null },
+        },
+      }),
+      this.prisma.auditEvent.count({
+        where: { name: { startsWith: 'transfer.callback.' } },
+      }),
+      this.prisma.platformIdentity.count({
+        where: { blockedAt: { not: null } },
+      }),
+      this.prisma.auditEvent.count({
+        where: { name: { startsWith: 'dependency.' } },
       }),
     ]);
 
@@ -118,8 +142,18 @@ export class WorkerMetricsService {
         jobsByType: Object.fromEntries(jobsByType),
       },
       kyc: { reviewQueue: verifications },
+      partner: {
+        pendingRequests: pendingPartnerRequests,
+        callbackEvents: providerCallbackEvents,
+      },
       notifications: { pending: pendingNotifications },
       reconciliation: { mismatches: mismatchedReconciliations },
+      security: { blockedIdentities },
+      dependencies: {
+        recordedFailures: dependencyFailureEvents,
+        postgresAuthoritative: true,
+        redisRebuildable: true,
+      },
       controls: { paused: pausedControls },
       alerts: { pendingOrFailed: pendingAlerts },
     };

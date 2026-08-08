@@ -374,6 +374,7 @@ describe('AdminService', () => {
   });
 
   it('preserves a separately verifiable Foundation readiness stage snapshot', async () => {
+    process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const stageCreate = jest.fn().mockResolvedValue({ id: 'stage_1' });
     const prisma = {
@@ -414,6 +415,7 @@ describe('AdminService', () => {
     expect(audit.append).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'admin.pilot-readiness.stage-recorded' }),
     );
+    delete process.env.ENGINEERING_LEAD_ID;
   });
 
   it('allows only the configured engineering lead to isolate provider movement', async () => {

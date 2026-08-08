@@ -779,6 +779,13 @@ export class AdminService {
       stage === PilotReadinessStage.FOUNDATION_COMPLETE
         ? [PilotApprovalRole.ENGINEERING]
         : [PilotApprovalRole.ENGINEERING, PilotApprovalRole.OPERATIONS];
+    const authorizedStageActors = requiredRoles.map(
+      (role) => process.env[PilotApprovalAuthority[role]],
+    );
+    if (!authorizedStageActors.includes(actor.id))
+      throw new ForbiddenException(
+        'The actor is not authorized to record this readiness stage',
+      );
     const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
       include: { approvals: true },

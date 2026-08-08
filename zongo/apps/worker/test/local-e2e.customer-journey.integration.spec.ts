@@ -5,6 +5,7 @@ import { AuditService } from '@app/audit';
 import { PrismaService } from '@app/db';
 import { TransactionReferenceService, type PartnerPort } from '@app/domain';
 import { LedgerService } from '@app/ledger';
+import { Prisma } from '@prisma/client';
 import {
   EnvironmentKeyProvider,
   EnvelopeEncryptionService,
@@ -52,6 +53,7 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
   const userId = `user-${suffix}`;
   const referencePrefix = 'ZNG-';
   let prisma: PrismaService;
+  let keyEnvironment: NodeJS.ProcessEnv;
 
   beforeAll(async () => {
     process.env.META_APP_SECRET = 'local-meta-secret';
@@ -66,6 +68,7 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
       process.env[`ZONGO_BLIND_INDEX_KEY_${purpose}`] =
         randomBytes(32).toString('base64url');
     }
+    keyEnvironment = { ...process.env };
     prisma = new PrismaService();
     await prisma.$connect();
   });
@@ -76,7 +79,7 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
 
   it('traverses signed intake through reconciled payout and notification', async () => {
     const protection = new EnvelopeEncryptionService(
-      new EnvironmentKeyProvider(),
+      new EnvironmentKeyProvider(keyEnvironment),
     );
     const audit = new AuditService(prisma);
     const ledger = new LedgerService(prisma, audit, {
@@ -158,7 +161,12 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
       sessions,
     );
     const receive = async (id: string, text: string) => {
-      const rawBody = JSON.stringify({ id, from: phone, text });
+      const rawBody = JSON.stringify({
+        id,
+        from: phone,
+        chat_id: chatId,
+        text,
+      });
       const signature = `sha256=${createHmac(
         'sha256',
         process.env.META_APP_SECRET!,
@@ -168,6 +176,7 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
       return controller.receive({ rawBody }, signature, {
         id,
         from: phone,
+        chat_id: chatId,
         text,
         type: 'text',
         message_id: id,
@@ -271,7 +280,7 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
       worker.process({
         transactionReference: transaction.reference,
         jobType: 'NOTIFICATION',
-        payload: {},
+        payload: notificationJob.payload as Prisma.InputJsonValue,
         persistedJobId: notificationJob.id,
       }),
     ).resolves.toEqual({ skipped: false, status: 'SUCCEEDED' });

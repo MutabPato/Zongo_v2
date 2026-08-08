@@ -39,25 +39,27 @@ Covered by `apps/worker/test/local-e2e.customer-journey.integration.spec.ts`:
 - support investigation through the AdminService boundary with masked sender data
   and no lifecycle mutation.
 
-The record remains `INCOMPLETE` until notification retry/failure isolation,
-full callback ordering/replay coverage, and the remaining named operational
-gates have their own executable evidence.
+The record remains `INCOMPLETE` until the controlled run records the exact
+commit/configuration and the remaining named operational gates have their own
+executable evidence. The journey includes a database-backed notification
+failure-isolation assertion; callback authentication and ordering/replay are
+covered at the API/service boundaries listed above.
 
 ## Journey gates
 
-| Gate | Result | Evidence |
-| --- | --- | --- |
-| Signed WhatsApp intake and normalization |  |  |
-| Consent, language, quote, beneficiary |  |  |
-| KYC eligibility and phone binding |  |  |
-| Same-key replay and conflicting-key rejection |  |  |
-| Active-chat contention |  |  |
-| Collection, payout, ledger, reconciliation |  |  |
-| Timeout, waiting, status-only query |  |  |
-| Notification retry and failure isolation |  |  |
-| Late/duplicate/out-of-order callback |  |  |
-| Support/admin masked investigation |  |  |
-| Manual payout recovery without automatic retry |  |  |
+| Gate                                           | Result | Evidence                                                    |
+| ---------------------------------------------- | ------ | ----------------------------------------------------------- |
+| Signed WhatsApp intake and normalization       |        |                                                             |
+| Consent, language, quote, beneficiary          |        |                                                             |
+| KYC eligibility and phone binding              |        |                                                             |
+| Same-key replay and conflicting-key rejection  |        |                                                             |
+| Active-chat contention                         |        |                                                             |
+| Collection, payout, ledger, reconciliation     |        |                                                             |
+| Timeout, waiting, status-only query            |        |                                                             |
+| Notification retry and failure isolation       |        | Database journey failure-isolation assertion + worker tests |
+| Late/duplicate/out-of-order callback           |        | API/service callback tests                                  |
+| Support/admin masked investigation             |        |                                                             |
+| Manual payout recovery without automatic retry |        |                                                             |
 
 Local E2E decision: `INCOMPLETE` until every gate has executable evidence and
 the named reviewers sign the release record.

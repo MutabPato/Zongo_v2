@@ -328,6 +328,56 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
     );
     expect(completed.reconciliation?.status).toBe('CONSISTENT');
     expect(notifications.send).toHaveBeenCalled();
+
+    const failedNotification = await prisma.notificationIntent.create({
+      data: {
+        dedupKey: `transfer:${transaction.id}:notification-failure-${suffix}`,
+        transactionId: transaction.id,
+        channel: 'WHATSAPP',
+        recipientPhoneCiphertext: phoneCiphertext,
+        template: 'transfer.resolved',
+        payload: { status: 'PAYOUT_SUCCESS', reference: transaction.reference },
+      },
+    });
+    const failedNotificationJob = await prisma.workerJob.create({
+      data: {
+        dedupKey: `notification:${failedNotification.id}`,
+        jobType: 'NOTIFICATION',
+        transactionReference: transaction.reference,
+        transactionId: transaction.id,
+        payload: { notificationIntentId: failedNotification.id },
+      },
+    });
+    const failingWorker = new WorkerJobProcessor(
+      prisma,
+      partner,
+      audit,
+      ledger,
+      { send: jest.fn().mockRejectedValue(new Error('WhatsApp unavailable')) },
+      protection,
+    );
+    await expect(
+      failingWorker.process({
+        transactionReference: transaction.reference,
+        jobType: 'NOTIFICATION',
+        payload: failedNotificationJob.payload as Prisma.InputJsonValue,
+        persistedJobId: failedNotificationJob.id,
+      }),
+    ).resolves.toEqual({ skipped: false, status: 'FAILED' });
+    await expect(
+      prisma.notificationIntent.findUniqueOrThrow({
+        where: { id: failedNotification.id },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ status: 'FAILED', attempts: 1 }),
+    );
+    await expect(
+      prisma.transferTransaction.findUniqueOrThrow({
+        where: { id: transaction.id },
+        select: { status: true },
+      }),
+    ).resolves.toEqual({ status: 'PAYOUT_SUCCESS' });
+
     const webhook = new PretiumWebhookService(
       prisma,
       audit,

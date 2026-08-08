@@ -44,3 +44,16 @@ running only when ingress throttling can be proven conservatively.
 Every pause/resume record includes incident ID, actor identity, control key,
 old/new state, reason, UTC timestamps, pending/ambiguous exposure, reconciliation
 reference, customer-impact decision, queued-job decision, and next review time.
+
+The worker appends a non-sensitive `reconciliation.sweep.completed` audit fact
+after each cadence sweep with the eligible-transaction count and job outcomes.
+Verify the exact deployment's coverage and decision history with:
+
+```sh
+ALLOW_RECONCILIATION_VERIFICATION=true pnpm verify:reconciliation
+```
+
+`PASS` requires current reconciliation coverage, owned/escalated discrepancies,
+completed sweep evidence, and durable control/readiness decision history. A
+`FAIL` is evidence to pause or withhold release; the command cannot mutate
+controls or settle transfers.

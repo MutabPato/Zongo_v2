@@ -136,4 +136,46 @@ describe('DurableJobDispatcher', () => {
     );
     delete process.env.STATUS_RECHECK_SWEEP_INTERVAL_MS;
   });
+
+  it('records a durable completed reconciliation sweep fact', async () => {
+    process.env.RECONCILIATION_SWEEP_INTERVAL_MS = '1';
+    const upsert = jest.fn().mockResolvedValue({});
+    const append = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      transferTransaction: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([{ id: 'tx_2', reference: 'ZNG-2' }])
+          .mockResolvedValueOnce([]),
+      },
+      workerJob: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert,
+      },
+      $transaction: jest.fn((operations: Promise<unknown>[]) =>
+        Promise.all(operations),
+      ),
+    } as unknown as PrismaService;
+    const processor = { process: jest.fn() } as unknown as WorkerJobProcessor;
+    const audit = { append };
+
+    await new DurableJobDispatcher(
+      prisma,
+      processor,
+      undefined,
+      audit,
+    ).dispatch();
+
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'reconciliation.sweep.completed',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({
+          eligibleTransactions: 1,
+          jobsObserved: 0,
+        }),
+      }),
+    );
+    delete process.env.RECONCILIATION_SWEEP_INTERVAL_MS;
+  });
 });

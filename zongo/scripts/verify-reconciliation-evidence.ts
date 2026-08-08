@@ -74,10 +74,7 @@ async function main(): Promise<void> {
       await prisma.transactionReconciliation.count({
         where: {
           status: { in: [...DISCREPANCY_STATUSES] },
-          OR: [
-            { discrepancyOwnerIdentityId: null },
-            { escalatedAt: null },
-          ],
+          OR: [{ discrepancyOwnerIdentityId: null }, { escalatedAt: null }],
         },
       });
     checks.push({
@@ -86,7 +83,7 @@ async function main(): Promise<void> {
       details: { unresolvedDiscrepancies },
     });
 
-    const [controlDecisionEvents, readinessPublicationEvents] =
+    const [controlDecisionEvents, readinessPublicationEvents, completedSweeps] =
       await Promise.all([
         prisma.auditEvent.count({
           where: { name: { startsWith: 'admin.pilot-control.' } },
@@ -94,15 +91,21 @@ async function main(): Promise<void> {
         prisma.auditEvent.count({
           where: { name: 'admin.pilot-readiness.published' },
         }),
+        prisma.auditEvent.count({
+          where: { name: 'reconciliation.sweep.completed' },
+        }),
       ]);
     const decisionHistoryComplete =
-      controlDecisionEvents > 0 && readinessPublicationEvents > 0;
+      controlDecisionEvents > 0 &&
+      readinessPublicationEvents > 0 &&
+      completedSweeps > 0;
     checks.push({
       name: 'release-and-control-decision-history',
       status: decisionHistoryComplete ? 'PASS' : 'FAIL',
       details: {
         controlDecisionEvents,
         readinessPublicationEvents,
+        completedSweeps,
       },
     });
 

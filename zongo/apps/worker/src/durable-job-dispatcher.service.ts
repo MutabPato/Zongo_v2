@@ -1,4 +1,5 @@
 import {
+  Inject,
   Injectable,
   OnModuleDestroy,
   OnModuleInit,
@@ -6,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { JobStatus, JobType, Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '@app/db';
+import { AUDIT_LOG_PORT, type AuditLogPort } from '@app/domain';
 import { WorkerJobProcessor } from './worker-job.processor';
 import { PilotExposureMonitor } from './pilot-exposure-monitor.service';
 
@@ -21,6 +23,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly processor: WorkerJobProcessor,
     @Optional() private readonly monitor?: PilotExposureMonitor,
+    @Optional() @Inject(AUDIT_LOG_PORT) private readonly audit?: AuditLogPort,
   ) {}
 
   onModuleInit(): void {
@@ -38,8 +41,11 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.monitor?.evaluate();
-      await this.enqueueReconciliationSweep();
+      const reconciliationSweep = await this.enqueueReconciliationSweep();
       await this.enqueuePendingStatusRechecks();
+      const reconciliationResults: Array<
+        Awaited<ReturnType<WorkerJobProcessor['process']>>
+      > = [];
       const jobs = await this.prisma.workerJob.findMany({
         where: {
           jobType: {
@@ -72,7 +78,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
       for (const job of jobs) {
         if (job.jobType === JobType.PAYOUT && job.status === JobStatus.FAILED)
           continue;
-        await this.processor.process({
+        const result = await this.processor.process({
           persistedJobId: job.id,
           transactionReference: job.transactionReference,
           jobType: job.jobType as Extract<
@@ -85,18 +91,43 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
           >,
           payload: job.payload as Prisma.InputJsonValue,
         });
+        if (job.jobType === JobType.RECONCILIATION)
+          reconciliationResults.push(result);
       }
+      if (reconciliationSweep && this.audit)
+        await this.audit.append({
+          id: crypto.randomUUID(),
+          eventType: 'TECHNICAL',
+          name: 'reconciliation.sweep.completed',
+          payload: {
+            bucket: reconciliationSweep.bucket,
+            eligibleTransactions: reconciliationSweep.eligibleTransactions,
+            jobsObserved: reconciliationResults.length,
+            succeeded: reconciliationResults.filter(
+              (result) => !result.skipped && result.status === 'SUCCEEDED',
+            ).length,
+            failed: reconciliationResults.filter(
+              (result) => !result.skipped && result.status === 'FAILED',
+            ).length,
+            skipped: reconciliationResults.filter((result) => result.skipped)
+              .length,
+          },
+          createdAt: new Date(),
+        });
     } finally {
       this.running = false;
     }
   }
 
-  private async enqueueReconciliationSweep(): Promise<void> {
+  private async enqueueReconciliationSweep(): Promise<{
+    bucket: number;
+    eligibleTransactions: number;
+  } | null> {
     const intervalMs = Number(
       process.env.RECONCILIATION_SWEEP_INTERVAL_MS ?? 15 * 60 * 1000,
     );
     const now = Date.now();
-    if (now - this.lastReconciliationSweepAt < intervalMs) return;
+    if (now - this.lastReconciliationSweepAt < intervalMs) return null;
     const transactions = await this.prisma.transferTransaction?.findMany?.({
       where: {
         status: {
@@ -113,7 +144,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
       take: 100,
       orderBy: { updatedAt: 'asc' },
     });
-    if (!transactions) return;
+    if (!transactions) return null;
     this.lastReconciliationSweepAt = now;
     const bucket = Math.floor(now / intervalMs);
     await this.prisma.$transaction(
@@ -133,6 +164,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
         }),
       ),
     );
+    return { bucket, eligibleTransactions: transactions.length };
   }
 
   /**

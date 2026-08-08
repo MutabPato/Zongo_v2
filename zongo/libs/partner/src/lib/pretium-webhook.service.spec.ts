@@ -29,7 +29,7 @@ describe('Pretium webhook boundary', () => {
   });
 
   it('applies a terminal callback and records reconciliation evidence', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       transferTransaction: {
         findFirst: jest.fn().mockResolvedValue({
@@ -39,7 +39,7 @@ describe('Pretium webhook boundary', () => {
           status: 'PENDING_PAYOUT',
           partnerReference: 'pt_1',
         }),
-        update,
+        updateMany,
       },
     } as unknown as PrismaService;
     const audit = {
@@ -58,7 +58,7 @@ describe('Pretium webhook boundary', () => {
         providerStatus: 'COMPLETE',
       }),
     ).resolves.toEqual({ applied: true, transactionReference: 'ZNG-1' });
-    expect(update).toHaveBeenCalledWith(
+    expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { status: 'PAYOUT_SUCCESS', partnerReference: 'pt_1' },
       }),
@@ -67,7 +67,7 @@ describe('Pretium webhook boundary', () => {
   });
 
   it('can resolve callbacks through the keyed provider-reference index', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const findFirst = jest.fn().mockResolvedValue({
       id: 'tx_2',
       reference: 'ZNG-2',
@@ -76,7 +76,7 @@ describe('Pretium webhook boundary', () => {
       partnerReference: null,
     });
     const prisma = {
-      transferTransaction: { findFirst, update },
+      transferTransaction: { findFirst, updateMany },
     } as unknown as PrismaService;
     const audit = {
       append: jest.fn().mockResolvedValue(undefined),
@@ -102,7 +102,7 @@ describe('Pretium webhook boundary', () => {
         ],
       },
     });
-    expect(update).toHaveBeenCalledWith(
+    expect(updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         data: expect.objectContaining({
@@ -113,7 +113,7 @@ describe('Pretium webhook boundary', () => {
   });
 
   it('audits and ignores an out-of-order callback without mutating lifecycle state', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
+    const updateMany = jest.fn();
     const append = jest.fn().mockResolvedValue(undefined);
     const prisma = {
       transferTransaction: {
@@ -124,7 +124,7 @@ describe('Pretium webhook boundary', () => {
           status: 'COLLECTION_SUCCESS',
           partnerReference: 'pt_3',
         }),
-        update,
+        updateMany,
       },
     } as unknown as PrismaService;
     const ledger = {
@@ -138,9 +138,44 @@ describe('Pretium webhook boundary', () => {
         providerStatus: 'FAILED',
       }),
     ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-3' });
-    expect(update).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
     expect(append).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'transfer.callback.out-of-order' }),
     );
+  });
+
+  it('does not overwrite a lifecycle state changed by a concurrent callback', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const append = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      transferTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tx_4',
+          reference: 'ZNG-4',
+          corridorId: 'corr_1',
+          status: 'PENDING_COLLECTION',
+          partnerReference: 'pt_4',
+        }),
+        updateMany,
+      },
+    } as unknown as PrismaService;
+    const appendLifecycleEntries = jest.fn();
+    const ledger = {
+      appendLifecycleEntries,
+      persistReconciliation: jest.fn(),
+    } as unknown as LedgerService;
+
+    await expect(
+      new PretiumWebhookService(prisma, { append }, ledger).apply({
+        partnerReference: 'pt_4',
+        providerStatus: 'COMPLETE',
+      }),
+    ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-4' });
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'transfer.callback.concurrent-state-change',
+      }),
+    );
+    expect(appendLifecycleEntries).not.toHaveBeenCalled();
   });
 });

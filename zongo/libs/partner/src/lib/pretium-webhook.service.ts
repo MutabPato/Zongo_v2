@@ -121,8 +121,8 @@ export class PretiumWebhookService {
       }
       throw error;
     }
-    await this.prisma.transferTransaction.update({
-      where: { id: transaction.id },
+    const applied = await this.prisma.transferTransaction.updateMany({
+      where: { id: transaction.id, status: transaction.status },
       data: {
         status,
         partnerReference: input.partnerReference,
@@ -131,6 +131,22 @@ export class PretiumWebhookService {
           : {}),
       },
     });
+    if (applied.count !== 1) {
+      await this.audit.append({
+        id: crypto.randomUUID(),
+        eventType: 'TECHNICAL',
+        name: 'transfer.callback.concurrent-state-change',
+        transactionId: transaction.id,
+        corridorId: transaction.corridorId,
+        payload: {
+          observedStatus: transaction.status,
+          receivedStatus: status,
+          partnerReference: input.partnerReference,
+        },
+        createdAt: new Date(),
+      });
+      return { applied: false, transactionReference: transaction.reference };
+    }
     if (
       status === TransactionStatus.COLLECTION_SUCCESS ||
       status === TransactionStatus.PAYOUT_SUCCESS

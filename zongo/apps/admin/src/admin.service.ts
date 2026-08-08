@@ -16,6 +16,8 @@ import { PrismaService } from '@app/db';
 import { BeneficiaryService } from '@app/beneficiary';
 import { SenderProfileService } from '@app/profile';
 import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
+import { verifyKeyLifecycle } from '@app/security';
+import { verifyPretiumRuntimeConfiguration } from '@app/partner';
 import {
   hashPilotReleasePublication,
   isUsableEvidenceReference,
@@ -1277,6 +1279,10 @@ export class AdminService {
   }
 
   private async requirePublishedPilotReadiness(): Promise<void> {
+    const providerConfigurationReady =
+      verifyPretiumRuntimeConfiguration(process.env).status === 'PASS';
+    const keyLifecycleReady =
+      verifyKeyLifecycle(process.env, undefined, true).status === 'PASS';
     const record = await this.prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
       include: {
@@ -1332,7 +1338,9 @@ export class AdminService {
       !record.publishedAt ||
       !record.publishedByIdentityId ||
       record.publicationHash !== recomputedPublicationHash ||
-      !publicationSignatureValid
+      !publicationSignatureValid ||
+      !providerConfigurationReady ||
+      !keyLifecycleReady
     )
       throw new ForbiddenException(
         'Pilot Ready evidence and no-waiver approval are required before global start',

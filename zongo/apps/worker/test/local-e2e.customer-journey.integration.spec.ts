@@ -3,8 +3,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { AuditService } from '@app/audit';
 import { PrismaService } from '@app/db';
-import { TransactionReferenceService, type PartnerPort } from '@app/domain';
+import {
+  DomainError,
+  TransactionReferenceService,
+  type PartnerPort,
+} from '@app/domain';
 import { LedgerService } from '@app/ledger';
+import { PretiumWebhookService } from '@app/partner';
 import { Prisma } from '@prisma/client';
 import {
   EnvironmentKeyProvider,
@@ -15,6 +20,7 @@ import {
   WhatsAppWebhookSignatureService,
 } from '@app/whatsapp';
 import { WhatsAppWebhookController } from '../../api/src/whatsapp-webhook.controller';
+import { AdminService } from '../../admin/src/admin.service';
 import { TransferInitiationService } from '../../../libs/transfer/src/transfer-initiation.service';
 import { WorkerJobProcessor } from '../src/worker-job.processor';
 
@@ -231,6 +237,33 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
     });
     expect(first.duplicate).toBe(false);
     expect(duplicate.duplicate).toBe(true);
+    await expect(
+      initiation.initiate({
+        senderProfileId: profileId,
+        senderPhoneNumber: phone,
+        chatId,
+        inboundEventId: inboundEvent.id,
+        corridorId,
+        beneficiaryId,
+        sendAmountMinor: 100_001n,
+        sendCurrency: 'CDF',
+        payoutAmountMinor: 1_000n,
+        payoutCurrency: 'KES',
+        quoteId: `quote-${suffix}`,
+        quoteSnapshot: { rate: '0.01', captured: true },
+        idempotencyKey: `idem-${suffix}`,
+      }),
+    ).rejects.toMatchObject<Partial<DomainError>>({
+      code: 'TRANSFER_IDEMPOTENCY_CONFLICT',
+    });
+    await expect(
+      receive(`active-contention-${suffix}`, 'tuma pesa'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        received: true,
+        reason: 'ACTIVE_TRANSFER_SESSION',
+      }),
+    );
 
     const partner: PartnerPort = {
       collect: jest.fn().mockResolvedValue({
@@ -295,6 +328,21 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
     );
     expect(completed.reconciliation?.status).toBe('CONSISTENT');
     expect(notifications.send).toHaveBeenCalled();
+    const webhook = new PretiumWebhookService(
+      prisma,
+      audit,
+      ledger,
+      protection,
+    );
+    await expect(
+      webhook.apply({
+        partnerReference: `pretium-payout-${suffix}`,
+        providerStatus: 'COMPLETE',
+      }),
+    ).resolves.toEqual({
+      applied: false,
+      transactionReference: transaction.reference,
+    });
     expect(
       await prisma.whatsAppSession.findUnique({
         where: {
@@ -310,5 +358,178 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
       }),
     ).toBeGreaterThanOrEqual(3);
     expect(transaction.reference.startsWith(referencePrefix)).toBe(true);
+  });
+
+  it('moves timed-out chats to waiting, answers status-only queries, and preserves manual recovery targets', async () => {
+    const protection = new EnvelopeEncryptionService(
+      new EnvironmentKeyProvider(keyEnvironment),
+    );
+    const audit = new AuditService(prisma);
+    const sessions = new WhatsAppSessionService(prisma, audit, protection);
+    const signatures = new WhatsAppWebhookSignatureService();
+    const controller = new WhatsAppWebhookController(signatures, sessions);
+    const timeoutChatId = `timeout-chat-${suffix}`;
+    const timeoutPhone = `+243801${suffix.replace(/\D/g, '').slice(-6)}`;
+
+    await expect(
+      sessions.acceptInbound({
+        externalEventId: `timeout-start-${suffix}`,
+        chatId: timeoutChatId,
+        senderPhoneNumber: timeoutPhone,
+        messageText: 'tuma pesa',
+      }),
+    ).resolves.toEqual(expect.objectContaining({ accepted: true }));
+    const timeoutSession = await prisma.whatsAppSession.findUniqueOrThrow({
+      where: { activeChatKey: `chat:${timeoutChatId}` },
+    });
+    const timeoutTransaction = await prisma.transferTransaction.create({
+      data: {
+        reference: `ZNG-TIMEOUT-${suffix}`,
+        corridorId,
+        senderUserId: userId,
+        sendAmountMinor: 10_000n,
+        sendCurrency: 'CDF',
+        payoutAmountMinor: 100n,
+        payoutCurrency: 'KES',
+        status: 'PENDING_PAYOUT',
+        partnerReference: `pretium-timeout-${suffix}`,
+        idempotencyKey: `timeout-idem-${suffix}`,
+      },
+    });
+    await prisma.whatsAppSession.update({
+      where: { id: timeoutSession.id },
+      data: {
+        transferId: timeoutTransaction.id,
+        expiresAt: new Date(Date.now() - 1_000),
+      },
+    });
+
+    await expect(sessions.expireSession(timeoutSession.id)).resolves.toEqual(
+      expect.objectContaining({
+        status: 'WAITING',
+        transferId: timeoutTransaction.id,
+      }),
+    );
+    const statusRawBody = JSON.stringify({
+      id: `timeout-status-${suffix}`,
+      from: timeoutPhone,
+      chat_id: timeoutChatId,
+      text: 'hali',
+    });
+    const statusSignature = `sha256=${createHmac(
+      'sha256',
+      process.env.META_APP_SECRET!,
+    )
+      .update(statusRawBody)
+      .digest('hex')}`;
+    await expect(
+      controller.receive({ rawBody: statusRawBody }, statusSignature, {
+        id: `timeout-status-${suffix}`,
+        from: timeoutPhone,
+        chat_id: timeoutChatId,
+        text: 'hali',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        received: true,
+        reason: 'WAITING_STATUS_ONLY',
+        transferId: timeoutTransaction.id,
+      }),
+    );
+    expect(
+      await prisma.workerJob.findUniqueOrThrow({
+        where: {
+          dedupKey: `timeout-status-recheck:${timeoutTransaction.reference}`,
+        },
+      }),
+    ).toEqual(expect.objectContaining({ jobType: 'STATUS_RECHECK' }));
+
+    const correctedBeneficiaryId = `beneficiary-recovery-${suffix}`;
+    await prisma.beneficiary.create({
+      data: {
+        id: correctedBeneficiaryId,
+        corridorId,
+        userId,
+        displayName: 'Corrected Kenya Beneficiary',
+        payoutCountryCode: 'KE',
+        payoutCurrency: 'KES',
+        phoneNumber: '+254711111111',
+      },
+    });
+    const failedTransaction = await prisma.transferTransaction.create({
+      data: {
+        reference: `ZNG-RECOVERY-${suffix}`,
+        corridorId,
+        senderUserId: userId,
+        beneficiaryId,
+        sendAmountMinor: 20_000n,
+        sendCurrency: 'CDF',
+        payoutAmountMinor: 200n,
+        payoutCurrency: 'KES',
+        status: 'PAYOUT_FAILED',
+        idempotencyKey: `recovery-idem-${suffix}`,
+      },
+    });
+    const worker = new WorkerJobProcessor(
+      prisma,
+      { collect: jest.fn(), payout: jest.fn(), status: jest.fn() },
+      audit,
+      new LedgerService(prisma, audit, {
+        warning: jest.fn().mockResolvedValue(undefined),
+        urgent: jest.fn().mockResolvedValue(undefined),
+      }),
+    );
+    const recoveryJob = await worker.prepareManualPayoutRetry(
+      failedTransaction.reference,
+      correctedBeneficiaryId,
+    );
+    expect(recoveryJob.jobType).toBe('PAYOUT');
+    await expect(
+      prisma.transferTransaction.findUniqueOrThrow({
+        where: { id: failedTransaction.id },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: 'PENDING_PAYOUT',
+        beneficiaryId,
+        retryBeneficiaryId: correctedBeneficiaryId,
+      }),
+    );
+
+    const supportIdentity = await prisma.platformIdentity.create({
+      data: {
+        userId: `support-${suffix}`,
+        role: 'SUPPORT',
+        mfaVerifiedAt: new Date(),
+      },
+    });
+    const admin = new AdminService(
+      prisma,
+      audit,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      protection,
+    );
+    const beforeInvestigation =
+      await prisma.transferTransaction.findUniqueOrThrow({
+        where: { id: failedTransaction.id },
+        select: { status: true, beneficiaryId: true, retryBeneficiaryId: true },
+      });
+    const investigation = (await admin.investigateTransfer(
+      supportIdentity.id,
+      failedTransaction.reference,
+    )) as {
+      transaction: Record<string, unknown>;
+      sender: Record<string, unknown> | null;
+    };
+    expect(investigation.sender?.senderPhoneNumber).not.toBe(phone);
+    await expect(
+      prisma.transferTransaction.findUniqueOrThrow({
+        where: { id: failedTransaction.id },
+        select: { status: true, beneficiaryId: true, retryBeneficiaryId: true },
+      }),
+    ).resolves.toEqual(beforeInvestigation);
   });
 });

@@ -92,6 +92,7 @@ export class PretiumHttpClient implements PretiumClient {
       shortcode: input.senderPhoneNumber,
       amount: this.amount(input.amountMinor),
       mobile_network: input.mobileNetwork,
+      reference: input.reference,
       callback_url: input.callbackUrl ?? this.callbackUrl,
     }).then((data) => ({
       partnerReference: this.reference(data),
@@ -110,6 +111,7 @@ export class PretiumHttpClient implements PretiumClient {
       account_number: account.accountNumber ?? account.account_number,
       mobile_network:
         input.mobileNetwork ?? account.mobileNetwork ?? account.mobile_network,
+      reference: input.reference,
       callback_url: input.callbackUrl ?? this.callbackUrl,
     }).then((data) => ({
       partnerReference: this.reference(data),

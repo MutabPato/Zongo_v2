@@ -40,6 +40,7 @@ describe('PretiumHttpClient', () => {
           shortcode: '+243800000001',
           amount: 2500,
           mobile_network: 'Airtel Money',
+          reference: 'ZNG-1',
         }),
       }),
     );
@@ -66,5 +67,47 @@ describe('PretiumHttpClient', () => {
       status: 'PAYOUT_SUCCESS',
       partnerReference: 'pretium_payout_1',
     });
+  });
+
+  it('passes the client reference to wallet-funded disbursement', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: 200,
+          data: { status: 'PENDING', transaction_code: 'pretium_payout_2' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    const client = new PretiumHttpClient(
+      'https://api.example.test',
+      'consumer-key',
+    );
+
+    await expect(
+      client.payout({
+        reference: 'ZNG-2',
+        amountMinor: '1000',
+        currency: 'KES',
+        beneficiaryId: 'ben_2',
+        payoutPhoneNumber: '+254700000000',
+        mobileNetwork: 'Safaricom',
+      }),
+    ).resolves.toEqual({
+      partnerReference: 'pretium_payout_2',
+      status: 'PENDING_PAYOUT',
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.test/kes/disburse',
+      expect.objectContaining({
+        body: JSON.stringify({
+          shortcode: '+254700000000',
+          amount: 1000,
+          type: 'MOBILE',
+          mobile_network: 'Safaricom',
+          reference: 'ZNG-2',
+        }),
+      }),
+    );
   });
 });

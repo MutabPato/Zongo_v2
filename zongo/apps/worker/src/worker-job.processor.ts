@@ -117,9 +117,20 @@ export class WorkerJobProcessor {
                 in: [PilotControlKey.GLOBAL, PilotControlKey.NOTIFICATION],
               },
             },
-            select: { state: true },
+            select: { key: true, state: true },
           })) ?? [];
-        if (controls.some((control) => control.state !== 'ENABLED')) {
+        const requiredControlKeys = [
+          PilotControlKey.GLOBAL,
+          PilotControlKey.NOTIFICATION,
+        ];
+        const controlsUnavailable = this.prisma.pilotControl
+          ? requiredControlKeys.some(
+              (key) =>
+                controls.find((control) => control.key === key)?.state !==
+                'ENABLED',
+            )
+          : false;
+        if (controlsUnavailable) {
           await this.prisma.workerJob.update({
             where: { id: durableJob.id },
             data: {
@@ -161,7 +172,20 @@ export class WorkerJobProcessor {
               (control) => control.key === PilotControlKey.CORRIDOR_PROVIDER,
             )
           : controls;
-        if (blockedControls.some((control) => control.state !== 'ENABLED')) {
+        const requiredControlKeys = manualPayout
+          ? [PilotControlKey.CORRIDOR_PROVIDER]
+          : controlKeys;
+        const controlsUnavailable = this.prisma.pilotControl
+          ? requiredControlKeys.some(
+              (key) =>
+                controls.find((control) => control.key === key)?.state !==
+                'ENABLED',
+            )
+          : false;
+        if (
+          controlsUnavailable ||
+          blockedControls.some((control) => control.state !== 'ENABLED')
+        ) {
           const reason =
             'Pilot money movement is paused by operational control';
           await this.prisma.workerJob.update({

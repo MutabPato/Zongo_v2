@@ -665,7 +665,14 @@ export class AdminService {
     if (!reason.trim())
       throw new ForbiddenException('A control reason is required');
     const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
-    if (key === PilotControlKey.GLOBAL && state === PilotControlState.ENABLED)
+    const movementControlKeys = new Set<PilotControlKey>([
+      PilotControlKey.GLOBAL,
+      PilotControlKey.INITIATION,
+      PilotControlKey.COLLECTION,
+      PilotControlKey.PAYOUT,
+      PilotControlKey.CORRIDOR_PROVIDER,
+    ]);
+    if (state === PilotControlState.ENABLED && movementControlKeys.has(key))
       await this.requirePublishedPilotReadiness();
     const pilotOperatorId = process.env.PILOT_OPERATOR_ID;
     const isPilotOperator = pilotOperatorId === actor.id;

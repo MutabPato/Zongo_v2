@@ -78,7 +78,15 @@ export class TransferInitiationService {
         },
         select: { key: true, state: true },
       });
-      if (controls.some((control) => control.state !== 'ENABLED'))
+      const requiredControlKeys = ['GLOBAL', 'INITIATION', 'CORRIDOR_PROVIDER'];
+      if (
+        controls.length !== requiredControlKeys.length ||
+        requiredControlKeys.some(
+          (key) =>
+            controls.find((control) => control.key === key)?.state !==
+            'ENABLED',
+        )
+      )
         throw new DomainError(
           'PILOT_INITIATION_PAUSED',
           'Pilot initiation is paused by operational control',

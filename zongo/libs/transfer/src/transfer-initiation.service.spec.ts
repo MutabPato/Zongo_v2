@@ -16,7 +16,13 @@ describe('TransferInitiationService', () => {
     };
     const tx = {
       $executeRaw: jest.fn().mockResolvedValue(0),
-      pilotControl: { findMany: jest.fn().mockResolvedValue([]) },
+      pilotControl: {
+        findMany: jest.fn().mockResolvedValue([
+          { key: 'GLOBAL', state: 'ENABLED' },
+          { key: 'INITIATION', state: 'ENABLED' },
+          { key: 'CORRIDOR_PROVIDER', state: 'ENABLED' },
+        ]),
+      },
       pilotExposurePolicy: { findUnique: jest.fn().mockResolvedValue(null) },
       transferTransaction: {
         findUnique: jest.fn().mockResolvedValue(null),
@@ -79,12 +85,13 @@ describe('TransferInitiationService', () => {
       blindIndex: jest.fn().mockResolvedValue('blind:+243800000001'),
     } as any;
 
-    const result = await new TransferInitiationService(
+    const service = new TransferInitiationService(
       prisma,
       references,
       audit,
       protection,
-    ).initiate({
+    );
+    const result = await service.initiate({
       senderProfileId: 'profile_1',
       senderPhoneNumber: '+243800000001',
       chatId: 'chat_1',
@@ -114,5 +121,24 @@ describe('TransferInitiationService', () => {
         data: { transferId: transaction.id },
       }),
     );
+
+    tx.pilotControl.findMany.mockResolvedValueOnce([]);
+    await expect(
+      service.initiate({
+        senderProfileId: 'profile_1',
+        senderPhoneNumber: '+243800000001',
+        chatId: 'chat_2',
+        inboundEventId: 'event_2',
+        corridorId: 'corr_1',
+        beneficiaryId: 'ben_1',
+        sendAmountMinor: 100n,
+        sendCurrency: 'CDF',
+        payoutAmountMinor: 250n,
+        payoutCurrency: 'KES',
+        quoteId: 'quote_1',
+        quoteSnapshot: { rate: '2.5' },
+        idempotencyKey: 'init_2',
+      }),
+    ).rejects.toMatchObject({ code: 'PILOT_INITIATION_PAUSED' });
   });
 });

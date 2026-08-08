@@ -53,6 +53,14 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
   });
 
   it('leases duplicate delivery once, records its visible effect, and blocks audit mutations', async () => {
+    await prisma.pilotControl.createMany({
+      data: [
+        { key: 'GLOBAL', state: 'ENABLED' },
+        { key: 'CORRIDOR_PROVIDER', state: 'ENABLED' },
+        { key: 'COLLECTION', state: 'ENABLED' },
+      ],
+      skipDuplicates: true,
+    });
     await prisma.corridor.create({
       data: { id: corridorId, code: `DB-${suffix}`, name: 'Database corridor' },
     });

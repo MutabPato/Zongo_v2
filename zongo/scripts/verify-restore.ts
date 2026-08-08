@@ -25,6 +25,7 @@ async function main(): Promise<void> {
 
   try {
     const checks: RestoreCheck[] = [];
+    let encryptionRestoreVerified = false;
     await prisma.$queryRaw`SELECT 1`;
     checks.push({ name: 'postgres-connectivity', status: 'PASS', details: {} });
 
@@ -66,6 +67,7 @@ async function main(): Promise<void> {
       });
       if (!matchingIndexes)
         throw new Error('Sender blind-index verification failed');
+      encryptionRestoreVerified = true;
     }
 
     checks.push({
@@ -78,17 +80,22 @@ async function main(): Promise<void> {
       status: 'PASS',
       details: { rebuildFromDurableFacts: true },
     });
+    const complete = encryptionRestoreVerified;
     console.log(
       JSON.stringify(
         {
           verifiedAt: new Date().toISOString(),
+          status: complete ? 'PASS' : 'INCOMPLETE',
           checks,
-          note: 'This artifact proves read-only restore invariants; it does not approve production release.',
+          note: complete
+            ? 'This artifact proves read-only restore invariants; it does not approve production release.'
+            : 'Restore verification is incomplete until an encrypted sample is decrypted with the restored key set; this does not approve production release.',
         },
         null,
         2,
       ),
     );
+    if (!complete) process.exitCode = 1;
   } finally {
     await prisma.$disconnect();
   }

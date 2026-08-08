@@ -15,6 +15,10 @@ approved.
   no cloud API key or production identity data.
 - Candidate modules: document processing, face verification, passive/active
   liveness, and signed event/webhook handling.
+- Repository transport boundary: `libs/profile/src/openbiometrics-client.ts`
+  supports self-hosted multipart detection, document scan, face verification,
+  and liveness-session calls. It is transport-only and cannot promote a
+  sender or bypass human review.
 
 The project documentation identifies the community model tier as the default
 and lists YuNet, SFace, MiniFASNet, Face Mesh, and document-processing models

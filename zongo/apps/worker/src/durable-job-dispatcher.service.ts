@@ -4,7 +4,7 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
-import { JobStatus, JobType, Prisma } from '@prisma/client';
+import { JobStatus, JobType, Prisma, TransactionStatus } from '@prisma/client';
 import { PrismaService } from '@app/db';
 import { WorkerJobProcessor } from './worker-job.processor';
 import { PilotExposureMonitor } from './pilot-exposure-monitor.service';
@@ -14,6 +14,7 @@ import { PilotExposureMonitor } from './pilot-exposure-monitor.service';
 export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
+  private lastReconciliationSweepAt = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -36,6 +37,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.monitor?.evaluate();
+      await this.enqueueReconciliationSweep();
       const jobs = await this.prisma.workerJob.findMany({
         where: {
           jobType: {
@@ -85,5 +87,49 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
     } finally {
       this.running = false;
     }
+  }
+
+  private async enqueueReconciliationSweep(): Promise<void> {
+    const intervalMs = Number(
+      process.env.RECONCILIATION_SWEEP_INTERVAL_MS ?? 15 * 60 * 1000,
+    );
+    const now = Date.now();
+    if (now - this.lastReconciliationSweepAt < intervalMs) return;
+    const transactions = await this.prisma.transferTransaction?.findMany?.({
+      where: {
+        status: {
+          in: [
+            TransactionStatus.COLLECTION_SUCCESS,
+            TransactionStatus.PENDING_PAYOUT,
+            TransactionStatus.PAYOUT_SUCCESS,
+            TransactionStatus.COLLECTION_FAILED,
+            TransactionStatus.PAYOUT_FAILED,
+          ],
+        },
+      },
+      select: { id: true, reference: true },
+      take: 100,
+      orderBy: { updatedAt: 'asc' },
+    });
+    if (!transactions) return;
+    this.lastReconciliationSweepAt = now;
+    const bucket = Math.floor(now / intervalMs);
+    await this.prisma.$transaction(
+      transactions.map((transaction) =>
+        this.prisma.workerJob.upsert({
+          where: {
+            dedupKey: `reconciliation:${transaction.id}:${bucket}`,
+          },
+          create: {
+            dedupKey: `reconciliation:${transaction.id}:${bucket}`,
+            transactionReference: transaction.reference,
+            transactionId: transaction.id,
+            jobType: JobType.RECONCILIATION,
+            payload: { reason: 'CADENCE_SWEEP', bucket },
+          },
+          update: {},
+        }),
+      ),
+    );
   }
 }

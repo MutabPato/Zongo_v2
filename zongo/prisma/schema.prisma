@@ -398,6 +398,13 @@ model TransactionReconciliation {
   transactionId String @unique
   status ReconciliationStatus @default(PENDING)
   reason String?
+  transactionStatus TransactionStatus?
+  providerStatusSnapshot String?
+  providerReferencePresent Boolean @default(false)
+  callbackCount Int @default(0)
+  lastCallbackAt DateTime?
+  discrepancyOwnerIdentityId String?
+  escalatedAt DateTime?
   checkedAt DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

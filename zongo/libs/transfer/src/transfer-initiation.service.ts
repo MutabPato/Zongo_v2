@@ -73,7 +73,9 @@ export class TransferInitiationService {
       }
 
       const controls = await tx.pilotControl.findMany({
-        where: { key: { in: ['GLOBAL', 'INITIATION', 'CORRIDOR_PROVIDER'] } },
+        where: {
+          key: { in: ['GLOBAL', 'INITIATION', 'CORRIDOR_PROVIDER'] },
+        },
         select: { key: true, state: true },
       });
       if (controls.some((control) => control.state !== 'ENABLED'))

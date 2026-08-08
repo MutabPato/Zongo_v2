@@ -406,4 +406,49 @@ describe('AdminService', () => {
     );
     expect(alerts.sensitiveAction).toHaveBeenCalled();
   });
+
+  it('assigns and escalates reconciliation ownership with an audit record', async () => {
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const update = jest.fn().mockResolvedValue({ id: 'recon_1' });
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'ops_1',
+            role: 'OPS',
+            mfaVerifiedAt: new Date(),
+            blockedAt: null,
+          })
+          .mockResolvedValueOnce({
+            id: 'recon_owner_1',
+            role: 'OPS',
+            blockedAt: null,
+          }),
+      },
+      transactionReconciliation: { update },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma, audit).assignReconciliation(
+        'ops_1',
+        'recon_1',
+        'recon_owner_1',
+        'Daily discrepancy review',
+        true,
+      ),
+    ).resolves.toEqual({ id: 'recon_1' });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'recon_1' },
+        data: expect.objectContaining({
+          discrepancyOwnerIdentityId: 'recon_owner_1',
+          escalatedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'admin.reconciliation.escalated' }),
+    );
+  });
 });

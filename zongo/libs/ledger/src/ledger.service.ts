@@ -116,16 +116,43 @@ export class LedgerService {
 
   async persistReconciliation(transactionId: string) {
     const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
-      { where: { id: transactionId }, include: { ledgerEntries: true } },
+      {
+        where: { id: transactionId },
+        include: {
+          ledgerEntries: true,
+          auditEvents: {
+            where: { name: { startsWith: 'transfer.callback.' } },
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true },
+          },
+        },
+      },
     );
     const derived = this.deriveReconciliation(
       transaction,
       transaction.ledgerEntries,
     );
+    const callbackEvents = transaction.auditEvents ?? [];
     const snapshot = await this.prisma.transactionReconciliation.upsert({
       where: { transactionId },
-      create: { transactionId, ...derived },
-      update: { ...derived, checkedAt: new Date() },
+      create: {
+        transactionId,
+        ...derived,
+        transactionStatus: transaction.status,
+        providerStatusSnapshot: transaction.lastStatusRecheckResult,
+        providerReferencePresent: Boolean(transaction.partnerReference),
+        callbackCount: callbackEvents.length,
+        lastCallbackAt: callbackEvents[0]?.createdAt,
+      },
+      update: {
+        ...derived,
+        transactionStatus: transaction.status,
+        providerStatusSnapshot: transaction.lastStatusRecheckResult,
+        providerReferencePresent: Boolean(transaction.partnerReference),
+        callbackCount: callbackEvents.length,
+        lastCallbackAt: callbackEvents[0]?.createdAt,
+        checkedAt: new Date(),
+      },
     });
     if (derived.status !== ReconciliationStatus.CONSISTENT)
       await this.alerts.warning('reconciliation.mismatch', {

@@ -380,6 +380,48 @@ export class AdminService {
     return note;
   }
 
+  async assignReconciliation(
+    actorId: string,
+    reconciliationId: string,
+    ownerIdentityId: string,
+    reason: string,
+    escalate = false,
+  ) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    if (!reason.trim())
+      throw new ForbiddenException(
+        'A reconciliation ownership reason is required',
+      );
+    const owner = await this.prisma.platformIdentity.findUniqueOrThrow({
+      where: { id: ownerIdentityId },
+      select: { id: true, role: true, blockedAt: true },
+    });
+    if (owner.blockedAt)
+      throw new ForbiddenException(
+        'A blocked identity cannot own a discrepancy',
+      );
+    const reconciliation = await this.prisma.transactionReconciliation.update({
+      where: { id: reconciliationId },
+      data: {
+        discrepancyOwnerIdentityId: owner.id,
+        ...(escalate ? { escalatedAt: new Date() } : {}),
+      },
+    });
+    await this.record(
+      actor,
+      escalate
+        ? 'admin.reconciliation.escalated'
+        : 'admin.reconciliation.owner-assigned',
+      {
+        target: `reconciliation:${reconciliationId}`,
+        ownerIdentityId: owner.id,
+        reason,
+      },
+      true,
+    );
+    return reconciliation;
+  }
+
   /** Queues a durable partner status recheck and exposes that result immediately to operations. */
   async recheckStatus(actorId: string, reference: string): Promise<unknown> {
     const actor = await this.requireActor(actorId, AdminRole.OPS);

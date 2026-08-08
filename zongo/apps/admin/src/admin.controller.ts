@@ -147,6 +147,23 @@ export class AdminController {
     );
   }
 
+  @Post('reconciliations/:reconciliationId/ownership')
+  async assignReconciliation(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('reconciliationId') reconciliationId: string,
+    @Body()
+    body: { ownerIdentityId: string; reason: string; escalate?: boolean },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.assignReconciliation(
+      actor.id,
+      reconciliationId,
+      body.ownerIdentityId,
+      body.reason,
+      body.escalate,
+    );
+  }
+
   @Post('transactions/:reference/status-recheck')
   async recheckStatus(
     @Headers('authorization') authorization: string | undefined,

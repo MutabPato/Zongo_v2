@@ -418,6 +418,40 @@ describe('AdminService', () => {
     delete process.env.ENGINEERING_LEAD_ID;
   });
 
+  it('rejects placeholder readiness evidence at the mutation boundary', async () => {
+    process.env.ENGINEERING_LEAD_ID = 'engineering_1';
+    const stageCreate = jest.fn();
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'engineering_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'pilot',
+          stage: 'FOUNDATION_COMPLETE',
+          approvals: [{ role: 'ENGINEERING' }],
+        }),
+        upsert: jest.fn(),
+      },
+      pilotReadinessStageRecord: { create: stageCreate },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).recordPilotReadinessStage(
+        'engineering_1',
+        'FOUNDATION_COMPLETE',
+        { evidenceRefs: { provider: 'TBD' } },
+      ),
+    ).rejects.toThrow('Stage evidence references are required');
+    expect(stageCreate).not.toHaveBeenCalled();
+    delete process.env.ENGINEERING_LEAD_ID;
+  });
+
   it('reads staged readiness evidence without allowing a mutation', async () => {
     const readiness = {
       id: 'pilot',

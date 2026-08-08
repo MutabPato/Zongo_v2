@@ -1,4 +1,5 @@
 import { PrismaService } from '@app/db';
+import { isUsableEvidenceReference } from '@app/observability';
 
 const REQUIRED_APPROVALS = [
   'ENGINEERING',
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
         (entry) =>
           entry.stage === stage &&
           Object.values(nonEmptyRecord(entry.evidenceRefs)).some(
-            (value) => typeof value === 'string' && value.trim().length > 0,
+            isUsableEvidenceReference,
           ),
       ) ?? false;
     checks.push({
@@ -83,7 +84,7 @@ async function main(): Promise<void> {
     const evidence = nonEmptyRecord(record?.evidenceRefs);
     const missingEvidence = REQUIRED_EVIDENCE.filter(
       (key) =>
-        typeof evidence[key] !== 'string' || !String(evidence[key]).trim(),
+        !isUsableEvidenceReference(evidence[key]),
     );
     checks.push({
       name: 'pilot-evidence-references',

@@ -115,6 +115,7 @@
       "^@app/beneficiary(|/.*)$": "<rootDir>/libs/beneficiary/src/$1",
       "^@app/ledger(|/.*)$": "<rootDir>/libs/ledger/src/$1",
       "^@app/security(|/.*)$": "<rootDir>/libs/security/src/$1",
+      "^@app/observability(|/.*)$": "<rootDir>/libs/observability/src/$1",
       "^@app/whatsapp(|/.*)$": "<rootDir>/libs/whatsapp/src/$1",
       "^@app/transfer(|/.*)$": "<rootDir>/libs/transfer/src/$1"
     }

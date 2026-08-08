@@ -16,6 +16,7 @@ import { PrismaService } from '@app/db';
 import { BeneficiaryService } from '@app/beneficiary';
 import { SenderProfileService } from '@app/profile';
 import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
+import { isUsableEvidenceReference } from '@app/observability';
 import { WorkerJobProcessor } from '../../worker/src/worker-job.processor';
 import {
   AdminRole,
@@ -785,8 +786,8 @@ export class AdminService {
         'Pilot Ready must be published through the final release boundary',
       );
     const evidenceRefs = Object.fromEntries(
-      Object.entries(input.evidenceRefs).filter(
-        ([, value]) => typeof value === 'string' && value.trim().length > 0,
+      Object.entries(input.evidenceRefs).filter(([, value]) =>
+        isUsableEvidenceReference(value),
       ),
     );
     if (!Object.keys(evidenceRefs).length)
@@ -904,7 +905,7 @@ export class AdminService {
         'Pilot Ready release configuration is incomplete',
       );
     const missingEvidence = REQUIRED_PILOT_EVIDENCE.filter(
-      (key) => !input.evidenceRefs[key],
+      (key) => !isUsableEvidenceReference(input.evidenceRefs[key]),
     );
     if (missingEvidence.length)
       throw new ForbiddenException(
@@ -930,9 +931,7 @@ export class AdminService {
           stageRecord.stage === stage &&
           Object.values(
             stageRecord.evidenceRefs as Record<string, unknown>,
-          ).some(
-            (value) => typeof value === 'string' && value.trim().length > 0,
-          ),
+          ).some(isUsableEvidenceReference),
       ) ?? false;
     if (!hasStageEvidence(PilotReadinessStage.FOUNDATION_COMPLETE))
       throw new ForbiddenException(

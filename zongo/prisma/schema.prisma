@@ -596,6 +596,8 @@ model PilotReleaseRecord {
   releaseConfiguration Json?
   rollbackPlan String?
   evidenceRefs Json?
+  publicationHash String?
+  publishedByIdentityId String?
   publishedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

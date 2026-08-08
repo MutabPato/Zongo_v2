@@ -1,5 +1,8 @@
 import { PrismaService } from '@app/db';
-import { isUsableEvidenceReference } from '@app/observability';
+import {
+  hashPilotReleasePublication,
+  isUsableEvidenceReference,
+} from '@app/observability';
 
 const REQUIRED_APPROVALS = [
   'ENGINEERING',
@@ -48,7 +51,10 @@ async function main(): Promise<void> {
     const checks: Check[] = [];
     const record = await prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
-      include: { approvals: true, stageRecords: true },
+      include: {
+        approvals: { orderBy: { approvedAt: 'asc' } },
+        stageRecords: { orderBy: { recordedAt: 'asc' } },
+      },
     });
     const controls = await prisma.pilotControl.findMany({
       select: { key: true, state: true },
@@ -86,8 +92,7 @@ async function main(): Promise<void> {
     });
     const incompleteApprovals =
       record?.approvals.filter(
-        (approval) =>
-          !approval.actorIdentityId.trim() || !approval.note.trim(),
+        (approval) => !approval.actorIdentityId.trim() || !approval.note.trim(),
       ).length ?? REQUIRED_APPROVALS.length;
     checks.push({
       name: 'substantive-pilot-approvals',
@@ -97,8 +102,7 @@ async function main(): Promise<void> {
 
     const evidence = nonEmptyRecord(record?.evidenceRefs);
     const missingEvidence = REQUIRED_EVIDENCE.filter(
-      (key) =>
-        !isUsableEvidenceReference(evidence[key]),
+      (key) => !isUsableEvidenceReference(evidence[key]),
     );
     checks.push({
       name: 'pilot-evidence-references',
@@ -111,9 +115,9 @@ async function main(): Promise<void> {
 
     const releaseFactsPresent = Boolean(
       hasEntries(record?.approvedCohort) &&
-        hasEntries(record?.numericLimits) &&
-        hasEntries(record?.releaseConfiguration) &&
-        record?.rollbackPlan?.trim(),
+      hasEntries(record?.numericLimits) &&
+      hasEntries(record?.releaseConfiguration) &&
+      record?.rollbackPlan?.trim(),
     );
     checks.push({
       name: 'release-facts-and-rollback',
@@ -139,15 +143,58 @@ async function main(): Promise<void> {
       details: { configured: controls.length },
     });
 
+    const recomputedPublicationHash = record
+      ? hashPilotReleasePublication({
+          approvedCohort: record.approvedCohort,
+          numericLimits: record.numericLimits,
+          releaseConfiguration: record.releaseConfiguration,
+          rollbackPlan: record.rollbackPlan ?? '',
+          evidenceRefs: record.evidenceRefs,
+          noWaiverConfirmed: record.noWaiverConfirmed,
+          approvals: record.approvals
+            .map((approval) => ({
+              role: approval.role,
+              actorIdentityId: approval.actorIdentityId,
+              note: approval.note,
+              approvedAt: approval.approvedAt.toISOString(),
+            }))
+            .sort((left, right) => left.role.localeCompare(right.role)),
+          stageRecords: record.stageRecords
+            .map((stageRecord) => ({
+              id: stageRecord.id,
+              stage: stageRecord.stage,
+              evidenceRefs: stageRecord.evidenceRefs,
+              approvedCohort: stageRecord.approvedCohort,
+              numericLimits: stageRecord.numericLimits,
+              releaseConfiguration: stageRecord.releaseConfiguration,
+              rollbackPlan: stageRecord.rollbackPlan,
+              noWaiverConfirmed: stageRecord.noWaiverConfirmed,
+              recordedByIdentityId: stageRecord.recordedByIdentityId,
+              recordedAt: stageRecord.recordedAt.toISOString(),
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+          publishedAt: record.publishedAt?.toISOString(),
+          publishedByIdentityId: record.publishedByIdentityId ?? undefined,
+        })
+      : null;
+    const publicationHashMatches =
+      Boolean(record?.publicationHash) &&
+      record?.publicationHash === recomputedPublicationHash;
     const published = Boolean(
       record?.stage === 'PILOT_READY' &&
       record.noWaiverConfirmed &&
-      record.publishedAt,
+      record.publishedAt &&
+      record.publishedByIdentityId &&
+      publicationHashMatches,
     );
     checks.push({
       name: 'pilot-ready-publication',
       status: published ? 'PASS' : 'FAIL',
-      details: { published },
+      details: {
+        published,
+        publicationHash: record?.publicationHash ?? 'missing',
+        publicationHashMatches,
+      },
     });
 
     const passed = checks.every((check) => check.status === 'PASS');

@@ -16,7 +16,10 @@ import { PrismaService } from '@app/db';
 import { BeneficiaryService } from '@app/beneficiary';
 import { SenderProfileService } from '@app/profile';
 import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
-import { isUsableEvidenceReference } from '@app/observability';
+import {
+  hashPilotReleasePublication,
+  isUsableEvidenceReference,
+} from '@app/observability';
 import { WorkerJobProcessor } from '../../worker/src/worker-job.processor';
 import {
   AdminRole,
@@ -957,6 +960,40 @@ export class AdminService {
       throw new ForbiddenException(
         'Local E2E Complete evidence must be recorded before Pilot Ready',
       );
+    const publishedAt = new Date();
+    const publishedByIdentityId = actor.id;
+    const publicationHash = hashPilotReleasePublication({
+      approvedCohort: input.approvedCohort,
+      numericLimits: input.numericLimits,
+      releaseConfiguration: input.releaseConfiguration,
+      rollbackPlan: input.rollbackPlan,
+      evidenceRefs,
+      noWaiverConfirmed: input.noWaiverConfirmed,
+      approvals: existingRecord?.approvals
+        .map((approval) => ({
+          role: approval.role,
+          actorIdentityId: approval.actorIdentityId,
+          note: approval.note,
+          approvedAt: approval.approvedAt.toISOString(),
+        }))
+        .sort((left, right) => left.role.localeCompare(right.role)),
+      stageRecords: existingRecord?.stageRecords
+        .map((stageRecord) => ({
+          id: stageRecord.id,
+          stage: stageRecord.stage,
+          evidenceRefs: stageRecord.evidenceRefs,
+          approvedCohort: stageRecord.approvedCohort,
+          numericLimits: stageRecord.numericLimits,
+          releaseConfiguration: stageRecord.releaseConfiguration,
+          rollbackPlan: stageRecord.rollbackPlan,
+          noWaiverConfirmed: stageRecord.noWaiverConfirmed,
+          recordedByIdentityId: stageRecord.recordedByIdentityId,
+          recordedAt: stageRecord.recordedAt.toISOString(),
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id)),
+      publishedAt: publishedAt.toISOString(),
+      publishedByIdentityId,
+    });
     const record = await this.prisma.pilotReleaseRecord.upsert({
       where: { id: 'pilot' },
       create: {
@@ -969,7 +1006,9 @@ export class AdminService {
           input.releaseConfiguration as Prisma.InputJsonValue,
         rollbackPlan: input.rollbackPlan,
         evidenceRefs,
-        publishedAt: new Date(),
+        publicationHash,
+        publishedByIdentityId,
+        publishedAt,
       },
       update: {
         stage: 'PILOT_READY',
@@ -980,14 +1019,21 @@ export class AdminService {
           input.releaseConfiguration as Prisma.InputJsonValue,
         rollbackPlan: input.rollbackPlan,
         evidenceRefs,
-        publishedAt: new Date(),
+        publicationHash,
+        publishedByIdentityId,
+        publishedAt,
       },
       include: { approvals: true },
     });
     await this.record(
       actor,
       'admin.pilot-readiness.published',
-      { target: `pilot-release:${record.id}`, stage: record.stage },
+      {
+        target: `pilot-release:${record.id}`,
+        stage: record.stage,
+        publicationHash,
+        evidenceKeys: Object.keys(evidenceRefs).sort(),
+      },
       true,
     );
     return record;

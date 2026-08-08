@@ -27,9 +27,10 @@ describe('EnvelopeEncryptionService', () => {
 
   it('rejects tampered ciphertext', async () => {
     const encrypted = await service.encrypt('identity-secret', 'kyc');
+    const replacement = encrypted.ciphertext.endsWith('A') ? 'B' : 'A';
     const tampered = {
       ...encrypted,
-      ciphertext: `${encrypted.ciphertext.slice(0, -1)}A`,
+      ciphertext: `${encrypted.ciphertext.slice(0, -1)}${replacement}`,
     };
 
     await expect(service.decrypt(tampered, 'kyc')).rejects.toThrow();

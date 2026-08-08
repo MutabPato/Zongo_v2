@@ -91,6 +91,8 @@ describe('SenderProfileService', () => {
         data: expect.objectContaining({
           idempotencyKey: 'case_1',
           status: VerificationStatus.HUMAN_REVIEW,
+          verifiedPhoneNumber: null,
+          verifiedPhoneNumberCiphertext: expect.any(String),
         }),
       }),
     );

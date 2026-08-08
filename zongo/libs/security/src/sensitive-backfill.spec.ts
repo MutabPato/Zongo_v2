@@ -1,4 +1,7 @@
-import { buildSenderProfileBackfillData } from '../../../scripts/backfill-sensitive-blind-indexes';
+import {
+  buildSenderProfileBackfillData,
+  buildVerificationPhoneBackfillData,
+} from '../../../scripts/backfill-sensitive-blind-indexes';
 import type { EnvelopeEncryptionService } from './security.service';
 
 describe('sensitive-data backfill mutations', () => {
@@ -32,5 +35,21 @@ describe('sensitive-data backfill mutations', () => {
         backupPhoneCiphertext: '{"ciphertext":"encrypted"}',
       }),
     );
+  });
+
+  it('encrypts and explicitly clears legacy verification phones', async () => {
+    const protection = {
+      encrypt: jest.fn().mockResolvedValue({ ciphertext: 'encrypted' }),
+    };
+
+    await expect(
+      buildVerificationPhoneBackfillData(
+        '+243800000001',
+        protection as unknown as EnvelopeEncryptionService,
+      ),
+    ).resolves.toEqual({
+      verifiedPhoneNumber: null,
+      verifiedPhoneNumberCiphertext: '{"ciphertext":"encrypted"}',
+    });
   });
 });

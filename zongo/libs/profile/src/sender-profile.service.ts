@@ -202,6 +202,10 @@ export class SenderProfileService {
     const profile = await this.prisma.senderProfile.findUniqueOrThrow({
       where: { id: input.senderProfileId },
     });
+    const verifiedPhoneCiphertext = await this.protection.encrypt(
+      input.verifiedPhoneNumber,
+      'sender-phone',
+    );
     const verification = await this.prisma.senderVerification.create({
       data: {
         senderProfileId: profile.id,
@@ -212,7 +216,8 @@ export class SenderProfileService {
         ),
         idempotencyKey: input.idempotencyKey,
         status: input.status ?? VerificationStatus.TECHNICAL_REVIEW,
-        verifiedPhoneNumber: input.verifiedPhoneNumber,
+        verifiedPhoneNumber: null,
+        verifiedPhoneNumberCiphertext: JSON.stringify(verifiedPhoneCiphertext),
         evidenceCiphertext: input.evidence
           ? (JSON.stringify(
               await this.protection.encrypt(
@@ -271,7 +276,15 @@ export class SenderProfileService {
           'The verification reviewer must be independent of the collector',
         );
       }
-      if (!verification.verifiedPhoneNumber) {
+      const verifiedPhoneNumber =
+        verification.verifiedPhoneNumber ??
+        (verification.verifiedPhoneNumberCiphertext
+          ? await this.protection.decrypt(
+              JSON.parse(verification.verifiedPhoneNumberCiphertext as string),
+              'sender-phone',
+            )
+          : null);
+      if (!verifiedPhoneNumber) {
         throw new DomainError(
           'VERIFIED_PHONE_REQUIRED',
           'An approved verification must include a verified phone number',
@@ -299,7 +312,7 @@ export class SenderProfileService {
             )
           : null);
       const replacedPhone = Boolean(
-        previousPhone && previousPhone !== verification.verifiedPhoneNumber,
+        previousPhone && previousPhone !== verifiedPhoneNumber,
       );
       if (replacedPhone) {
         await tx.senderPhoneReplacement.create({
@@ -312,7 +325,7 @@ export class SenderProfileService {
             ),
             replacementPhoneCiphertext: JSON.stringify(
               await this.protection.encrypt(
-                verification.verifiedPhoneNumber,
+                verifiedPhoneNumber,
                 'sender-phone',
               ),
             ),
@@ -321,7 +334,7 @@ export class SenderProfileService {
               'sender-phone',
             ),
             replacementPhoneBlindIndex: await this.protection.blindIndex(
-              verification.verifiedPhoneNumber,
+              verifiedPhoneNumber,
               'sender-phone',
             ),
             verificationId: verification.id,
@@ -329,7 +342,7 @@ export class SenderProfileService {
         });
       }
       const encryptedPhone = await this.protection.encrypt(
-        verification.verifiedPhoneNumber,
+        verifiedPhoneNumber,
         'sender-phone',
       );
       const updatedProfile = await tx.senderProfile.update({
@@ -339,7 +352,7 @@ export class SenderProfileService {
           whatsappPhoneNumber: null,
           senderPhoneCiphertext: JSON.stringify(encryptedPhone),
           senderPhoneBlindIndex: await this.protection.blindIndex(
-            verification.verifiedPhoneNumber,
+            verifiedPhoneNumber,
             'sender-phone',
           ),
           tier: KycTier.TIER_1,

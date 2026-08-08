@@ -59,6 +59,18 @@ export async function buildSenderProfileBackfillData(
   };
 }
 
+export async function buildVerificationPhoneBackfillData(
+  phone: string,
+  protection: EnvelopeEncryptionService,
+): Promise<Prisma.SenderVerificationUpdateInput> {
+  return {
+    verifiedPhoneNumber: null,
+    verifiedPhoneNumberCiphertext: JSON.stringify(
+      await protection.encrypt(phone, 'sender-phone'),
+    ),
+  };
+}
+
 async function main(): Promise<void> {
   if (process.env.ALLOW_SENSITIVE_INDEX_BACKFILL !== 'true') {
     throw new Error(
@@ -169,6 +181,29 @@ async function main(): Promise<void> {
       verifications += rows.length;
     }
 
+    let verificationPhones = 0;
+    while (true) {
+      const rows = await prisma.senderVerification.findMany({
+        where: {
+          verifiedPhoneNumber: { not: null },
+          verifiedPhoneNumberCiphertext: { equals: Prisma.DbNull },
+        },
+        select: { id: true, verifiedPhoneNumber: true },
+        take: BATCH_SIZE,
+      });
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        await prisma.senderVerification.update({
+          where: { id: row.id },
+          data: await buildVerificationPhoneBackfillData(
+            row.verifiedPhoneNumber!,
+            protection,
+          ),
+        });
+        verificationPhones += 1;
+      }
+    }
+
     let transactions = 0;
     while (true) {
       const rows = await prisma.transferTransaction.findMany({
@@ -199,7 +234,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `Sensitive backfill complete: ${senderProfiles} sender profiles, ${beneficiaries} beneficiaries, ${verifications} verification rows, ${transactions} transaction rows`,
+      `Sensitive backfill complete: ${senderProfiles} sender profiles, ${beneficiaries} beneficiaries, ${verificationPhones} verification phones, ${verifications} verification references, ${transactions} transaction rows`,
     );
   } finally {
     await prisma.$disconnect();

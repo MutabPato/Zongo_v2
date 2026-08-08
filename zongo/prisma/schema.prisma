@@ -678,7 +678,9 @@ model SenderVerification {
   providerReferenceBlindIndex String?
   idempotencyKey String @unique
   status VerificationStatus
+  /// Legacy compatibility field; new writes use verifiedPhoneNumberCiphertext.
   verifiedPhoneNumber String?
+  verifiedPhoneNumberCiphertext Json?
   evidenceCiphertext Json?
   failureReason String?
   decisionReason String?

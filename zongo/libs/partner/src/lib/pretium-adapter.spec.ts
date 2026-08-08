@@ -28,7 +28,10 @@ describe('PretiumHttpClient', () => {
         senderPhoneNumber: '+243800000001',
         mobileNetwork: 'Airtel Money',
       }),
-    ).resolves.toEqual({ partnerReference: 'pretium_collect_1' });
+    ).resolves.toEqual({
+      partnerReference: 'pretium_collect_1',
+      status: 'PENDING_COLLECTION',
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api.example.test/cdf/collect',
       expect.objectContaining({

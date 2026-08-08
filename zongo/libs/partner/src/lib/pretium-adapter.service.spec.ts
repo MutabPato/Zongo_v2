@@ -4,7 +4,10 @@ import type { PretiumClient } from './pretium-adapter';
 
 describe('PretiumPartnerAdapter', () => {
   it('maps collect success to the shared port', async () => {
-    const collect = jest.fn().mockResolvedValue({ partnerReference: 'pt_123' });
+    const collect = jest.fn().mockResolvedValue({
+      partnerReference: 'pt_123',
+      status: 'PENDING_COLLECTION',
+    });
     const payout = jest.fn();
     const client = { collect, payout } as unknown as PretiumClient;
 
@@ -20,6 +23,7 @@ describe('PretiumPartnerAdapter', () => {
     ).resolves.toEqual({
       success: true,
       partnerReference: 'pt_123',
+      status: 'PENDING_COLLECTION',
     });
 
     expect(collect).toHaveBeenCalledWith({

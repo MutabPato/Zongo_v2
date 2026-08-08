@@ -14,7 +14,18 @@ export interface PartnerCollectionRequest {
 export type PartnerPayoutRequest = PartnerCollectionRequest;
 
 export type PartnerResult =
-  | { readonly success: true; readonly partnerReference: string }
+  | {
+      readonly success: true;
+      readonly partnerReference: string;
+      /** The partner may accept a request without having settled it. */
+      readonly status?:
+        | 'PENDING_COLLECTION'
+        | 'COLLECTION_SUCCESS'
+        | 'COLLECTION_FAILED'
+        | 'PENDING_PAYOUT'
+        | 'PAYOUT_SUCCESS'
+        | 'PAYOUT_FAILED';
+    }
   | { readonly success: false; readonly error: PartnerError };
 
 /** A partner-authoritative transfer state used by an operational recheck. */

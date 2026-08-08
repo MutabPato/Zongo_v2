@@ -28,6 +28,7 @@ export class PretiumPartnerAdapter implements PartnerPort {
       return {
         success: true,
         partnerReference: response.partnerReference,
+        status: response.status,
       };
     } catch (error) {
       return { success: false, error: normalizePartnerError(error) };
@@ -49,6 +50,7 @@ export class PretiumPartnerAdapter implements PartnerPort {
       return {
         success: true,
         partnerReference: response.partnerReference,
+        status: response.status,
       };
     } catch (error) {
       return this.fail(error);

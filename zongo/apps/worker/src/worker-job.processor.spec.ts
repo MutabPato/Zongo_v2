@@ -312,6 +312,58 @@ describe('WorkerJobProcessor', () => {
     );
   });
 
+  it('keeps an asynchronously accepted provider request pending and queues status reconciliation', async () => {
+    const jobUpsert = jest.fn().mockResolvedValue({ id: 'job_accepted' });
+    const transferUpdate = jest.fn().mockReturnValue({});
+    const workerUpdate = jest.fn().mockReturnValue({});
+    const prisma = {
+      workerJob: {
+        upsert: jobUpsert,
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: workerUpdate,
+      },
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue(transaction),
+        update: transferUpdate,
+      },
+      $transaction: jest.fn().mockResolvedValue([]),
+    } as unknown as PrismaService;
+    const partner = {
+      collect: jest.fn().mockResolvedValue({
+        success: true,
+        partnerReference: 'pt-pending-1',
+        status: TransactionStatus.PENDING_COLLECTION,
+      }),
+      payout: jest.fn(),
+      status: jest.fn(),
+    } as unknown as PartnerPort;
+
+    await expect(
+      new WorkerJobProcessor(
+        prisma,
+        partner,
+        { append: jest.fn().mockResolvedValue(undefined) },
+        noopLedger,
+      ).process(job),
+    ).resolves.toEqual({ skipped: false, status: 'SUCCEEDED' });
+
+    expect(transferUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: TransactionStatus.COLLECTION_SUCCESS,
+        }),
+      }),
+    );
+    expect(jobUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          jobType: 'STATUS_RECHECK',
+          payload: { reason: 'PROVIDER_ACCEPTED_PENDING' },
+        }),
+      }),
+    );
+  });
+
   it('prepares a manual payout retry on the original reference without refunding', async () => {
     const failedTransaction = {
       ...transaction,

@@ -389,18 +389,116 @@ export class WorkerJobProcessor {
         job.jobType === JobType.COLLECTION
           ? TransactionStatus.COLLECTION_SUCCESS
           : TransactionStatus.PAYOUT_SUCCESS;
-      this.lifecycle.assertTransition(processingStatus, succeededStatus);
-
-      await this.ledger.appendLifecycleEntries(
-        transaction.id,
-        job.jobType === JobType.COLLECTION ? 'collection' : 'payout',
-      );
+      const partnerStatus = result.status ?? succeededStatus;
+      this.lifecycle.assertTransition(processingStatus, partnerStatus);
       const partnerReferenceBlindIndex = this.protection
         ? await this.protection.blindIndex(
             result.partnerReference,
             'provider-reference',
           )
         : undefined;
+
+      if (
+        partnerStatus === TransactionStatus.COLLECTION_FAILED ||
+        partnerStatus === TransactionStatus.PAYOUT_FAILED
+      ) {
+        await this.prisma.$transaction([
+          this.prisma.transferTransaction.update({
+            where: { id: transaction.id },
+            data: {
+              status: partnerStatus,
+              failedReason: 'Provider returned a terminal failure',
+              partnerReference: result.partnerReference,
+              ...(partnerReferenceBlindIndex
+                ? { partnerReferenceBlindIndex }
+                : {}),
+            },
+          }),
+          this.prisma.workerJob.update({
+            where: { id: durableJob.id },
+            data: {
+              status: JobStatus.SUCCEEDED,
+              processedAt: new Date(),
+              leaseExpiresAt: null,
+            },
+          }),
+        ]);
+        await this.audit.append({
+          id: crypto.randomUUID(),
+          eventType: 'BUSINESS',
+          name: `transfer.${job.jobType.toLowerCase()}.failed`,
+          transactionId: transaction.id,
+          corridorId: transaction.corridorId,
+          payload: {
+            reference: transaction.reference,
+            partnerReference: result.partnerReference,
+          },
+          createdAt: new Date(),
+        });
+        return { skipped: false, status: 'SUCCEEDED' };
+      }
+
+      if (
+        partnerStatus === TransactionStatus.PENDING_COLLECTION ||
+        partnerStatus === TransactionStatus.PENDING_PAYOUT
+      ) {
+        const statusRecheckBucket = Math.floor(
+          Date.now() /
+            Number(process.env.STATUS_RECHECK_SWEEP_INTERVAL_MS ?? 60_000),
+        );
+        await this.prisma.$transaction([
+          this.prisma.transferTransaction.update({
+            where: { id: transaction.id },
+            data: {
+              status: processingStatus,
+              partnerReference: result.partnerReference,
+              ...(partnerReferenceBlindIndex
+                ? { partnerReferenceBlindIndex }
+                : {}),
+              lastStatusRecheckResult: 'PENDING_PROVIDER_ACCEPTANCE',
+            },
+          }),
+          this.prisma.workerJob.update({
+            where: { id: durableJob.id },
+            data: {
+              status: JobStatus.SUCCEEDED,
+              processedAt: new Date(),
+              leaseExpiresAt: null,
+            },
+          }),
+          this.prisma.workerJob.upsert({
+            where: {
+              dedupKey: `provider-status:${transaction.id}:${statusRecheckBucket}`,
+            },
+            create: {
+              dedupKey: `provider-status:${transaction.id}:${statusRecheckBucket}`,
+              transactionReference: transaction.reference,
+              transactionId: transaction.id,
+              jobType: JobType.STATUS_RECHECK,
+              payload: { reason: 'PROVIDER_ACCEPTED_PENDING' },
+            },
+            update: {},
+          }),
+        ]);
+        await this.audit.append({
+          id: crypto.randomUUID(),
+          eventType: 'BUSINESS',
+          name: `transfer.${job.jobType.toLowerCase()}.accepted-pending`,
+          transactionId: transaction.id,
+          corridorId: transaction.corridorId,
+          payload: {
+            reference: transaction.reference,
+            partnerReference: result.partnerReference,
+          },
+          createdAt: new Date(),
+        });
+        return { skipped: false, status: 'SUCCEEDED' };
+      }
+
+      await this.ledger.appendLifecycleEntries(
+        transaction.id,
+        job.jobType === JobType.COLLECTION ? 'collection' : 'payout',
+      );
 
       await this.prisma.$transaction([
         this.prisma.transferTransaction.update({

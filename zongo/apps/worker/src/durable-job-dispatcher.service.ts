@@ -15,6 +15,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
   private timer?: NodeJS.Timeout;
   private running = false;
   private lastReconciliationSweepAt = 0;
+  private lastStatusRecheckSweepAt = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -38,6 +39,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
     try {
       await this.monitor?.evaluate();
       await this.enqueueReconciliationSweep();
+      await this.enqueuePendingStatusRechecks();
       const jobs = await this.prisma.workerJob.findMany({
         where: {
           jobType: {
@@ -126,6 +128,51 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
             transactionId: transaction.id,
             jobType: JobType.RECONCILIATION,
             payload: { reason: 'CADENCE_SWEEP', bucket },
+          },
+          update: {},
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Pretium callbacks are at-least-once hints and may be missing. Pending
+   * provider work therefore gets a durable status lookup on a bounded cadence.
+   */
+  private async enqueuePendingStatusRechecks(): Promise<void> {
+    const intervalMs = Number(
+      process.env.STATUS_RECHECK_SWEEP_INTERVAL_MS ?? 60 * 1000,
+    );
+    const now = Date.now();
+    if (now - this.lastStatusRecheckSweepAt < intervalMs) return;
+    const transactions = await this.prisma.transferTransaction?.findMany?.({
+      where: {
+        status: {
+          in: [
+            TransactionStatus.PENDING_COLLECTION,
+            TransactionStatus.PENDING_PAYOUT,
+          ],
+        },
+      },
+      select: { id: true, reference: true },
+      take: 100,
+      orderBy: { updatedAt: 'asc' },
+    });
+    if (!transactions) return;
+    this.lastStatusRecheckSweepAt = now;
+    const bucket = Math.floor(now / intervalMs);
+    await this.prisma.$transaction(
+      transactions.map((transaction) =>
+        this.prisma.workerJob.upsert({
+          where: {
+            dedupKey: `provider-status:${transaction.id}:${bucket}`,
+          },
+          create: {
+            dedupKey: `provider-status:${transaction.id}:${bucket}`,
+            transactionReference: transaction.reference,
+            transactionId: transaction.id,
+            jobType: JobType.STATUS_RECHECK,
+            payload: { reason: 'PENDING_PROVIDER_SWEEP', bucket },
           },
           update: {},
         }),

@@ -7,7 +7,10 @@ export interface PretiumClient {
     senderPhoneNumber?: string;
     mobileNetwork?: string;
     callbackUrl?: string;
-  }): Promise<{ partnerReference: string }>;
+  }): Promise<{
+    partnerReference: string;
+    status?: 'PENDING_COLLECTION' | 'COLLECTION_SUCCESS' | 'COLLECTION_FAILED';
+  }>;
 
   payout(input: {
     reference: string;
@@ -18,7 +21,10 @@ export interface PretiumClient {
     mobileNetwork?: string;
     payoutAccount?: Record<string, unknown>;
     callbackUrl?: string;
-  }): Promise<{ partnerReference: string }>;
+  }): Promise<{
+    partnerReference: string;
+    status?: 'PENDING_PAYOUT' | 'PAYOUT_SUCCESS' | 'PAYOUT_FAILED';
+  }>;
 
   status(input: {
     reference: string;
@@ -60,6 +66,15 @@ type PretiumEnvelope = {
   data?: Record<string, unknown>;
 };
 
+type PretiumCollectionStatus =
+  | 'PENDING_COLLECTION'
+  | 'COLLECTION_SUCCESS'
+  | 'COLLECTION_FAILED';
+type PretiumPayoutStatus =
+  | 'PENDING_PAYOUT'
+  | 'PAYOUT_SUCCESS'
+  | 'PAYOUT_FAILED';
+
 export class PretiumHttpClient implements PretiumClient {
   constructor(
     private readonly baseUrl: string,
@@ -78,7 +93,10 @@ export class PretiumHttpClient implements PretiumClient {
       amount: this.amount(input.amountMinor),
       mobile_network: input.mobileNetwork,
       callback_url: input.callbackUrl ?? this.callbackUrl,
-    }).then((data) => ({ partnerReference: this.reference(data) }));
+    }).then((data) => ({
+      partnerReference: this.reference(data),
+      status: this.initiationStatus(data, 'COLLECTION'),
+    }));
   }
 
   payout(input: Parameters<PretiumClient['payout']>[0]) {
@@ -93,7 +111,10 @@ export class PretiumHttpClient implements PretiumClient {
       mobile_network:
         input.mobileNetwork ?? account.mobileNetwork ?? account.mobile_network,
       callback_url: input.callbackUrl ?? this.callbackUrl,
-    }).then((data) => ({ partnerReference: this.reference(data) }));
+    }).then((data) => ({
+      partnerReference: this.reference(data),
+      status: this.initiationStatus(data, 'PAYOUT'),
+    }));
   }
 
   status(input: Parameters<PretiumClient['status']>[0]) {
@@ -176,5 +197,32 @@ export class PretiumHttpClient implements PretiumClient {
     if (typeof reference !== 'string' || !reference)
       throw new Error('Pretium response omitted transaction_code');
     return reference;
+  }
+
+  private initiationStatus(
+    data: Record<string, unknown>,
+    phase: 'COLLECTION',
+  ): PretiumCollectionStatus;
+  private initiationStatus(
+    data: Record<string, unknown>,
+    phase: 'PAYOUT',
+  ): PretiumPayoutStatus;
+  private initiationStatus(
+    data: Record<string, unknown>,
+    phase: 'COLLECTION' | 'PAYOUT',
+  ): PretiumCollectionStatus | PretiumPayoutStatus {
+    const status =
+      typeof data.status === 'string' ? data.status.toUpperCase() : '';
+    if (status === 'FAILED' || status === 'FAILURE' || status === 'REJECTED')
+      return phase === 'COLLECTION'
+        ? ('COLLECTION_FAILED' as const)
+        : ('PAYOUT_FAILED' as const);
+    if (status === 'COMPLETE' || status === 'SUCCESS' || status === 'SUCCEEDED')
+      return phase === 'COLLECTION'
+        ? ('COLLECTION_SUCCESS' as const)
+        : ('PAYOUT_SUCCESS' as const);
+    return phase === 'COLLECTION'
+      ? ('PENDING_COLLECTION' as const)
+      : ('PENDING_PAYOUT' as const);
   }
 }

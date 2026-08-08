@@ -96,4 +96,40 @@ describe('DurableJobDispatcher', () => {
     );
     delete process.env.RECONCILIATION_SWEEP_INTERVAL_MS;
   });
+
+  it('queues provider status checks for pending collection and payout work', async () => {
+    process.env.STATUS_RECHECK_SWEEP_INTERVAL_MS = '1';
+    const upsert = jest.fn().mockResolvedValue({});
+    const prisma = {
+      transferTransaction: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ id: 'tx_pending', reference: 'ZNG-PENDING' }]),
+      },
+      workerJob: {
+        findMany: jest.fn().mockResolvedValue([]),
+        upsert,
+      },
+      $transaction: jest.fn((operations: Promise<unknown>[]) =>
+        Promise.all(operations),
+      ),
+    } as unknown as PrismaService;
+    const processor = { process: jest.fn() } as unknown as WorkerJobProcessor;
+
+    await new DurableJobDispatcher(prisma, processor).dispatch();
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          jobType: JobType.STATUS_RECHECK,
+          transactionReference: 'ZNG-PENDING',
+          payload: expect.objectContaining({
+            reason: 'PENDING_PROVIDER_SWEEP',
+          }),
+        }),
+      }),
+    );
+    delete process.env.STATUS_RECHECK_SWEEP_INTERVAL_MS;
+  });
 });

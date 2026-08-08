@@ -197,10 +197,26 @@ async function main(): Promise<void> {
         evidenceReferenceProvided: Boolean(redisLossEvidenceReference),
       },
     });
+    const rpoMinutes = Number(process.env.PILOT_RPO_MINUTES);
+    const rtoMinutes = Number(process.env.PILOT_RTO_MINUTES);
+    const recoveryTargetsConfigured =
+      Number.isInteger(rpoMinutes) &&
+      rpoMinutes > 0 &&
+      Number.isInteger(rtoMinutes) &&
+      rtoMinutes > 0;
+    checks.push({
+      name: 'approved-rpo-rto-targets-recorded',
+      status: recoveryTargetsConfigured ? 'PASS' : 'FAIL',
+      details: {
+        rpoMinutes: Number.isFinite(rpoMinutes) ? rpoMinutes : 'missing',
+        rtoMinutes: Number.isFinite(rtoMinutes) ? rtoMinutes : 'missing',
+      },
+    });
     const complete =
       encryptedSamplesVerified &&
       !encryptedSampleFailed &&
-      Boolean(redisLossEvidenceReference);
+      Boolean(redisLossEvidenceReference) &&
+      recoveryTargetsConfigured;
     console.log(
       JSON.stringify(
         {
@@ -209,7 +225,7 @@ async function main(): Promise<void> {
           checks,
           note: complete
             ? 'This artifact proves read-only restore invariants; it does not approve production release.'
-            : 'Restore verification is incomplete until encrypted samples decrypt and Redis-loss rebuild evidence is attached; this does not approve production release.',
+            : 'Restore verification is incomplete until encrypted samples decrypt, Redis-loss rebuild evidence and approved RPO/RTO targets are attached; this does not approve production release.',
         },
         null,
         2,

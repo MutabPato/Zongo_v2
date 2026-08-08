@@ -5,13 +5,13 @@ required evidence item is a stop condition; no waiver can promote the pilot.
 
 ## Authority
 
-| Action | Authority | Required evidence |
-| --- | --- | --- |
-| Start or permanently stop | Accountable pilot operator identified by `PILOT_OPERATOR_ID` | Signed release/stop record and reconciliation snapshot |
-| Pause or resume within the approved runbook | Ops | Incident or resume record, control state, queued-job review |
-| Technical isolation/recommendation | Engineering | Isolation reason and handoff to Ops/operator |
-| Customer communication/investigation | Support | Case notes; no money-moving mutation |
-| Access and policy administration | Admin | MFA, role audit; no pilot release authority |
+| Action                                      | Authority                                                    | Required evidence                                           |
+| ------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------- |
+| Start or permanently stop                   | Accountable pilot operator identified by `PILOT_OPERATOR_ID` | Signed release/stop record and reconciliation snapshot      |
+| Pause or resume within the approved runbook | Ops                                                          | Incident or resume record, control state, queued-job review |
+| Technical isolation/recommendation          | Engineering                                                  | Isolation reason and handoff to Ops/operator                |
+| Customer communication/investigation        | Support                                                      | Case notes; no money-moving mutation                        |
+| Access and policy administration            | Admin                                                        | MFA, role audit; no pilot release authority                 |
 
 ## Pause sequence
 
@@ -52,6 +52,9 @@ reference, customer-impact decision, queued-job decision, and next review time.
 
 The worker appends a non-sensitive `reconciliation.sweep.completed` audit fact
 after each cadence sweep with the eligible-transaction count and job outcomes.
+API, worker, and Admin HTTP surfaces also emit structured `http.request` log
+records with a propagated `x-request-id`, route, status, and duration; request
+bodies, query values, customer identifiers, and provider payloads are excluded.
 Verify the exact deployment's coverage and decision history with:
 
 ```sh

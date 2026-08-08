@@ -213,6 +213,7 @@ model TransferTransaction {
   payoutAmountMinor BigInt?
   payoutCurrency CurrencyCode?
   partnerReference String?
+  partnerReferenceBlindIndex String?
   idempotencyKey String @unique
   activeJobKey String?
   collectionRequestAt DateTime?
@@ -562,6 +563,7 @@ model SenderVerification {
   senderProfileId String
   provider String @default("OPEN_BIOMETRICS")
   providerReference String @unique
+  providerReferenceBlindIndex String?
   idempotencyKey String @unique
   status VerificationStatus
   verifiedPhoneNumber String?

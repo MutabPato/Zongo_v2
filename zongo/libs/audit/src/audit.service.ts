@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@app/db';
 import { Prisma } from '@prisma/client';
 import { type AuditLogPort, type NewAuditEvent } from '@app/domain';
+import { redactSensitivePayload } from '@app/security';
 
 @Injectable()
 export class AuditService implements AuditLogPort {
@@ -17,7 +18,7 @@ export class AuditService implements AuditLogPort {
         actorId: event.actorId,
         corridorId: event.corridorId,
         transactionId: event.transactionId,
-        payload: event.payload as Prisma.InputJsonValue,
+        payload: redactSensitivePayload(event.payload) as Prisma.InputJsonValue,
         createdAt: event.createdAt,
       },
     });

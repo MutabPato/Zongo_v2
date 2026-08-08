@@ -41,4 +41,34 @@ describe('AuditService', () => {
       },
     });
   });
+
+  it('redacts sensitive values before persistence', async () => {
+    const auditEventCreate = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      auditEvent: { create: auditEventCreate },
+    } as unknown as PrismaService;
+    const service = new AuditService(prisma);
+
+    await service.append({
+      id: 'audit_2',
+      eventType: 'TECHNICAL',
+      name: 'webhook.received',
+      payload: {
+        phone: '+254700000001',
+        providerPayload: { token: 'secret-token' },
+        status: 'COMPLETE',
+      },
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    const calls = auditEventCreate.mock.calls as Array<
+      [{ data: { payload: unknown } }]
+    >;
+    const persisted = calls[0]?.[0];
+    expect(persisted.data.payload).toEqual({
+      phone: '[REDACTED]',
+      providerPayload: '[REDACTED]',
+      status: 'COMPLETE',
+    });
+  });
 });

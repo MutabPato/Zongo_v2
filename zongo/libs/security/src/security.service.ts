@@ -114,6 +114,13 @@ export class EnvelopeEncryptionService {
     ]).toString('utf8');
   }
 
+  async reencrypt(
+    value: EncryptedValue,
+    purpose: string,
+  ): Promise<EncryptedValue> {
+    return this.encrypt(await this.decrypt(value, purpose), purpose);
+  }
+
   async blindIndex(value: string, purpose: string): Promise<string> {
     const key = await this.keys.blindIndexKey(purpose);
     this.assertKey(key);
@@ -132,4 +139,20 @@ export class EnvelopeEncryptionService {
     if (key.length !== 32)
       throw new Error('Encryption and blind-index keys must be 32 bytes');
   }
+}
+
+const SENSITIVE_AUDIT_KEY =
+  /(?:authorization|biometric|document|email|identity|password|payout.?account|phone|provider.?payload|raw.?payload|secret|token)/i;
+
+export function redactSensitivePayload(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSensitivePayload);
+  if (value === null || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      SENSITIVE_AUDIT_KEY.test(key)
+        ? '[REDACTED]'
+        : redactSensitivePayload(entry),
+    ]),
+  );
 }

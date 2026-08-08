@@ -6,6 +6,7 @@ import {
   PretiumWebhookSignatureService,
 } from './pretium-webhook.service';
 import { createHmac } from 'node:crypto';
+import type { EnvelopeEncryptionService } from '@app/security';
 
 describe('Pretium webhook boundary', () => {
   afterEach(() => {
@@ -63,5 +64,51 @@ describe('Pretium webhook boundary', () => {
       }),
     );
     expect(appendLifecycleEntries).toHaveBeenCalledWith('tx_1', 'payout');
+  });
+
+  it('can resolve callbacks through the keyed provider-reference index', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    const findFirst = jest.fn().mockResolvedValue({
+      id: 'tx_2',
+      reference: 'ZNG-2',
+      corridorId: 'corr_1',
+      status: 'PENDING_PAYOUT',
+      partnerReference: null,
+    });
+    const prisma = {
+      transferTransaction: { findFirst, update },
+    } as unknown as PrismaService;
+    const audit = {
+      append: jest.fn().mockResolvedValue(undefined),
+    } as unknown as AuditLogPort;
+    const ledger = {
+      appendLifecycleEntries: jest.fn().mockResolvedValue(undefined),
+      persistReconciliation: jest.fn().mockResolvedValue(undefined),
+    } as unknown as LedgerService;
+    const protection = {
+      blindIndex: jest.fn().mockResolvedValue('blind-provider-ref'),
+    } as unknown as EnvelopeEncryptionService;
+
+    await new PretiumWebhookService(prisma, audit, ledger, protection).apply({
+      partnerReference: 'pt-2',
+      providerStatus: 'COMPLETE',
+    });
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          { partnerReference: 'pt-2' },
+          { partnerReferenceBlindIndex: 'blind-provider-ref' },
+        ],
+      },
+    });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: expect.objectContaining({
+          partnerReferenceBlindIndex: 'blind-provider-ref',
+        }),
+      }),
+    );
   });
 });

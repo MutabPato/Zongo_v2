@@ -33,6 +33,14 @@ describe('EnvelopeEncryptionService', () => {
     await expect(service.decrypt(tampered, 'kyc')).rejects.toThrow();
   });
 
+  it('reencrypts with the current key version', async () => {
+    const encrypted = await service.encrypt('identity-secret', 'kyc');
+
+    await expect(service.reencrypt(encrypted, 'kyc')).resolves.toEqual(
+      expect.objectContaining({ algorithm: 'aes-256-gcm', keyVersion: 'v2' }),
+    );
+  });
+
   it('creates stable keyed indexes without exposing the input', async () => {
     const first = await service.blindIndex(' +254700000001 ', 'phone');
     const second = await service.blindIndex('+254700000001', 'phone');

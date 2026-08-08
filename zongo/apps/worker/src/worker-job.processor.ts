@@ -239,12 +239,22 @@ export class WorkerJobProcessor {
           return { skipped: false, status: 'FAILED' };
         }
         this.lifecycle.assertTransition(transaction.status, result.status);
+        const partnerReferenceBlindIndex =
+          this.protection && result.partnerReference
+            ? await this.protection.blindIndex(
+                result.partnerReference,
+                'provider-reference',
+              )
+            : undefined;
         await this.prisma.$transaction([
           this.prisma.transferTransaction.update({
             where: { id: transaction.id },
             data: {
               status: result.status,
               partnerReference: result.partnerReference,
+              ...(partnerReferenceBlindIndex
+                ? { partnerReferenceBlindIndex }
+                : {}),
               lastStatusRecheckAt: new Date(),
               lastStatusRecheckResult: result.status,
             },
@@ -382,6 +392,12 @@ export class WorkerJobProcessor {
         transaction.id,
         job.jobType === JobType.COLLECTION ? 'collection' : 'payout',
       );
+      const partnerReferenceBlindIndex = this.protection
+        ? await this.protection.blindIndex(
+            result.partnerReference,
+            'provider-reference',
+          )
+        : undefined;
 
       await this.prisma.$transaction([
         this.prisma.transferTransaction.update({
@@ -392,11 +408,17 @@ export class WorkerJobProcessor {
                   status: 'COLLECTION_SUCCESS',
                   collectionCompletedAt: new Date(),
                   partnerReference: result.partnerReference,
+                  ...(partnerReferenceBlindIndex
+                    ? { partnerReferenceBlindIndex }
+                    : {}),
                 }
               : {
                   status: 'PAYOUT_SUCCESS',
                   payoutCompletedAt: new Date(),
                   partnerReference: result.partnerReference,
+                  ...(partnerReferenceBlindIndex
+                    ? { partnerReferenceBlindIndex }
+                    : {}),
                 },
         }),
         this.prisma.workerJob.update({

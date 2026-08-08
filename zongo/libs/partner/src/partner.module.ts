@@ -13,9 +13,10 @@ import {
 import { LedgerModule } from '@app/ledger';
 import { DbModule } from '@app/db';
 import { AuditModule } from '@app/audit';
+import { SecurityModule } from '@app/security';
 
 @Module({
-  imports: [DbModule, AuditModule, LedgerModule],
+  imports: [DbModule, AuditModule, LedgerModule, SecurityModule],
   providers: [
     PretiumWebhookService,
     PretiumWebhookSignatureService,

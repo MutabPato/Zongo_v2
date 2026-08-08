@@ -14,6 +14,7 @@
     "start:dev:worker": "nest start worker --watch",
     "bootstrap:admin": "ts-node -r tsconfig-paths/register apps/admin/src/admin-bootstrap.ts",
     "seed:local-admin": "ts-node -r tsconfig-paths/register apps/admin/src/local-admin-seed.ts",
+    "backfill:sensitive-indexes": "ts-node -r tsconfig-paths/register scripts/backfill-sensitive-blind-indexes.ts",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/apps/api/main",
     "lint": "eslint \"{apps,libs}/**/*.ts\"",

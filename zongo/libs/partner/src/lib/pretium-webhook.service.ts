@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   AUDIT_LOG_PORT,
@@ -9,6 +9,10 @@ import {
 import { PrismaService } from '@app/db';
 import { LedgerService } from '@app/ledger';
 import { TransactionStatus } from '@prisma/client';
+import {
+  ENVELOPE_ENCRYPTION,
+  type EnvelopeEncryptionService,
+} from '@app/security';
 
 export class PretiumWebhookSignatureService {
   verify(rawBody: string, signature: string | undefined): boolean {
@@ -31,14 +35,30 @@ export class PretiumWebhookService {
     private readonly prisma: PrismaService,
     @Inject(AUDIT_LOG_PORT) private readonly audit: AuditLogPort,
     private readonly ledger: LedgerService,
+    @Optional()
+    @Inject(ENVELOPE_ENCRYPTION)
+    private readonly protection?: EnvelopeEncryptionService,
   ) {}
 
   async apply(input: {
     partnerReference: string;
     providerStatus: string;
   }): Promise<{ applied: boolean; transactionReference?: string }> {
+    const providerReferenceBlindIndex = this.protection
+      ? await this.protection.blindIndex(
+          input.partnerReference,
+          'provider-reference',
+        )
+      : undefined;
     const transaction = await this.prisma.transferTransaction.findFirst({
-      where: { partnerReference: input.partnerReference },
+      where: {
+        OR: [
+          { partnerReference: input.partnerReference },
+          ...(providerReferenceBlindIndex
+            ? [{ partnerReferenceBlindIndex: providerReferenceBlindIndex }]
+            : []),
+        ],
+      },
     });
     if (!transaction)
       throw new DomainError(
@@ -80,7 +100,13 @@ export class PretiumWebhookService {
     this.lifecycle.assertTransition(transaction.status, status);
     await this.prisma.transferTransaction.update({
       where: { id: transaction.id },
-      data: { status, partnerReference: input.partnerReference },
+      data: {
+        status,
+        partnerReference: input.partnerReference,
+        ...(providerReferenceBlindIndex
+          ? { partnerReferenceBlindIndex: providerReferenceBlindIndex }
+          : {}),
+      },
     });
     if (
       status === TransactionStatus.COLLECTION_SUCCESS ||

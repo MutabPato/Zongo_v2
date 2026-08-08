@@ -204,6 +204,10 @@ export class SenderProfileService {
       data: {
         senderProfileId: profile.id,
         providerReference: input.providerReference,
+        providerReferenceBlindIndex: await this.protection.blindIndex(
+          input.providerReference,
+          'provider-reference',
+        ),
         idempotencyKey: input.idempotencyKey,
         status: input.status ?? VerificationStatus.TECHNICAL_REVIEW,
         verifiedPhoneNumber: input.verifiedPhoneNumber,

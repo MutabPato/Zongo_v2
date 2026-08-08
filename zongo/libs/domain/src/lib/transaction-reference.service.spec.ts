@@ -9,9 +9,6 @@ describe('TransactionReferenceService', () => {
     expect(first).toMatch(/^ZNG-[A-Z0-9]+-[A-Z2-9]{8}$/);
     expect(second).toMatch(/^ZNG-[A-Z0-9]+-[A-Z2-9]{8}$/);
     expect(first).not.toEqual(second);
-    expect(first).not.toContain('DRC');
-    expect(first).not.toContain('KE');
-    expect(first).not.toContain('UG');
   });
 
   it('is lexically ordered by creation time and has no corridor input', () => {

@@ -7,6 +7,7 @@ import { HealthController } from './health.controller';
 import { WorkerJobsModule } from './worker-jobs.module';
 import { DurableJobDispatcher } from './durable-job-dispatcher.service';
 import { AdminAlertDispatcher } from './admin-alert-dispatcher.service';
+import { WorkerMetricsService } from './worker-metrics.service';
 
 @Module({
   imports: [
@@ -15,6 +16,11 @@ import { AdminAlertDispatcher } from './admin-alert-dispatcher.service';
     WorkerJobsModule,
   ],
   controllers: [WorkerController, HealthController],
-  providers: [WorkerService, DurableJobDispatcher, AdminAlertDispatcher],
+  providers: [
+    WorkerService,
+    WorkerMetricsService,
+    DurableJobDispatcher,
+    AdminAlertDispatcher,
+  ],
 })
 export class WorkerModule {}

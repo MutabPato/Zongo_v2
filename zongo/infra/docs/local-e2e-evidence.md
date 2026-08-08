@@ -3,9 +3,9 @@
 Record the exact commit, configuration, database migration state, controlled
 partner behavior, and evidence links. Passing unit tests alone is insufficient.
 
-- Commit/image digest: `f1aa024f2c859a1fbe49fecf19f5670a9f977fba`
+- Commit/image digest: `7c275166513b7260c7d7658b62c4e4781280a50c`
 - Environment and migration hash: local PostgreSQL/Redis; Prisma schema
-  `fd6175730db96848951b82f5b0149492b3c6bc6c2640491b4cfcde49b3efdbc8`
+  `32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1`
 - Partner stub/cassette: controlled in-process `PartnerPort`
 - Evidence directory: repository test output; no external customer or partner data
 
@@ -30,9 +30,9 @@ credentials or send customer notifications externally.
 
 Most recent controlled run record:
 
-- Commit: `f1aa024f2c859a1fbe49fecf19f5670a9f977fba`
-- Prisma schema hash: `fd6175730db96848951b82f5b0149492b3c6bc6c2640491b4cfcde49b3efdbc8`
-- Executed at: `2026-08-08T23:30:33Z`
+- Commit: `7c275166513b7260c7d7658b62c4e4781280a50c`
+- Prisma schema hash: `32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1`
+- Executed at: `2026-08-08T23:35:33Z`
 - Command: `DATABASE_URL='<local-only PostgreSQL URL>' pnpm test:integration`
 - Worker state during test: stopped; PostgreSQL and Redis healthy
 - Result: `2` suites passed, `3` tests passed
@@ -40,6 +40,8 @@ Most recent controlled run record:
   external customer notifications used
 - Global pilot start/resume also fails closed when the persisted publication
   fingerprint does not recompute from the stored release facts.
+- Pilot Ready publication now additionally requires a valid HMAC signature
+  from the runtime-only release signing key.
 
 Covered by `apps/worker/test/local-e2e.customer-journey.integration.spec.ts`:
 

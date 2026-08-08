@@ -105,7 +105,9 @@ describe('DurableJobDispatcher', () => {
         findMany: jest
           .fn()
           .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([{ id: 'tx_pending', reference: 'ZNG-PENDING' }]),
+          .mockResolvedValueOnce([
+            { id: 'tx_pending', reference: 'ZNG-PENDING' },
+          ]),
       },
       workerJob: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -121,9 +123,11 @@ describe('DurableJobDispatcher', () => {
 
     expect(upsert).toHaveBeenCalledWith(
       expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         create: expect.objectContaining({
           jobType: JobType.STATUS_RECHECK,
           transactionReference: 'ZNG-PENDING',
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           payload: expect.objectContaining({
             reason: 'PENDING_PROVIDER_SWEEP',
           }),

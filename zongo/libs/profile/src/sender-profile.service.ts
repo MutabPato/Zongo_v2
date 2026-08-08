@@ -107,7 +107,9 @@ export class SenderProfileService {
           input.whatsappPhoneNumber,
           'sender-phone',
         ),
-        whatsappPhoneNumber: input.whatsappPhoneNumber,
+        // Keep the legacy plaintext field empty for all new profiles. The
+        // encrypted sender-phone value is the canonical recoverable contact.
+        whatsappPhoneNumber: undefined,
         backupPhoneNumber: undefined,
         backupPhoneCiphertext: backupPhone
           ? JSON.stringify(backupPhone)

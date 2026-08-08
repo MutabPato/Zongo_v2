@@ -552,7 +552,8 @@ model SenderProfile {
   senderPhoneNumber String? @unique
   senderPhoneCiphertext String?
   senderPhoneBlindIndex String? @unique
-  whatsappPhoneNumber String
+  /// Legacy compatibility field; new writes use senderPhoneCiphertext.
+  whatsappPhoneNumber String?
   backupPhoneNumber String?
   backupPhoneCiphertext String?
   tier KycTier @default(TIER_0)

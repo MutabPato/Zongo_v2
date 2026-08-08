@@ -202,7 +202,11 @@ export class AdminService {
         'sender-phone',
         profile.senderPhoneNumber,
       ),
-      whatsappPhoneNumber: profile.whatsappPhoneNumber,
+      whatsappPhoneNumber: await decrypt(
+        profile.senderPhoneCiphertext,
+        'sender-phone',
+        profile.whatsappPhoneNumber ?? profile.senderPhoneNumber,
+      ),
       backupPhoneNumber: await decrypt(
         profile.backupPhoneCiphertext,
         'sender-phone',
@@ -286,6 +290,10 @@ export class AdminService {
   ): Promise<unknown> {
     await this.requireActor(actorId, AdminRole.SUPPORT);
     const q = query.q?.trim();
+    const phoneBlindIndex =
+      q && this.protection
+        ? await this.protection.blindIndex(q, 'sender-phone')
+        : undefined;
     const profiles = q
       ? await this.prisma.senderProfile.findMany({
           where: {
@@ -293,6 +301,10 @@ export class AdminService {
               { userId: { contains: q, mode: 'insensitive' } },
               { legalName: { contains: q, mode: 'insensitive' } },
               { email: { contains: q, mode: 'insensitive' } },
+              ...(phoneBlindIndex
+                ? [{ senderPhoneBlindIndex: phoneBlindIndex }]
+                : []),
+              // Legacy fallback only; new profiles do not populate this field.
               { senderPhoneNumber: { contains: q } },
             ],
           },

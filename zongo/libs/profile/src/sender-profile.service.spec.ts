@@ -42,6 +42,7 @@ describe('SenderProfileService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           email: undefined,
+          whatsappPhoneNumber: undefined,
           contactPreferences: { create: { preferredLanguage: 'en' } },
         }),
       }),

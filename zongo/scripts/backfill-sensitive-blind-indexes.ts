@@ -3,6 +3,7 @@ import {
   EnvironmentKeyProvider,
   EnvelopeEncryptionService,
 } from '@app/security';
+import { Prisma } from '@prisma/client';
 
 const BATCH_SIZE = 100;
 
@@ -20,6 +21,112 @@ async function main(): Promise<void> {
   await prisma.$connect();
 
   try {
+    let senderProfiles = 0;
+    while (true) {
+      const rows = await prisma.senderProfile.findMany({
+        where: {
+          OR: [
+            { email: { not: null }, emailCiphertext: null },
+            {
+              senderPhoneCiphertext: null,
+              OR: [
+                { senderPhoneNumber: { not: null } },
+                { whatsappPhoneNumber: { not: null } },
+              ],
+            },
+            { backupPhoneNumber: { not: null }, backupPhoneCiphertext: null },
+          ],
+        },
+        select: {
+          id: true,
+          email: true,
+          emailCiphertext: true,
+          senderPhoneNumber: true,
+          senderPhoneCiphertext: true,
+          whatsappPhoneNumber: true,
+          backupPhoneNumber: true,
+          backupPhoneCiphertext: true,
+        },
+        take: BATCH_SIZE,
+      });
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        const senderPhone =
+          row.senderPhoneNumber ?? row.whatsappPhoneNumber ?? undefined;
+        await prisma.senderProfile.update({
+          where: { id: row.id },
+          data: {
+            ...(row.email && !row.emailCiphertext
+              ? {
+                  emailCiphertext: JSON.stringify(
+                    await protection.encrypt(row.email, 'sender-email'),
+                  ),
+                  emailBlindIndex: await protection.blindIndex(
+                    row.email,
+                    'sender-email',
+                  ),
+                  email: undefined,
+                }
+              : {}),
+            ...(senderPhone && !row.senderPhoneCiphertext
+              ? {
+                  senderPhoneCiphertext: JSON.stringify(
+                    await protection.encrypt(senderPhone, 'sender-phone'),
+                  ),
+                  senderPhoneBlindIndex: await protection.blindIndex(
+                    senderPhone,
+                    'sender-phone',
+                  ),
+                  senderPhoneNumber: undefined,
+                  whatsappPhoneNumber: undefined,
+                }
+              : {}),
+            ...(row.backupPhoneNumber && !row.backupPhoneCiphertext
+              ? {
+                  backupPhoneCiphertext: JSON.stringify(
+                    await protection.encrypt(
+                      row.backupPhoneNumber,
+                      'sender-phone',
+                    ),
+                  ),
+                  backupPhoneNumber: undefined,
+                }
+              : {}),
+          },
+        });
+        senderProfiles += 1;
+      }
+    }
+
+    let beneficiaries = 0;
+    while (true) {
+      const rows = await prisma.beneficiary.findMany({
+        where: {
+          payoutAccount: { not: Prisma.JsonNull },
+          payoutAccountCiphertext: { equals: Prisma.DbNull },
+        },
+        select: { id: true, payoutAccount: true },
+        take: BATCH_SIZE,
+      });
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        if (!row.payoutAccount) continue;
+        await prisma.beneficiary.update({
+          where: { id: row.id },
+          data: {
+            payoutAccountCiphertext: JSON.stringify(
+              await protection.encrypt(
+                JSON.stringify(row.payoutAccount),
+                'beneficiary-payout-account',
+              ),
+            ),
+            payoutAccount: undefined,
+          },
+        });
+        beneficiaries += 1;
+      }
+    }
+
     let verifications = 0;
     while (true) {
       const rows = await prisma.senderVerification.findMany({
@@ -79,7 +186,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `Sensitive blind-index backfill complete: ${verifications} verification rows, ${transactions} transaction rows`,
+      `Sensitive backfill complete: ${senderProfiles} sender profiles, ${beneficiaries} beneficiaries, ${verifications} verification rows, ${transactions} transaction rows`,
     );
   } finally {
     await prisma.$disconnect();

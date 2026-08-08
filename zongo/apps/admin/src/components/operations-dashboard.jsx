@@ -70,8 +70,8 @@ const OperationsDashboard = () => {
 
       <section style={{ background: '#fff', padding: 24, borderRadius: 8 }}>
         <h2>Security and policy</h2>
-        <p>Manage Tier 0 limits, account blocks, immutable audit events, and alert delivery status.</p>
-        <LinkButton href={resourceUrl('TierLimitPolicy')}>Tier 0 transfer caps</LinkButton>
+        <p>Manage Tier 1 limits, account blocks, immutable audit events, and alert delivery status.</p>
+        <LinkButton href={resourceUrl('TierLimitPolicy')}>Tier 1 transfer caps</LinkButton>
         <LinkButton href={resourceUrl('PlatformIdentity')} secondary>Identity controls</LinkButton>
         <LinkButton href={resourceUrl('AuditEvent')} secondary>Audit trail</LinkButton>
       </section>

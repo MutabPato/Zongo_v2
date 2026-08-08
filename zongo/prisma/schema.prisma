@@ -40,6 +40,7 @@ enum JobType {
   NOTIFICATION
   RETRY
   ADMIN_ALERT
+  RECONCILIATION
 }
 
 enum AdminAlertDeliveryStatus {
@@ -63,8 +64,39 @@ enum KycTier {
 
 enum VerificationStatus {
   PENDING
-  SUCCEEDED
+  TECHNICAL_REVIEW
+  HUMAN_REVIEW
+  APPROVED
+  REJECTED
+  ESCALATED
+  EXPIRED
+}
+
+enum WhatsAppSessionStatus {
+  ACTIVE
+  WAITING
+  CLOSED
+}
+
+enum NotificationIntentStatus {
+  PENDING
+  SENT
   FAILED
+}
+
+enum PilotControlKey {
+  GLOBAL
+  INITIATION
+  COLLECTION
+  PAYOUT
+  CORRIDOR_PROVIDER
+  NOTIFICATION
+}
+
+enum PilotControlState {
+  ENABLED
+  PAUSED
+  PERMANENTLY_STOPPED
 }
 
 enum ContactChannel {
@@ -147,6 +179,7 @@ model Beneficiary {
   payoutCurrency CurrencyCode
   phoneNumber String
   payoutAccount Json?
+  payoutAccountCiphertext Json?
   version Int @default(1)
   supersedesId String?
   isCurrent Boolean @default(true)
@@ -202,10 +235,62 @@ model TransferTransaction {
   ledgerEntries LedgerEntry[]
   reconciliation TransactionReconciliation?
   adminNotes AdminNote[]
+  notificationIntents NotificationIntent[]
 
   @@index([corridorId, createdAt])
   @@index([senderUserId, status])
   @@index([status, updatedAt])
+}
+
+model WhatsAppSession {
+  id String @id @default(cuid())
+  chatId String
+  senderPhoneNumber String?
+  senderPhoneCiphertext String?
+  senderPhoneBlindIndex String?
+  status WhatsAppSessionStatus @default(ACTIVE)
+  activeChatKey String? @unique
+  transferId String? @unique
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([chatId, status, updatedAt])
+}
+
+model WhatsAppInboundEvent {
+  id String @id @default(cuid())
+  externalEventId String @unique
+  chatId String
+  senderPhoneNumber String?
+  senderPhoneCiphertext String?
+  senderPhoneBlindIndex String?
+  payloadRedacted Json?
+  receivedAt DateTime @default(now())
+
+  @@index([chatId, receivedAt])
+}
+
+model NotificationIntent {
+  id String @id @default(cuid())
+  dedupKey String @unique
+  transactionId String?
+  channel ContactChannel
+  recipientPhoneCiphertext String?
+  template String
+  payload Json
+  status NotificationIntentStatus @default(PENDING)
+  attempts Int @default(0)
+  nextAttemptAt DateTime?
+  lastError String?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transaction TransferTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt, createdAt])
+  @@index([transactionId, createdAt])
 }
 
 /// Shared platform identity store used by backend authorization and the self-hosted admin app.
@@ -304,6 +389,7 @@ model LedgerEntry {
 
   @@index([transactionId, createdAt])
   @@index([account, createdAt])
+  @@unique([transactionId, eventName, account, direction])
 }
 
 model TransactionReconciliation {
@@ -399,9 +485,14 @@ model SenderProfile {
   userId String @unique
   legalName String?
   email String? @unique
+  emailCiphertext String?
+  emailBlindIndex String? @unique
   senderPhoneNumber String? @unique
+  senderPhoneCiphertext String?
+  senderPhoneBlindIndex String? @unique
   whatsappPhoneNumber String
   backupPhoneNumber String?
+  backupPhoneCiphertext String?
   tier KycTier @default(TIER_0)
   verifiedAt DateTime?
   createdAt DateTime @default(now())
@@ -412,20 +503,65 @@ model SenderProfile {
   contactPreferences ContactPreference?
   channelMigrations ChannelMigration[]
   tierLimitOverride SenderTierLimitOverride?
+  pilotAllowlist PilotAllowlist?
 
   @@index([senderPhoneNumber])
   @@index([tier, createdAt])
 }
 
-/// Smile ID outcomes are immutable facts; the latest successful one may promote the profile.
+model PilotControl {
+  id String @id @default(cuid())
+  key PilotControlKey @unique
+  state PilotControlState @default(ENABLED)
+  reason String?
+  changedByIdentityId String?
+  changedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PilotAllowlist {
+  id String @id @default(cuid())
+  senderProfileId String @unique
+  enabled Boolean @default(true)
+  reason String?
+  changedByIdentityId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  senderProfile SenderProfile @relation(fields: [senderProfileId], references: [id], onDelete: Restrict)
+}
+
+model PilotExposurePolicy {
+  id String @id @default("pilot")
+  allowlistRequired Boolean @default(true)
+  maxPendingTransfers Int?
+  maxAmbiguousTransfers Int?
+  maxPartnerSettlementMinor BigInt?
+  maxRecoveryCapacity Int?
+  globalDailySendMinor BigInt?
+  updatedByIdentityId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Provider-neutral verification cases are immutable evidence; only an approved human review may promote the profile.
 model SenderVerification {
   id String @id @default(cuid())
   senderProfileId String
-  provider String @default("SMILE_ID")
+  provider String @default("OPEN_BIOMETRICS")
   providerReference String @unique
+  idempotencyKey String @unique
   status VerificationStatus
   verifiedPhoneNumber String?
+  evidenceCiphertext Json?
   failureReason String?
+  decisionReason String?
+  collectedByIdentityId String?
+  reviewerIdentityId String?
+  consentAt DateTime?
+  reviewedAt DateTime?
+  expiresAt DateTime?
   completedAt DateTime?
   createdAt DateTime @default(now())
 
@@ -438,8 +574,12 @@ model SenderVerification {
 model SenderPhoneReplacement {
   id String @id @default(cuid())
   senderProfileId String
-  previousPhoneNumber String
-  replacementPhoneNumber String
+  previousPhoneNumber String?
+  replacementPhoneNumber String?
+  previousPhoneCiphertext String?
+  replacementPhoneCiphertext String?
+  previousPhoneBlindIndex String?
+  replacementPhoneBlindIndex String?
   verificationId String @unique
   replacedAt DateTime @default(now())
 

@@ -13,6 +13,32 @@ describe('LedgerService', () => {
     urgent: jest.fn().mockResolvedValue(undefined),
   } as unknown as LedgerAlertPort;
 
+  it('posts lifecycle entries idempotently for duplicate delivery', async () => {
+    const createMany = jest.fn().mockResolvedValue({ count: 2 });
+    const prisma = {
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'tx_1',
+          corridorId: 'corr_1',
+          sendAmountMinor: 100n,
+          sendCurrency: 'USD',
+          payoutAmountMinor: 12_900n,
+          payoutCurrency: 'KES',
+        }),
+      },
+      ledgerEntry: { createMany },
+    } as unknown as PrismaService;
+
+    await new LedgerService(prisma, audit, alerts).appendLifecycleEntries(
+      'tx_1',
+      'collection',
+    );
+
+    expect(createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
+  });
+
   it('derives reconciliation without persistence side effects', () => {
     const service = new LedgerService({} as PrismaService, audit, alerts);
     expect(

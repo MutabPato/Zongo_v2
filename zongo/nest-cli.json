@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/zongo/src",
+  "sourceRoot": "apps/api/src",
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "apps/zongo/tsconfig.app.json"
+    "tsConfigPath": "apps/api/tsconfig.app.json"
   },
   "monorepo": true,
-  "root": "apps/zongo",
+  "root": "apps/api",
   "projects": {
     "admin": {
       "type": "application",
@@ -99,6 +99,27 @@
       "sourceRoot": "libs/ledger/src",
       "compilerOptions": { "tsConfigPath": "libs/ledger/tsconfig.lib.json" }
     },
+    "security": {
+      "type": "library",
+      "root": "libs/security",
+      "entryFile": "index",
+      "sourceRoot": "libs/security/src",
+      "compilerOptions": { "tsConfigPath": "libs/security/tsconfig.lib.json" }
+    },
+    "whatsapp": {
+      "type": "library",
+      "root": "libs/whatsapp",
+      "entryFile": "index",
+      "sourceRoot": "libs/whatsapp/src",
+      "compilerOptions": { "tsConfigPath": "libs/whatsapp/tsconfig.lib.json" }
+    },
+    "transfer": {
+      "type": "library",
+      "root": "libs/transfer",
+      "entryFile": "index",
+      "sourceRoot": "libs/transfer/src",
+      "compilerOptions": { "tsConfigPath": "libs/transfer/tsconfig.lib.json" }
+    },
     "worker": {
       "type": "application",
       "root": "apps/worker",
@@ -106,15 +127,6 @@
       "sourceRoot": "apps/worker/src",
       "compilerOptions": {
         "tsConfigPath": "apps/worker/tsconfig.app.json"
-      }
-    },
-    "zongo": {
-      "type": "application",
-      "root": "apps/zongo",
-      "entryFile": "main",
-      "sourceRoot": "apps/zongo/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/zongo/tsconfig.app.json"
       }
     }
   }

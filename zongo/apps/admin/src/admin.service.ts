@@ -15,8 +15,16 @@ import { AUDIT_LOG_PORT, type AuditLogPort } from '@app/domain';
 import { PrismaService } from '@app/db';
 import { BeneficiaryService } from '@app/beneficiary';
 import { SenderProfileService } from '@app/profile';
+import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
 import { WorkerJobProcessor } from '../../worker/src/worker-job.processor';
-import { AdminRole, JobType, TransactionStatus } from '@prisma/client';
+import {
+  AdminRole,
+  JobType,
+  PilotControlKey,
+  PilotControlState,
+  TransactionStatus,
+  VerificationStatus,
+} from '@prisma/client';
 
 export const ADMIN_ALERTS = Symbol('ADMIN_ALERTS');
 
@@ -45,6 +53,9 @@ export class AdminService {
     @Optional() private readonly beneficiaries?: BeneficiaryService,
     @Optional() private readonly profiles?: SenderProfileService,
     @Optional() @Inject(ADMIN_ALERTS) private readonly alerts?: AdminAlertPort,
+    @Optional()
+    @Inject(ENVELOPE_ENCRYPTION)
+    private readonly protection?: EnvelopeEncryptionService,
   ) {}
 
   /** Creates a short-lived self-hosted admin session after TOTP verification. */
@@ -126,6 +137,59 @@ export class AdminService {
   ): Promise<unknown> {
     await this.requireActor(actorId, AdminRole.SUPPORT);
     return this.prisma.transferTransaction.findUnique({ where: { reference } });
+  }
+
+  async revealSenderProfile(actorId: string, profileId: string) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    if (!this.protection)
+      throw new Error('Sensitive-data protection is not available');
+    const profile = await this.prisma.senderProfile.findUniqueOrThrow({
+      where: { id: profileId },
+      select: {
+        id: true,
+        email: true,
+        emailCiphertext: true,
+        senderPhoneNumber: true,
+        senderPhoneCiphertext: true,
+        whatsappPhoneNumber: true,
+        backupPhoneNumber: true,
+        backupPhoneCiphertext: true,
+      },
+    });
+    const decrypt = async (
+      ciphertext: string | null,
+      purpose: string,
+      legacy: string | null,
+    ) =>
+      ciphertext
+        ? this.protection!.decrypt(JSON.parse(ciphertext), purpose)
+        : legacy;
+    const revealed = {
+      id: profile.id,
+      email: await decrypt(
+        profile.emailCiphertext,
+        'sender-email',
+        profile.email,
+      ),
+      senderPhoneNumber: await decrypt(
+        profile.senderPhoneCiphertext,
+        'sender-phone',
+        profile.senderPhoneNumber,
+      ),
+      whatsappPhoneNumber: profile.whatsappPhoneNumber,
+      backupPhoneNumber: await decrypt(
+        profile.backupPhoneCiphertext,
+        'sender-phone',
+        profile.backupPhoneNumber,
+      ),
+    };
+    await this.record(
+      actor,
+      'admin.sender-profile.sensitive-revealed',
+      { target: `sender-profile:${profileId}`, fields: Object.keys(revealed) },
+      true,
+    );
+    return revealed;
   }
 
   async dashboard(actorId: string): Promise<unknown> {
@@ -345,6 +409,36 @@ export class AdminService {
     return { job, result };
   }
 
+  async queueReconciliation(actorId: string, reference: string) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
+      {
+        where: { reference },
+      },
+    );
+    const job = await this.prisma.workerJob.upsert({
+      where: { dedupKey: `reconciliation:${transaction.id}` },
+      create: {
+        dedupKey: `reconciliation:${transaction.id}`,
+        transactionReference: reference,
+        transactionId: transaction.id,
+        jobType: JobType.RECONCILIATION,
+        payload: { requestedBy: actor.id },
+      },
+      update: { status: 'PENDING', lastError: null },
+    });
+    await this.record(
+      actor,
+      'admin.reconciliation.queued',
+      {
+        target: `transaction:${transaction.id}`,
+        jobId: job.id,
+      },
+      true,
+    );
+    return job;
+  }
+
   async retryFailedPayout(
     actorId: string,
     reference: string,
@@ -421,7 +515,7 @@ export class AdminService {
     return identity;
   }
 
-  async setTier0TransferCaps(
+  async setTier1TransferCaps(
     actorId: string,
     perTransferLimitMinor: bigint,
     dailyLimitMinor: bigint,
@@ -430,14 +524,14 @@ export class AdminService {
     if (!this.profiles)
       throw new Error('Profile policy service is not available');
     const policy = await this.profiles.setGlobalTierLimits(
-      'TIER_0',
+      'TIER_1',
       perTransferLimitMinor,
       dailyLimitMinor,
       actor.id,
     );
     await this.record(
       actor,
-      'admin.policy.tier-0-caps.updated',
+      'admin.policy.tier-1-caps.updated',
       {
         target: `tier-policy:${policy.id}`,
         perTransferLimitMinor: perTransferLimitMinor.toString(),
@@ -446,6 +540,175 @@ export class AdminService {
       true,
     );
     return policy;
+  }
+
+  async setPilotControl(
+    actorId: string,
+    key: PilotControlKey,
+    state: PilotControlState,
+    reason: string,
+  ) {
+    if (!reason.trim())
+      throw new ForbiddenException('A control reason is required');
+    const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
+    const pilotOperatorId = process.env.PILOT_OPERATOR_ID;
+    const isPilotOperator = pilotOperatorId === actor.id;
+    if (
+      state === PilotControlState.PERMANENTLY_STOPPED ||
+      state === PilotControlState.ENABLED
+    ) {
+      if (!isPilotOperator)
+        throw new ForbiddenException(
+          'Only the accountable pilot operator may start or permanently stop the pilot',
+        );
+    } else if (!isPilotOperator && actor.role !== AdminRole.OPS) {
+      throw new ForbiddenException('Only Ops may pause the pilot');
+    }
+    const control = await this.prisma.pilotControl.upsert({
+      where: { key },
+      create: { key, state, reason, changedByIdentityId: actor.id },
+      update: {
+        state,
+        reason,
+        changedByIdentityId: actor.id,
+        changedAt: new Date(),
+      },
+    });
+    await this.record(
+      actor,
+      `admin.pilot-control.${state.toLowerCase()}`,
+      {
+        target: `pilot-control:${key}`,
+        key,
+        state,
+        reason,
+      },
+      true,
+    );
+    return control;
+  }
+
+  async setPilotAllowlist(
+    actorId: string,
+    senderProfileId: string,
+    enabled: boolean,
+    reason: string,
+  ) {
+    if (!reason.trim())
+      throw new ForbiddenException('An allowlist reason is required');
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    const entry = await this.prisma.pilotAllowlist.upsert({
+      where: { senderProfileId },
+      create: {
+        senderProfileId,
+        enabled,
+        reason,
+        changedByIdentityId: actor.id,
+      },
+      update: { enabled, reason, changedByIdentityId: actor.id },
+    });
+    await this.record(
+      actor,
+      enabled
+        ? 'admin.pilot-allowlist.enabled'
+        : 'admin.pilot-allowlist.disabled',
+      {
+        target: `sender-profile:${senderProfileId}`,
+        senderProfileId,
+        reason,
+      },
+      true,
+    );
+    return entry;
+  }
+
+  async setPilotExposurePolicy(
+    actorId: string,
+    input: {
+      allowlistRequired?: boolean;
+      maxPendingTransfers?: number | null;
+      maxAmbiguousTransfers?: number | null;
+      maxPartnerSettlementMinor?: bigint | null;
+      maxRecoveryCapacity?: number | null;
+      globalDailySendMinor?: bigint | null;
+    },
+  ) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    const policy = await this.prisma.pilotExposurePolicy.upsert({
+      where: { id: 'pilot' },
+      create: { id: 'pilot', ...input, updatedByIdentityId: actor.id },
+      update: { ...input, updatedByIdentityId: actor.id },
+    });
+    await this.record(
+      actor,
+      'admin.pilot-exposure-policy.updated',
+      {
+        target: 'pilot-exposure-policy:pilot',
+        values: input,
+      },
+      true,
+    );
+    return policy;
+  }
+
+  async listVerificationCases(actorId: string) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    return this.prisma.senderVerification.findMany({
+      where: {
+        status: {
+          in: [
+            VerificationStatus.TECHNICAL_REVIEW,
+            VerificationStatus.HUMAN_REVIEW,
+          ],
+        },
+      },
+      include: {
+        senderProfile: {
+          select: { id: true, legalName: true, tier: true, verifiedAt: true },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async reviewVerification(
+    actorId: string,
+    input: {
+      verificationId: string;
+      decision: Extract<
+        VerificationStatus,
+        'APPROVED' | 'REJECTED' | 'ESCALATED'
+      >;
+      decisionReason: string;
+    },
+  ) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    if (!this.profiles)
+      throw new Error('Profile review service is not available');
+    const result =
+      input.decision === VerificationStatus.APPROVED
+        ? await this.profiles.approveVerification({
+            verificationId: input.verificationId,
+            reviewerIdentityId: actor.id,
+            decisionReason: input.decisionReason,
+          })
+        : await this.profiles.resolveVerification({
+            verificationId: input.verificationId,
+            reviewerIdentityId: actor.id,
+            decision: input.decision,
+            decisionReason: input.decisionReason,
+          });
+    await this.record(
+      actor,
+      `admin.verification.${input.decision.toLowerCase()}`,
+      {
+        target: `verification:${input.verificationId}`,
+        verificationId: input.verificationId,
+        decision: input.decision,
+      },
+      true,
+    );
+    return result;
   }
 
   /** Emergency-only recovery path. It is intentionally separate from normal MFA login. */

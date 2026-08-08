@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { AuditService } from '@app/audit';
 import { PartnerPort } from '@app/domain';
 import { PrismaService } from '@app/db';
+import { LedgerService } from '@app/ledger';
 import { WorkerJobProcessor } from '../src/worker-job.processor';
 
 function loadDatabaseUrl(): void {
@@ -15,10 +16,12 @@ function loadDatabaseUrl(): void {
   if (value) process.env.DATABASE_URL = value[1] ?? value[2] ?? value[3];
 }
 
-loadDatabaseUrl();
+const databaseIntegrationEnabled =
+  process.env.RUN_DATABASE_INTEGRATION === 'true';
 
-const describeDatabase =
-  process.env.RUN_DATABASE_INTEGRATION === 'true' ? describe : describe.skip;
+if (databaseIntegrationEnabled) loadDatabaseUrl();
+
+const describeDatabase = databaseIntegrationEnabled ? describe : describe.skip;
 
 describeDatabase('platform foundation (PostgreSQL)', () => {
   let prisma: PrismaService;
@@ -82,7 +85,11 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
       payout: jest.fn(),
       status: jest.fn(),
     };
-    const processor = new WorkerJobProcessor(prisma, partner, audit);
+    const ledger = new LedgerService(prisma, audit, {
+      warning: jest.fn().mockResolvedValue(undefined),
+      urgent: jest.fn().mockResolvedValue(undefined),
+    });
+    const processor = new WorkerJobProcessor(prisma, partner, audit, ledger);
 
     await expect(
       processor.process({

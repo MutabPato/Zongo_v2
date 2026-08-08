@@ -18,9 +18,12 @@ export class PretiumPartnerAdapter implements PartnerPort {
     try {
       const response = await this.client.collect({
         reference: request.reference,
-        amount: Number(request.amountMinor),
+        amountMinor: request.amountMinor.toString(),
         currency: request.currency,
         beneficiaryId: request.beneficiaryId,
+        senderPhoneNumber: request.senderPhoneNumber,
+        mobileNetwork: request.mobileNetwork,
+        callbackUrl: process.env.PRETIUM_WEBHOOK_URL,
       });
       return {
         success: true,
@@ -35,9 +38,13 @@ export class PretiumPartnerAdapter implements PartnerPort {
     try {
       const response = await this.client.payout({
         reference: request.reference,
-        amount: Number(request.amountMinor),
+        amountMinor: request.amountMinor.toString(),
         currency: request.currency,
         beneficiaryId: request.beneficiaryId,
+        payoutPhoneNumber: request.payoutPhoneNumber,
+        mobileNetwork: request.mobileNetwork,
+        payoutAccount: request.payoutAccount,
+        callbackUrl: process.env.PRETIUM_WEBHOOK_URL,
       });
       return {
         success: true,
@@ -48,9 +55,12 @@ export class PretiumPartnerAdapter implements PartnerPort {
     }
   }
 
-  async status(reference: string): Promise<PartnerStatusResult> {
+  async status(
+    reference: string,
+    phase?: 'COLLECTION' | 'PAYOUT',
+  ): Promise<PartnerStatusResult> {
     try {
-      const response = await this.client.status({ reference });
+      const response = await this.client.status({ reference, phase });
       return {
         success: true,
         status: response.status,

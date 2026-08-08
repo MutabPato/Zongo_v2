@@ -7,8 +7,17 @@ export function normalizePartnerError(error: unknown): PartnerError {
 
   const message =
     error instanceof Error ? error.message : 'Unknown partner error';
+  const httpStatus =
+    typeof error === 'object' && error !== null && 'httpStatus' in error
+      ? Number((error as { httpStatus?: unknown }).httpStatus)
+      : undefined;
   const code = /timed?\s*out|temporar|unavailable|network/i.test(message)
     ? 'TEMPORARY_FAILURE'
     : 'REQUEST_FAILED';
-  return new PartnerError(code, message, code === 'TEMPORARY_FAILURE');
+  const retryable =
+    code === 'TEMPORARY_FAILURE' ||
+    httpStatus === 408 ||
+    httpStatus === 429 ||
+    (httpStatus !== undefined && httpStatus >= 500);
+  return new PartnerError(code, message, retryable);
 }

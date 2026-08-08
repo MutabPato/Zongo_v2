@@ -11,6 +11,7 @@ import {
 import { AdminService } from './admin.service';
 import { WebAuthnService } from './webauthn.service';
 import { TransactionStatus } from '@prisma/client';
+import { PilotControlKey, PilotControlState } from '@prisma/client';
 
 @Controller('admin')
 export class AdminController {
@@ -81,6 +82,15 @@ export class AdminController {
     return this.adminService.searchTransaction(actor.id, reference);
   }
 
+  @Get('senders/:profileId/reveal')
+  async revealSenderProfile(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('profileId') profileId: string,
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.revealSenderProfile(actor.id, profileId);
+  }
+
   @Get('dashboard')
   async dashboard(
     @Headers('authorization') authorization: string | undefined,
@@ -146,6 +156,15 @@ export class AdminController {
     return this.adminService.recheckStatus(actor.id, reference);
   }
 
+  @Post('transactions/:reference/reconciliation')
+  async queueReconciliation(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('reference') reference: string,
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.queueReconciliation(actor.id, reference);
+  }
+
   @Post('transactions/:reference/retry-payout')
   async retryPayout(
     @Headers('authorization') authorization: string | undefined,
@@ -175,6 +194,32 @@ export class AdminController {
     });
   }
 
+  @Get('verifications')
+  async listVerificationCases(
+    @Headers('authorization') authorization: string | undefined,
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.listVerificationCases(actor.id);
+  }
+
+  @Post('verifications/:verificationId/review')
+  async reviewVerification(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('verificationId') verificationId: string,
+    @Body()
+    body: {
+      decision: 'APPROVED' | 'REJECTED' | 'ESCALATED';
+      decisionReason: string;
+    },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.reviewVerification(actor.id, {
+      verificationId,
+      decision: body.decision,
+      decisionReason: body.decisionReason,
+    });
+  }
+
   @Post('users/:userId/block')
   async blockUser(
     @Headers('authorization') authorization: string | undefined,
@@ -199,17 +244,56 @@ export class AdminController {
     return this.adminService.setUserBlocked(actor.id, userId, false);
   }
 
-  @Post('policies/tier-0-transfer-caps')
-  async setTier0TransferCaps(
+  @Post('policies/tier-1-transfer-caps')
+  async setTier1TransferCaps(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: { perTransferLimitMinor: string; dailyLimitMinor: string },
   ) {
     const actor = await this.actor(authorization);
-    return this.adminService.setTier0TransferCaps(
+    return this.adminService.setTier1TransferCaps(
       actor.id,
       BigInt(body.perTransferLimitMinor),
       BigInt(body.dailyLimitMinor),
     );
+  }
+
+  @Post('pilot/controls')
+  async setPilotControl(
+    @Headers('authorization') authorization: string | undefined,
+    @Body()
+    body: { key: PilotControlKey; state: PilotControlState; reason: string },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.setPilotControl(
+      actor.id,
+      body.key,
+      body.state,
+      body.reason,
+    );
+  }
+
+  @Post('pilot/allowlist/:profileId')
+  async setPilotAllowlist(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('profileId') profileId: string,
+    @Body() body: { enabled: boolean; reason: string },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.setPilotAllowlist(
+      actor.id,
+      profileId,
+      body.enabled,
+      body.reason,
+    );
+  }
+
+  @Post('pilot/exposure-policy')
+  async setPilotExposurePolicy(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Parameters<AdminService['setPilotExposurePolicy']>[1],
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.setPilotExposurePolicy(actor.id, body);
   }
 
   private async actor(authorization: string | undefined) {

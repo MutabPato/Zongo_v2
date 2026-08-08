@@ -2,6 +2,7 @@
 import type { PrismaService } from '@app/db';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { PilotControlKey, PilotControlState } from '@prisma/client';
 
 describe('AdminService', () => {
   it('does not create an admin session without a valid MFA factor', async () => {
@@ -158,7 +159,7 @@ describe('AdminService', () => {
     );
   });
 
-  it('allows only an MFA-verified admin to change and audit Tier 0 caps', async () => {
+  it('allows only an MFA-verified admin to change and audit Tier 1 caps', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const alerts = { sensitiveAction: jest.fn().mockResolvedValue(undefined) };
     const setGlobalTierLimits = jest.fn().mockResolvedValue({ id: 'policy_1' });
@@ -181,22 +182,97 @@ describe('AdminService', () => {
       undefined,
       { setGlobalTierLimits } as never,
       alerts,
-    ).setTier0TransferCaps('admin_1', 500_000n, 1_000_000n);
+    ).setTier1TransferCaps('admin_1', 500_000n, 1_000_000n);
 
     expect(setGlobalTierLimits).toHaveBeenCalledWith(
-      'TIER_0',
+      'TIER_1',
       500_000n,
       1_000_000n,
       'admin_1',
     );
     expect(audit.append).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'admin.policy.tier-0-caps.updated' }),
+      expect.objectContaining({ name: 'admin.policy.tier-1-caps.updated' }),
     );
     expect(alerts.sensitiveAction).toHaveBeenCalledWith(
-      'admin.policy.tier-0-caps.updated',
+      'admin.policy.tier-1-caps.updated',
       expect.any(Object),
       expect.any(String),
     );
+  });
+
+  it('allows Ops to pause but prevents Admin from changing pilot authority controls', async () => {
+    const upsert = jest.fn().mockResolvedValue({
+      key: PilotControlKey.INITIATION,
+      state: PilotControlState.PAUSED,
+    });
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'ops_1',
+            role: 'OPS',
+            mfaVerifiedAt: new Date(),
+            blockedAt: null,
+          })
+          .mockResolvedValueOnce({
+            id: 'admin_1',
+            role: 'ADMIN',
+            mfaVerifiedAt: new Date(),
+            blockedAt: null,
+          }),
+      },
+      pilotControl: { upsert },
+    } as unknown as PrismaService;
+    const service = new AdminService(prisma, audit);
+
+    await expect(
+      service.setPilotControl(
+        'ops_1',
+        PilotControlKey.INITIATION,
+        PilotControlState.PAUSED,
+        'Partner incident',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({ state: PilotControlState.PAUSED }),
+    );
+    await expect(
+      service.setPilotControl(
+        'admin_1',
+        PilotControlKey.INITIATION,
+        PilotControlState.PAUSED,
+        'Admin attempt',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires the configured accountable pilot operator to start or permanently stop', async () => {
+    process.env.PILOT_OPERATOR_ID = 'operator_1';
+    const upsert = jest
+      .fn()
+      .mockResolvedValue({ state: PilotControlState.PERMANENTLY_STOPPED });
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'ops_1',
+          role: 'OPS',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotControl: { upsert },
+    } as unknown as PrismaService;
+    await expect(
+      new AdminService(prisma).setPilotControl(
+        'ops_1',
+        PilotControlKey.GLOBAL,
+        PilotControlState.PERMANENTLY_STOPPED,
+        'Permanent stop',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    delete process.env.PILOT_OPERATOR_ID;
   });
 
   it('queues an ops status recheck and records its operational and audit results', async () => {

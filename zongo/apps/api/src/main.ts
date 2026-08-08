@@ -10,6 +10,7 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
     ApiModule,
     new FastifyAdapter(),
+    { rawBody: true },
   );
   const config = new DocumentBuilder()
     .setTitle('Zongo Public API')

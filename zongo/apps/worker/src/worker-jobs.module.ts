@@ -3,6 +3,9 @@ import { AuditModule } from '@app/audit';
 import { DbModule } from '@app/db';
 import { DomainModule } from '@app/domain';
 import { PartnerModule } from '@app/partner';
+import { LedgerModule } from '@app/ledger';
+import { SecurityModule } from '@app/security';
+import { WhatsAppModule } from '@app/whatsapp';
 import { WorkerJobProcessor } from './worker-job.processor';
 
 /**
@@ -11,7 +14,15 @@ import { WorkerJobProcessor } from './worker-job.processor';
  * enqueue or run a controlled retry.
  */
 @Module({
-  imports: [DomainModule, PartnerModule, AuditModule, DbModule],
+  imports: [
+    DomainModule,
+    PartnerModule,
+    AuditModule,
+    DbModule,
+    LedgerModule,
+    SecurityModule,
+    WhatsAppModule,
+  ],
   providers: [WorkerJobProcessor],
   exports: [WorkerJobProcessor],
 })

@@ -5,6 +5,9 @@
 - Technology orchestrator: a software platform that captures transfer intent and coordinates licensed financial partners to execute collection and payout. It is not the regulated money transmitter of record.
 - Licensed partner: a regulated financial institution or aggregator that executes the actual movement of funds.
 - DRC to Kenya corridor: the initial remittance corridor for the product, with send-side amounts denominated in USD or CDF and payout settled in KES.
+- Foundation Complete: the core domain, persistence, worker, and control-plane capabilities are implemented and verified in isolation; this term does not claim that a customer can complete a live transfer.
+- Local E2E Complete: the complete DRC-to-Kenya WhatsApp transfer journey runs through the real application boundaries in a controlled non-production environment with durable, verifiable outcomes.
+- Pilot Ready: the platform is approved to move real customer money for a limited cohort using production integrations, with the required security, operations, reconciliation, recovery, and release evidence in place.
 - Pretium partner layer: Pretium is the single integration partner used by the MVP to handle both collection and payout.
 - Fiat-only user experience: users see only fiat amounts and transfer outcomes; stablecoin or internal rail details are hidden from the customer flow.
 - Verified sender identity: a user must complete verification and link it to a specific sender phone number before initiating transfers.
@@ -38,14 +41,22 @@
 - Payout retries are manual only.
 - Deferred implementations: bill payments, KE -> DRC, DRC -> UG, and UG -> DRC are out of MVP scope.
 - KYC tiering: `TIER_0` means account created with no transfers allowed; `TIER_1` means verified sender identity allowed to send within MVP limits; `TIER_2` is deferred for later when higher limits or enhanced due diligence are needed.
+- Assisted KYC verification: technical identity-verification results are evidence for an independently conducted human review; they are not, by themselves, a certified KYC or AML determination.
+- Verification case: the durable record of identity evidence, technical results, screening, reviewer actions, decision reasons, and re-verification history for a sender.
+- Verification case states: `PENDING`, `TECHNICAL_REVIEW`, `HUMAN_REVIEW`, `APPROVED`, `REJECTED`, `ESCALATED`, and `EXPIRED`; only `APPROVED` permits `TIER_1` sender eligibility.
+- Verification review independence: the initial reviewer must be separate from the person who collected or configured the case; watchlist hits, identity conflicts, suspected fraud, and exceptions require compliance/risk escalation.
+- Verification re-check: re-verification is required after sender-phone replacement, material identity change, document expiry, suspected compromise or fraud, or compliance-directed review.
 - Pretium role: Pretium is the single compliance and rail abstraction layer for the MVP.
 - Backend architecture: the MVP uses an asynchronous, event-driven backend.
 - Runtime: the MVP backend is built in TypeScript/Node.js.
 - HTTP framework: the MVP backend uses Fastify.
 - Service shape: the backend is split into separate API and worker services.
-- Persistence: Postgres stores durable state; Redis handles queueing and short-lived orchestration state.
+- Persistence: Postgres stores durable state and owns the correctness path for the durable queue; Redis handles disposable coordination such as short-lived locks, wakeups, rate-limit buckets, and caches.
 - API surface: the MVP exposes a minimal REST API in addition to WhatsApp webhooks.
 - Transfer initiation: transfer creation is WhatsApp-only.
+- Transfer initiation boundary: a single internal application service atomically validates corridor, sender, beneficiary, quote, limits, idempotency, and active-chat rules, then creates the accepted transfer, first collection job, session ownership, and audit fact in Postgres.
+- Accepted transfer: a committed `INITIATED` transaction with a durable collection job; it is not proof that collection or payout succeeded.
+- Initiation idempotency: repeating the same key and material inputs returns the original accepted result; reusing the key with different material inputs is a conflict.
 - Minimal REST API: health checks, transaction status lookup, beneficiary lookup/listing for support or admin use, and internal ops actions such as manual retry or status recheck.
 - Minimal REST API access: internal/admin-only.
 - Admin API authentication: simple bearer-token authentication for MVP.
@@ -67,7 +78,7 @@
 - Environments: `local` runs on the developer machine, `development` runs on the self-hosted local server, and `production` runs on the GCE VM.
 - Secrets: use environment variables in `local` and managed secrets in `development` and `production`.
 - Data handling: sensitive data is minimized and segmented where practical.
-- KYC provider: Smile ID is the KYC verification provider.
+- KYC capability: the pilot evaluates OpenBiometrics first and retains a composed self-hosted fallback; neither route is promoted until its evidence pack and cross-functional Pilot Ready approval are complete.
 - Future-channel-ready user profile: store the minimum durable profile needed to contact the user and migrate them later, plus verification history and contact preferences, including legal name, KYC status, linked phone number, WhatsApp number, backup phone, optional email, verification timestamps, provider reference IDs, change history, preferred channel, language, and notification opt-in.
 - Email is optional at onboarding.
 - Migration path: user migration to future channels is modeled explicitly in the domain model.
@@ -111,8 +122,12 @@
 - Alerts cover both failures and slow drift signals.
 - Warnings go to Slack/email; pages are reserved for urgent operational failures.
 - Sensitive fields use application-level encryption plus storage encryption at rest.
-- Encryption keys are managed in restricted storage with a rotation policy.
-- Keys are separated per data class where practical.
+- Sensitive pilot data: sender/KYC/biometric, beneficiary payout, personal-data-bearing payloads, secrets, and financial/operational records require restricted handling.
+- Recoverable sensitive values use authenticated envelope encryption; phone, email, and provider-reference lookups use keyed hashes/blind indexes.
+- Admin displays mask restricted values by default and require explicit role-limited reveal permission.
+- Encryption keys are managed in GCP KMS/Secret Manager with versioned rotation and compromise response.
+- Keys are separated per data class, with distinct API, worker, and admin access.
+- KYC/biometric or partner data must not cross the approved processing boundary without DPIA, transfer assessment, processor agreement, and accountable risk approval.
 - Backups cover Postgres, audit logs, and critical configuration, with regular restore testing.
 - RPO/RTO targets are deferred to the runbook.
 - Every privileged admin action is audited.
@@ -121,3 +136,6 @@
 - Sensitive admin actions trigger alerts.
 - Emergency access is minimized and logged.
 - Emergency access uses a minimal break-glass path that is heavily logged and rarely used.
+- Pilot authority: the accountable business/operator owner starts or permanently stops the pilot; Ops pauses/resumes within runbook conditions; Engineering may isolate or recommend pause but cannot independently resume money movement; Support investigates and communicates; Admin manages access/policy but cannot unilaterally release the pilot.
+- Pilot kill switches: initiation, collection, payout, corridor/provider rail, notification, and global pilot switches can isolate money movement while preserving status, reconciliation, audit, support, and manual recovery.
+- Pilot resume gate: incident record, named approval, bounded cause, partner-status reconciliation, ledger/reconciliation confirmation, queued-job review, customer-impact decision, and restored-control evidence are required before real-money movement resumes.

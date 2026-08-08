@@ -5,6 +5,10 @@ export interface PartnerCollectionRequest {
   readonly amountMinor: bigint;
   readonly currency: string;
   readonly beneficiaryId: string;
+  readonly senderPhoneNumber?: string;
+  readonly payoutPhoneNumber?: string;
+  readonly mobileNetwork?: string;
+  readonly payoutAccount?: Record<string, unknown>;
 }
 
 export type PartnerPayoutRequest = PartnerCollectionRequest;
@@ -32,7 +36,10 @@ export type PartnerStatusResult =
 export interface PartnerPort {
   collect(request: PartnerCollectionRequest): Promise<PartnerResult>;
   payout(request: PartnerPayoutRequest): Promise<PartnerResult>;
-  status(reference: string): Promise<PartnerStatusResult>;
+  status(
+    reference: string,
+    phase?: 'COLLECTION' | 'PAYOUT',
+  ): Promise<PartnerStatusResult>;
 }
 
 export const PARTNER_PORT = Symbol('PARTNER_PORT');

@@ -24,7 +24,7 @@ describe('PretiumPartnerAdapter', () => {
 
     expect(collect).toHaveBeenCalledWith({
       reference: 'tx_1',
-      amount: 100,
+      amountMinor: '100',
       currency: 'USD',
       beneficiaryId: 'ben_1',
     });

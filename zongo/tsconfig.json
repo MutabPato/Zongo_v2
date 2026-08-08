@@ -38,7 +38,13 @@
       "@app/beneficiary": ["libs/beneficiary/src"],
       "@app/beneficiary/*": ["libs/beneficiary/src/*"],
       "@app/ledger": ["libs/ledger/src"],
-      "@app/ledger/*": ["libs/ledger/src/*"]
+      "@app/ledger/*": ["libs/ledger/src/*"],
+      "@app/security": ["libs/security/src"],
+      "@app/security/*": ["libs/security/src/*"],
+      "@app/whatsapp": ["libs/whatsapp/src"],
+      "@app/whatsapp/*": ["libs/whatsapp/src/*"],
+      "@app/transfer": ["libs/transfer/src"],
+      "@app/transfer/*": ["libs/transfer/src/*"]
     }
   }
 }

@@ -10,6 +10,10 @@ import { PartnerModule } from '@app/partner';
 import { ProfileModule } from '@app/profile';
 import { BeneficiaryModule } from '@app/beneficiary';
 import { LedgerModule } from '@app/ledger';
+import { WhatsAppModule } from '@app/whatsapp';
+import { WhatsAppWebhookController } from './whatsapp-webhook.controller';
+import { TransferModule } from '@app/transfer';
+import { PretiumWebhookController } from './pretium-webhook.controller';
 
 @Module({
   imports: [
@@ -21,8 +25,15 @@ import { LedgerModule } from '@app/ledger';
     LedgerModule,
     AuditModule,
     DbModule,
+    WhatsAppModule,
+    TransferModule,
   ],
-  controllers: [ApiController, HealthController],
+  controllers: [
+    ApiController,
+    HealthController,
+    WhatsAppWebhookController,
+    PretiumWebhookController,
+  ],
   providers: [ApiService],
 })
 export class ApiModule {}

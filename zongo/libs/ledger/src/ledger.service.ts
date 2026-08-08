@@ -41,7 +41,7 @@ export class LedgerService {
       eventName === 'collection'
         ? [LedgerAccount.CUSTOMER_COLLECTION, LedgerAccount.PARTNER_CLEARING]
         : [LedgerAccount.PARTNER_CLEARING, LedgerAccount.BENEFICIARY_PAYOUT];
-    await this.prisma.ledgerEntry.createMany({
+    const posted = await this.prisma.ledgerEntry.createMany({
       data: [
         {
           transactionId,
@@ -60,7 +60,9 @@ export class LedgerService {
           eventName,
         },
       ],
+      skipDuplicates: true,
     });
+    if (posted.count === 0) return;
     await this.audit.append({
       id: crypto.randomUUID(),
       eventType: 'BUSINESS',

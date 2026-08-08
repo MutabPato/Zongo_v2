@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AUDIT_LOG_PORT, DomainError, type AuditLogPort } from '@app/domain';
 import { PrismaService } from '@app/db';
+import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
 import { CurrencyCode, TransactionStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
@@ -19,10 +20,26 @@ export class BeneficiaryService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_LOG_PORT) private readonly audit: AuditLogPort,
+    @Inject(ENVELOPE_ENCRYPTION)
+    private readonly protection: EnvelopeEncryptionService,
   ) {}
 
   async create(details: BeneficiaryDetails) {
-    const beneficiary = await this.prisma.beneficiary.create({ data: details });
+    const payoutAccount = details.payoutAccount
+      ? await this.protection.encrypt(
+          JSON.stringify(details.payoutAccount),
+          'beneficiary-payout-account',
+        )
+      : undefined;
+    const beneficiary = await this.prisma.beneficiary.create({
+      data: {
+        ...details,
+        payoutAccount: undefined,
+        payoutAccountCiphertext: payoutAccount
+          ? JSON.stringify(payoutAccount)
+          : undefined,
+      },
+    });
     await this.appendAudit('beneficiary.created', beneficiary.id, {
       familyId: beneficiary.familyId,
     });
@@ -43,6 +60,12 @@ export class BeneficiaryService {
         'Only the current beneficiary revision can be changed',
       );
 
+    const payoutAccount = changes.payoutAccount
+      ? await this.protection.encrypt(
+          JSON.stringify(changes.payoutAccount),
+          'beneficiary-payout-account',
+        )
+      : undefined;
     const next = await this.prisma.beneficiary.create({
       data: {
         userId: previous.userId,
@@ -51,7 +74,10 @@ export class BeneficiaryService {
         payoutCountryCode: changes.payoutCountryCode,
         payoutCurrency: changes.payoutCurrency,
         phoneNumber: changes.phoneNumber,
-        payoutAccount: changes.payoutAccount,
+        payoutAccount: undefined,
+        payoutAccountCiphertext: payoutAccount
+          ? JSON.stringify(payoutAccount)
+          : undefined,
         familyId: previous.familyId,
         version: previous.version + 1,
         supersedesId: previous.id,

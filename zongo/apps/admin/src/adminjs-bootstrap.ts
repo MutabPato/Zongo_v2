@@ -110,8 +110,8 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
           throw new Error(
             'An authenticated admin and policy record are required',
           );
-        if (context.record.params.tier !== 'TIER_0')
-          throw new Error('Only the TIER_0 transfer-cap policy is editable');
+        if (context.record.params.tier !== 'TIER_1')
+          throw new Error('Only the TIER_1 transfer-cap policy is editable');
 
         if (request.method === 'get')
           return { record: context.record.toJSON(context.currentAdmin) };
@@ -119,16 +119,16 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
         const perTransferLimitMinor = request.payload?.perTransferLimitMinor;
         const dailyLimitMinor = request.payload?.dailyLimitMinor;
         if (!perTransferLimitMinor || !dailyLimitMinor)
-          throw new Error('Both Tier 0 transfer caps are required');
+          throw new Error('Both Tier 1 transfer caps are required');
 
-        const policy = await controlPlane.setTier0TransferCaps(
+        const policy = await controlPlane.setTier1TransferCaps(
           context.currentAdmin.id,
           BigInt(perTransferLimitMinor),
           BigInt(dailyLimitMinor),
         );
         const updatedRecord = await context.resource.findOne(policy.id);
         if (!updatedRecord)
-          throw new Error('Tier 0 policy was not found after update');
+          throw new Error('Tier 1 policy was not found after update');
         return {
           record: updatedRecord.toJSON(context.currentAdmin),
           redirectUrl: context.h.resourceUrl({
@@ -136,7 +136,7 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
               context.resource._decorated?.id() ?? context.resource.id(),
           }),
           notice: {
-            message: 'Tier 0 caps updated and audited',
+            message: 'Tier 1 caps updated and audited',
             type: 'success',
           },
         };
@@ -352,6 +352,7 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
     resources: [
       'TransferTransaction',
       'Beneficiary',
+      'SenderProfile',
       'TransactionReconciliation',
       'AuditEvent',
       'TierLimitPolicy',
@@ -362,6 +363,20 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
         client: prisma,
       },
       options: {
+        properties:
+          model === 'SenderProfile'
+            ? {
+                email: { isVisible: false },
+                senderPhoneNumber: { isVisible: false },
+                whatsappPhoneNumber: { isVisible: false },
+                backupPhoneNumber: { isVisible: false },
+                emailCiphertext: { isVisible: false },
+                emailBlindIndex: { isVisible: false },
+                senderPhoneCiphertext: { isVisible: false },
+                senderPhoneBlindIndex: { isVisible: false },
+                backupPhoneCiphertext: { isVisible: false },
+              }
+            : undefined,
         actions:
           model === 'TierLimitPolicy'
             ? tierPolicyActions

@@ -8,6 +8,15 @@ describe('BeneficiaryService', () => {
   const audit = {
     append: jest.fn().mockResolvedValue(undefined),
   } as unknown as AuditLogPort;
+  const protection = {
+    encrypt: jest.fn((value: string) => ({
+      algorithm: 'aes-256-gcm' as const,
+      keyVersion: 'v1',
+      iv: 'iv',
+      ciphertext: value,
+      authTag: 'tag',
+    })),
+  } as any;
   const details = {
     userId: 'sender_1',
     corridorId: 'corr_1',
@@ -31,7 +40,7 @@ describe('BeneficiaryService', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue(created),
       },
     } as unknown as PrismaService;
-    const service = new BeneficiaryService(prisma, audit);
+    const service = new BeneficiaryService(prisma, audit, protection);
 
     await expect(service.create(details)).resolves.toEqual(created);
     await expect(
@@ -68,7 +77,7 @@ describe('BeneficiaryService', () => {
     } as unknown as PrismaService;
 
     await expect(
-      new BeneficiaryService(prisma, audit).revise(original.id, {
+      new BeneficiaryService(prisma, audit, protection).revise(original.id, {
         ...details,
         phoneNumber: revision.phoneNumber,
       }),
@@ -112,7 +121,7 @@ describe('BeneficiaryService', () => {
     } as unknown as PrismaService;
 
     await expect(
-      new BeneficiaryService(prisma, audit).setRetryTarget(
+      new BeneficiaryService(prisma, audit, protection).setRetryTarget(
         transaction.id,
         corrected.id,
       ),

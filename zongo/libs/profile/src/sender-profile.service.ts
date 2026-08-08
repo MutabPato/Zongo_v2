@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AUDIT_LOG_PORT, DomainError, type AuditLogPort } from '@app/domain';
 import { PrismaService } from '@app/db';
+import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
 import { KycTier, VerificationStatus } from '@prisma/client';
 
 export type CreateSenderProfileInput = {
@@ -12,12 +13,37 @@ export type CreateSenderProfileInput = {
   preferredLanguage?: string;
 };
 
-export type VerificationOutcomeInput = {
+export type TechnicalVerificationInput = {
   senderProfileId: string;
   providerReference: string;
+  idempotencyKey: string;
   verifiedPhoneNumber: string;
-  status: VerificationStatus;
+  status?: Extract<
+    VerificationStatus,
+    'PENDING' | 'TECHNICAL_REVIEW' | 'HUMAN_REVIEW' | 'REJECTED' | 'ESCALATED'
+  >;
   failureReason?: string;
+  collectedByIdentityId?: string;
+  consentAt?: Date;
+  evidence?: Record<string, unknown>;
+};
+
+export type ApproveVerificationInput = {
+  verificationId: string;
+  reviewerIdentityId: string;
+  decisionReason: string;
+};
+
+export type ExpireVerificationInput = {
+  verificationId: string;
+  reason: string;
+};
+
+export type ResolveVerificationInput = {
+  verificationId: string;
+  reviewerIdentityId: string;
+  decision: Extract<VerificationStatus, 'REJECTED' | 'ESCALATED'>;
+  decisionReason: string;
 };
 
 export type TransferEligibility =
@@ -32,6 +58,7 @@ export type TransferEligibility =
       reason:
         | 'PHONE_NOT_BOUND'
         | 'USER_BLOCKED'
+        | 'KYC_REQUIRED'
         | 'PER_TRANSFER_LIMIT_EXCEEDED'
         | 'DAILY_LIMIT_EXCEEDED';
     };
@@ -50,16 +77,41 @@ export class SenderProfileService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(AUDIT_LOG_PORT) private readonly audit: AuditLogPort,
+    @Inject(ENVELOPE_ENCRYPTION)
+    private readonly protection: EnvelopeEncryptionService,
   ) {}
 
   async create(input: CreateSenderProfileInput) {
+    const email = input.email
+      ? await this.protection.encrypt(input.email, 'sender-email')
+      : undefined;
+    const senderPhone = await this.protection.encrypt(
+      input.whatsappPhoneNumber,
+      'sender-phone',
+    );
+    const backupPhone = input.backupPhoneNumber
+      ? await this.protection.encrypt(input.backupPhoneNumber, 'sender-phone')
+      : undefined;
     const profile = await this.prisma.senderProfile.create({
       data: {
         userId: input.userId,
         legalName: input.legalName,
-        email: input.email,
+        email: undefined,
+        emailCiphertext: email ? JSON.stringify(email) : undefined,
+        emailBlindIndex: input.email
+          ? await this.protection.blindIndex(input.email, 'sender-email')
+          : undefined,
+        senderPhoneNumber: undefined,
+        senderPhoneCiphertext: JSON.stringify(senderPhone),
+        senderPhoneBlindIndex: await this.protection.blindIndex(
+          input.whatsappPhoneNumber,
+          'sender-phone',
+        ),
         whatsappPhoneNumber: input.whatsappPhoneNumber,
-        backupPhoneNumber: input.backupPhoneNumber,
+        backupPhoneNumber: undefined,
+        backupPhoneCiphertext: backupPhone
+          ? JSON.stringify(backupPhone)
+          : undefined,
         contactPreferences: {
           create: { preferredLanguage: input.preferredLanguage ?? 'en' },
         },
@@ -128,7 +180,23 @@ export class SenderProfileService {
     });
   }
 
-  async recordVerification(input: VerificationOutcomeInput) {
+  async recordTechnicalVerification(input: TechnicalVerificationInput) {
+    const existing = await this.prisma.senderVerification.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    if (existing) {
+      if (
+        existing.senderProfileId !== input.senderProfileId ||
+        existing.providerReference !== input.providerReference
+      ) {
+        throw new DomainError(
+          'VERIFICATION_IDEMPOTENCY_CONFLICT',
+          'Verification idempotency key was reused with different inputs',
+        );
+      }
+      return existing;
+    }
+
     const profile = await this.prisma.senderProfile.findUniqueOrThrow({
       where: { id: input.senderProfileId },
     });
@@ -136,51 +204,258 @@ export class SenderProfileService {
       data: {
         senderProfileId: profile.id,
         providerReference: input.providerReference,
-        status: input.status,
+        idempotencyKey: input.idempotencyKey,
+        status: input.status ?? VerificationStatus.TECHNICAL_REVIEW,
         verifiedPhoneNumber: input.verifiedPhoneNumber,
+        evidenceCiphertext: input.evidence
+          ? (JSON.stringify(
+              await this.protection.encrypt(
+                JSON.stringify(input.evidence),
+                'kyc-evidence',
+              ),
+            ) as never)
+          : undefined,
         failureReason: input.failureReason,
-        completedAt: new Date(),
+        collectedByIdentityId: input.collectedByIdentityId,
+        consentAt: input.consentAt,
       },
     });
 
-    if (input.status !== VerificationStatus.SUCCEEDED) {
-      await this.appendAudit('sender.verification.failed', profile.id, {
-        verificationId: verification.id,
-      });
-      return { profile, verification, replacedPhone: false };
+    if (
+      verification.status === VerificationStatus.REJECTED ||
+      verification.status === VerificationStatus.ESCALATED
+    ) {
+      await this.appendAudit(
+        'sender.verification.review_required',
+        profile.id,
+        {
+          verificationId: verification.id,
+          status: verification.status,
+        },
+      );
+    }
+    return verification;
+  }
+
+  async approveVerification(input: ApproveVerificationInput) {
+    if (!input.decisionReason.trim()) {
+      throw new DomainError(
+        'VERIFICATION_DECISION_REASON_REQUIRED',
+        'A verification approval requires a decision reason',
+      );
     }
 
-    const replacedPhone = Boolean(
-      profile.senderPhoneNumber &&
-      profile.senderPhoneNumber !== input.verifiedPhoneNumber,
-    );
-    if (replacedPhone) {
-      await this.prisma.senderPhoneReplacement.create({
+    return this.prisma.$transaction(async (tx) => {
+      const verification = await tx.senderVerification.findUniqueOrThrow({
+        where: { id: input.verificationId },
+        include: { senderProfile: true },
+      });
+      if (verification.status !== VerificationStatus.HUMAN_REVIEW) {
+        throw new DomainError(
+          'VERIFICATION_NOT_READY_FOR_APPROVAL',
+          'Only a verification in human review can be approved',
+        );
+      }
+      if (
+        verification.collectedByIdentityId &&
+        verification.collectedByIdentityId === input.reviewerIdentityId
+      ) {
+        throw new DomainError(
+          'VERIFICATION_REVIEWER_NOT_INDEPENDENT',
+          'The verification reviewer must be independent of the collector',
+        );
+      }
+      if (!verification.verifiedPhoneNumber) {
+        throw new DomainError(
+          'VERIFIED_PHONE_REQUIRED',
+          'An approved verification must include a verified phone number',
+        );
+      }
+
+      const now = new Date();
+      const approved = await tx.senderVerification.update({
+        where: { id: verification.id },
         data: {
-          senderProfileId: profile.id,
-          previousPhoneNumber: profile.senderPhoneNumber!,
-          replacementPhoneNumber: input.verifiedPhoneNumber,
-          verificationId: verification.id,
+          status: VerificationStatus.APPROVED,
+          reviewerIdentityId: input.reviewerIdentityId,
+          decisionReason: input.decisionReason,
+          reviewedAt: now,
+          completedAt: now,
         },
       });
-    }
-    const updatedProfile = await this.prisma.senderProfile.update({
-      where: { id: profile.id },
-      data: {
-        senderPhoneNumber: input.verifiedPhoneNumber,
-        tier: KycTier.TIER_1,
-        verifiedAt: new Date(),
-      },
+
+      const previousPhone =
+        verification.senderProfile.senderPhoneNumber ??
+        (verification.senderProfile.senderPhoneCiphertext
+          ? await this.protection.decrypt(
+              JSON.parse(verification.senderProfile.senderPhoneCiphertext),
+              'sender-phone',
+            )
+          : null);
+      const replacedPhone = Boolean(
+        previousPhone && previousPhone !== verification.verifiedPhoneNumber,
+      );
+      if (replacedPhone) {
+        await tx.senderPhoneReplacement.create({
+          data: {
+            senderProfileId: verification.senderProfile.id,
+            previousPhoneNumber: undefined,
+            replacementPhoneNumber: undefined,
+            previousPhoneCiphertext: JSON.stringify(
+              await this.protection.encrypt(previousPhone!, 'sender-phone'),
+            ),
+            replacementPhoneCiphertext: JSON.stringify(
+              await this.protection.encrypt(
+                verification.verifiedPhoneNumber,
+                'sender-phone',
+              ),
+            ),
+            previousPhoneBlindIndex: await this.protection.blindIndex(
+              previousPhone!,
+              'sender-phone',
+            ),
+            replacementPhoneBlindIndex: await this.protection.blindIndex(
+              verification.verifiedPhoneNumber,
+              'sender-phone',
+            ),
+            verificationId: verification.id,
+          },
+        });
+      }
+      const encryptedPhone = await this.protection.encrypt(
+        verification.verifiedPhoneNumber,
+        'sender-phone',
+      );
+      const updatedProfile = await tx.senderProfile.update({
+        where: { id: verification.senderProfile.id },
+        data: {
+          senderPhoneNumber: undefined,
+          senderPhoneCiphertext: JSON.stringify(encryptedPhone),
+          senderPhoneBlindIndex: await this.protection.blindIndex(
+            verification.verifiedPhoneNumber,
+            'sender-phone',
+          ),
+          tier: KycTier.TIER_1,
+          verifiedAt: now,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          id: `audit_${verification.id}_${now.getTime()}`,
+          eventType: 'BUSINESS',
+          name: replacedPhone
+            ? 'sender.phone.replaced'
+            : 'sender.verification.approved',
+          actorType: 'ADMIN',
+          actorId: input.reviewerIdentityId,
+          payload: {
+            verificationId: verification.id,
+            tier: updatedProfile.tier,
+            decisionReason: input.decisionReason,
+          },
+          createdAt: now,
+        },
+      });
+      return { profile: updatedProfile, verification: approved, replacedPhone };
     });
-    await this.appendAudit(
-      replacedPhone ? 'sender.phone.replaced' : 'sender.verification.succeeded',
-      profile.id,
-      {
-        verificationId: verification.id,
-        tier: updatedProfile.tier,
-      },
-    );
-    return { profile: updatedProfile, verification, replacedPhone };
+  }
+
+  async resolveVerification(input: ResolveVerificationInput) {
+    if (!input.decisionReason.trim())
+      throw new DomainError(
+        'VERIFICATION_DECISION_REASON_REQUIRED',
+        'A verification decision requires a reason',
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const verification = await tx.senderVerification.findUniqueOrThrow({
+        where: { id: input.verificationId },
+      });
+      if (
+        verification.status !== VerificationStatus.TECHNICAL_REVIEW &&
+        verification.status !== VerificationStatus.HUMAN_REVIEW
+      )
+        throw new DomainError(
+          'VERIFICATION_NOT_REVIEWABLE',
+          'Only a reviewable verification case can be resolved',
+        );
+      const resolved = await tx.senderVerification.update({
+        where: { id: verification.id },
+        data: {
+          status: input.decision,
+          reviewerIdentityId: input.reviewerIdentityId,
+          decisionReason: input.decisionReason,
+          reviewedAt: new Date(),
+          completedAt:
+            input.decision === VerificationStatus.REJECTED
+              ? new Date()
+              : undefined,
+        },
+      });
+      await tx.auditEvent.create({
+        data: {
+          id: `audit_${verification.id}_${Date.now()}`,
+          eventType: 'BUSINESS',
+          name: `sender.verification.${input.decision.toLowerCase()}`,
+          actorType: 'ADMIN',
+          actorId: input.reviewerIdentityId,
+          payload: {
+            verificationId: verification.id,
+            decision: input.decision,
+            decisionReason: input.decisionReason,
+          },
+          createdAt: new Date(),
+        },
+      });
+      return resolved;
+    });
+  }
+
+  async expireVerification(input: ExpireVerificationInput) {
+    if (!input.reason.trim()) {
+      throw new DomainError(
+        'VERIFICATION_EXPIRY_REASON_REQUIRED',
+        'Verification expiry requires a reason',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const verification = await tx.senderVerification.findUniqueOrThrow({
+        where: { id: input.verificationId },
+        include: { senderProfile: true },
+      });
+      if (verification.status !== VerificationStatus.APPROVED) {
+        throw new DomainError(
+          'VERIFICATION_NOT_APPROVED',
+          'Only an approved verification can expire',
+        );
+      }
+
+      const now = new Date();
+      const expired = await tx.senderVerification.update({
+        where: { id: verification.id },
+        data: {
+          status: VerificationStatus.EXPIRED,
+          decisionReason: input.reason,
+          reviewedAt: now,
+          expiresAt: now,
+        },
+      });
+      const profile = await tx.senderProfile.update({
+        where: { id: verification.senderProfile.id },
+        data: { tier: KycTier.TIER_0, verifiedAt: null },
+      });
+      await tx.auditEvent.create({
+        data: {
+          id: `audit_${verification.id}_expired_${now.getTime()}`,
+          eventType: 'BUSINESS',
+          name: 'sender.verification.expired',
+          actorType: 'SYSTEM',
+          payload: { verificationId: verification.id, reason: input.reason },
+          createdAt: now,
+        },
+      });
+      return { profile, verification: expired };
+    });
   }
 
   async checkTransferEligibility(
@@ -198,8 +473,18 @@ export class SenderProfileService {
       select: { blockedAt: true },
     });
     if (identity?.blockedAt) return { eligible: false, reason: 'USER_BLOCKED' };
-    if (profile.senderPhoneNumber !== senderPhoneNumber)
+    const boundPhone =
+      profile.senderPhoneNumber ??
+      (profile.senderPhoneCiphertext
+        ? await this.protection.decrypt(
+            JSON.parse(profile.senderPhoneCiphertext),
+            'sender-phone',
+          )
+        : null);
+    if (boundPhone !== senderPhoneNumber)
       return { eligible: false, reason: 'PHONE_NOT_BOUND' };
+    if (profile.tier === KycTier.TIER_0)
+      return { eligible: false, reason: 'KYC_REQUIRED' };
 
     const global = await this.prisma.tierLimitPolicy.findUnique({
       where: { tier: profile.tier },

@@ -1,0 +1,21 @@
+{
+  "deploymentCommitOrImageDigest": "",
+  "metricsEvidence": "",
+  "structuredLogsEvidence": "",
+  "traceCorrelationEvidence": "",
+  "warningRoutingEvidence": "",
+  "urgentRoutingEvidence": "",
+  "acknowledgementAndEscalationEvidence": "",
+  "postgresBackupEvidence": "",
+  "criticalConfigurationBackupEvidence": "",
+  "restoreWithKeysEvidence": "",
+  "redisLossRebuildEvidence": "",
+  "postgresFailureEvidence": "",
+  "approvedRpoMinutes": "",
+  "approvedRtoMinutes": "",
+  "pauseExerciseEvidence": "",
+  "incidentCommunicationEvidence": "",
+  "reconciliationExerciseEvidence": "",
+  "customerImpactEvidence": "",
+  "controlledResumeEvidence": ""
+}

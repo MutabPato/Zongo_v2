@@ -855,13 +855,28 @@ export class WorkerJobProcessor {
     const partnerReferenceBlindIndex = this.protection
       ? await this.protection.blindIndex(partnerReference, 'provider-reference')
       : undefined;
-    const applied = await this.prisma.transferTransaction.updateMany({
-      where: { id: transaction.id, status: transaction.status },
-      data: {
-        status,
-        partnerReference,
-        ...(partnerReferenceBlindIndex ? { partnerReferenceBlindIndex } : {}),
-      },
+    const applied = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.transferTransaction.updateMany({
+        where: { id: transaction.id, status: transaction.status },
+        data: {
+          status,
+          partnerReference,
+          ...(partnerReferenceBlindIndex ? { partnerReferenceBlindIndex } : {}),
+        },
+      });
+      if (result.count === 1 && status === TransactionStatus.COLLECTION_SUCCESS)
+        await tx.workerJob.upsert({
+          where: { dedupKey: `${transaction.reference}:PAYOUT` },
+          create: {
+            dedupKey: `${transaction.reference}:PAYOUT`,
+            transactionReference: transaction.reference,
+            transactionId: transaction.id,
+            jobType: JobType.PAYOUT,
+            payload: { reason: 'COLLECTION_SUCCESS' },
+          },
+          update: {},
+        });
+      return result;
     });
     if (applied.count !== 1) {
       await this.audit.append({

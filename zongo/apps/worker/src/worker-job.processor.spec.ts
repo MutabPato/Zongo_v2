@@ -607,6 +607,15 @@ describe('WorkerJobProcessor', () => {
         }),
         updateMany,
       },
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'payout_job_callback' }),
+      },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: jest.fn() },
+        } as never),
+      ),
     } as unknown as PrismaService;
     const ledger = {
       appendLifecycleEntries: jest.fn().mockResolvedValue(undefined),
@@ -633,6 +642,50 @@ describe('WorkerJobProcessor', () => {
       'payout',
     );
     expect(ledger.persistReconciliation).toHaveBeenCalledWith(transaction.id);
+  });
+
+  it('queues payout after an internal collection-success callback', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const payoutUpsert = jest.fn().mockResolvedValue({ id: 'payout_job_3' });
+    const prisma = {
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ...transaction,
+          status: TransactionStatus.PENDING_COLLECTION,
+        }),
+        updateMany,
+      },
+      workerJob: { upsert: payoutUpsert },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: payoutUpsert },
+        } as never),
+      ),
+    } as unknown as PrismaService;
+    const processor = new WorkerJobProcessor(
+      prisma,
+      {} as PartnerPort,
+      { append: jest.fn().mockResolvedValue(undefined) },
+      noopLedger,
+    );
+
+    await expect(
+      processor.handlePartnerCallback(
+        transaction.reference,
+        TransactionStatus.COLLECTION_SUCCESS,
+        'partner_collection',
+      ),
+    ).resolves.toEqual({ applied: true });
+    expect(payoutUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dedupKey: `${transaction.reference}:PAYOUT` },
+        create: expect.objectContaining({
+          jobType: JobType.PAYOUT,
+          payload: { reason: 'COLLECTION_SUCCESS' },
+        }),
+      }),
+    );
   });
 
   it('treats an identical callback delivery as an idempotent no-op', async () => {
@@ -712,6 +765,13 @@ describe('WorkerJobProcessor', () => {
         }),
         updateMany,
       },
+      workerJob: { upsert: jest.fn() },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: jest.fn() },
+        } as never),
+      ),
     } as unknown as PrismaService;
     const processor = new WorkerJobProcessor(
       prisma,

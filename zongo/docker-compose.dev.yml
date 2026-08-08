@@ -67,6 +67,8 @@ services:
     environment:
       <<: *app-environment
       PORT: '3001'
+      ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
+      ADMIN_WARNING_ALERT_WEBHOOK_URL: ${ADMIN_WARNING_ALERT_WEBHOOK_URL:-}
     expose:
       - '3001'
     healthcheck:

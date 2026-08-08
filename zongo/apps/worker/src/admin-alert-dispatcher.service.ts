@@ -59,10 +59,17 @@ export class AdminAlertDispatcher implements OnModuleInit, OnModuleDestroy {
 
   private async deliver(delivery: {
     id: string;
+    actionName: string;
     attempts: number;
+    severity: string;
+    escalatedAt: Date | null;
     payload: Prisma.JsonValue;
   }): Promise<void> {
-    const webhookUrl = process.env.ADMIN_ALERT_WEBHOOK_URL;
+    const webhookUrl =
+      delivery.severity === 'WARNING'
+        ? (process.env.ADMIN_WARNING_ALERT_WEBHOOK_URL ??
+          process.env.ADMIN_ALERT_WEBHOOK_URL)
+        : process.env.ADMIN_ALERT_WEBHOOK_URL;
     if (!webhookUrl) {
       this.logger.warn(
         `Admin alert ${delivery.id} pending: webhook is not configured`,
@@ -90,17 +97,45 @@ export class AdminAlertDispatcher implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       const attempts = delivery.attempts + 1;
       const retryable = attempts < 5;
-      await this.prisma.adminAlertDelivery.update({
-        where: { id: delivery.id },
-        data: {
-          status: AdminAlertDeliveryStatus.FAILED,
-          attempts: { increment: 1 },
-          lastError:
-            error instanceof Error ? error.message : 'Alert delivery failed',
-          nextAttemptAt: retryable
-            ? new Date(Date.now() + 1_000 * 2 ** attempts)
-            : null,
-        },
+      const updateData = {
+        status: AdminAlertDeliveryStatus.FAILED,
+        attempts: { increment: 1 },
+        lastError:
+          error instanceof Error ? error.message : 'Alert delivery failed',
+        nextAttemptAt: retryable
+          ? new Date(Date.now() + 1_000 * 2 ** attempts)
+          : null,
+        ...(retryable || delivery.escalatedAt
+          ? {}
+          : { escalatedAt: new Date() }),
+      };
+      if (retryable || delivery.escalatedAt) {
+        await this.prisma.adminAlertDelivery.update({
+          where: { id: delivery.id },
+          data: updateData,
+        });
+        return;
+      }
+      await this.prisma.$transaction(async (tx) => {
+        const escalation = await tx.adminAlertDelivery.updateMany({
+          where: { id: delivery.id, escalatedAt: null },
+          data: updateData,
+        });
+        if (escalation.count !== 1) return;
+        await tx.auditEvent.create({
+          data: {
+            id: crypto.randomUUID(),
+            eventType: 'TECHNICAL',
+            name: 'admin.alert.delivery.escalated',
+            payload: {
+              alertId: delivery.id,
+              actionName: delivery.actionName,
+              severity: delivery.severity,
+              attempts,
+            },
+            createdAt: new Date(),
+          },
+        });
       });
     }
   }

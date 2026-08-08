@@ -91,6 +91,8 @@ services:
     environment:
       <<: *local-environment
       PORT: '3001'
+      ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
+      ADMIN_WARNING_ALERT_WEBHOOK_URL: ${ADMIN_WARNING_ALERT_WEBHOOK_URL:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

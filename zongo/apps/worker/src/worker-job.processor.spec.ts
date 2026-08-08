@@ -100,6 +100,64 @@ describe('WorkerJobProcessor', () => {
     );
   });
 
+  it('keeps notification failure separate from transfer lifecycle state', async () => {
+    const intentUpdate = jest.fn().mockResolvedValue(undefined);
+    const workerUpdate = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'job_notification_2' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: workerUpdate,
+      },
+      notificationIntent: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'intent_2',
+          recipientPhoneCiphertext: JSON.stringify({ ciphertext: 'phone' }),
+          template: 'transfer.resolved',
+          payload: { status: 'PAYOUT_SUCCESS' },
+          attempts: 0,
+        }),
+        update: intentUpdate,
+      },
+      $transaction: jest.fn().mockResolvedValue(undefined),
+      transferTransaction: { update: jest.fn() },
+    } as unknown as PrismaService;
+    const processor = new WorkerJobProcessor(
+      prisma,
+      {} as PartnerPort,
+      { append: jest.fn().mockResolvedValue(undefined) },
+      noopLedger,
+      { send: jest.fn().mockRejectedValue(new Error('WhatsApp unavailable')) },
+      { decrypt: jest.fn().mockResolvedValue('+243800000001') } as never,
+    );
+
+    await expect(
+      processor.process({
+        transactionReference: 'ZNG-TEST-001',
+        jobType: 'NOTIFICATION',
+        payload: { notificationIntentId: 'intent_2' },
+      }),
+    ).resolves.toEqual({ skipped: false, status: 'FAILED' });
+    expect(intentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'FAILED',
+          attempts: 1,
+          lastError: 'WhatsApp unavailable',
+        }),
+      }),
+    );
+    expect(workerUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: JobStatus.FAILED,
+          lastError: 'WhatsApp unavailable',
+        }),
+      }),
+    );
+    expect(prisma.transferTransaction.update).not.toHaveBeenCalled();
+  });
+
   it('does not call a partner while the matching money-movement control is paused', async () => {
     const partner = {
       collect: jest.fn(),

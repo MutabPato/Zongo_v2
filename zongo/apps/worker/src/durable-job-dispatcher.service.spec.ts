@@ -31,6 +31,37 @@ describe('DurableJobDispatcher', () => {
     expect(processor.process).not.toHaveBeenCalled();
   });
 
+  it('redispatches a durable failed status check after a worker restart', async () => {
+    const prisma = {
+      workerJob: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'status_job_1',
+            transactionReference: 'ZNG-TEST-001',
+            jobType: JobType.STATUS_RECHECK,
+            status: JobStatus.FAILED,
+            payload: { reason: 'SESSION_TIMEOUT' },
+          },
+        ]),
+      },
+    } as unknown as PrismaService;
+    const processor = {
+      process: jest.fn().mockResolvedValue({
+        skipped: false,
+        status: JobStatus.SUCCEEDED,
+      }),
+    } as unknown as WorkerJobProcessor;
+
+    await new DurableJobDispatcher(prisma, processor).dispatch();
+
+    expect(processor.process).toHaveBeenCalledWith(
+      expect.objectContaining({
+        persistedJobId: 'status_job_1',
+        jobType: JobType.STATUS_RECHECK,
+      }),
+    );
+  });
+
   it('queues reconciliation jobs on the configured cadence', async () => {
     process.env.RECONCILIATION_SWEEP_INTERVAL_MS = '1';
     const upsert = jest.fn().mockResolvedValue({});

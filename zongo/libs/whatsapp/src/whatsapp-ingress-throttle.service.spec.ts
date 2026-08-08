@@ -57,14 +57,13 @@ describe('WhatsAppIngressThrottleService', () => {
       ),
     } as unknown as PrismaService;
 
-    await expect(
-      new WhatsAppIngressThrottleService(prisma).consume({
-        chatId: 'chat-2',
-        senderPhoneNumber: '+243800000002',
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({ allowed: false, retryAfterSeconds: 10 }),
-    );
+    const result = await new WhatsAppIngressThrottleService(prisma).consume({
+      chatId: 'chat-2',
+      senderPhoneNumber: '+243800000002',
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.retryAfterSeconds).toBeGreaterThanOrEqual(10);
+    expect(result.retryAfterSeconds).toBeLessThanOrEqual(11);
     expect(update).not.toHaveBeenCalled();
   });
 

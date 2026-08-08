@@ -589,6 +589,9 @@ describe('AdminService', () => {
 
   it('persists and audits a fingerprinted Pilot Ready publication', async () => {
     process.env.PILOT_OPERATOR_ID = 'operator_1';
+    process.env.PILOT_RELEASE_SIGNING_KEY = Buffer.alloc(32, 7).toString(
+      'base64url',
+    );
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const upsert = jest.fn().mockResolvedValue({
       id: 'pilot',
@@ -666,11 +669,13 @@ describe('AdminService', () => {
       expect.objectContaining({
         create: expect.objectContaining({
           publicationHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+          publicationSignature: expect.stringMatching(/^[A-Za-z0-9_-]+$/),
           publishedByIdentityId: 'operator_1',
           publishedAt: expect.any(Date),
         }),
         update: expect.objectContaining({
           publicationHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+          publicationSignature: expect.stringMatching(/^[A-Za-z0-9_-]+$/),
           publishedByIdentityId: 'operator_1',
         }),
       }),
@@ -684,6 +689,7 @@ describe('AdminService', () => {
       }),
     );
     delete process.env.PILOT_OPERATOR_ID;
+    delete process.env.PILOT_RELEASE_SIGNING_KEY;
   });
 
   it('allows only the configured engineering lead to isolate provider movement', async () => {

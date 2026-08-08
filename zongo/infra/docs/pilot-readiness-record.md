@@ -34,6 +34,9 @@ be completed for the exact deployed commit and configuration.
 - Backup/restore and RPO/RTO evidence:
 - Incident, pause/resume, and rollback references:
 - Explicit no-waiver declaration:
+- Release publication fingerprint and signature: generated with the
+  runtime-only `PILOT_RELEASE_SIGNING_KEY`; the key is never stored in the
+  release record or audit payload.
 
 An empty field or unresolved material issue means `Pilot Ready: NO`.
 
@@ -44,5 +47,6 @@ ALLOW_PILOT_READINESS_VERIFICATION=true pnpm verify:pilot-readiness
 ```
 
 The command reports missing stage snapshots, named approvals, evidence
-references, release facts, or explicit control rows. It never starts, resumes,
-or approves real-money movement.
+references, release facts, explicit control rows, or a valid publication
+fingerprint/signature. It never starts, resumes, or approves real-money
+movement.

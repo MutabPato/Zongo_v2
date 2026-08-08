@@ -2,6 +2,7 @@ import { PrismaService } from '@app/db';
 import {
   hashPilotReleasePublication,
   isUsableEvidenceReference,
+  verifyPilotReleasePublicationSignature,
 } from '@app/observability';
 
 const REQUIRED_APPROVALS = [
@@ -180,12 +181,20 @@ async function main(): Promise<void> {
     const publicationHashMatches =
       Boolean(record?.publicationHash) &&
       record?.publicationHash === recomputedPublicationHash;
+    const publicationSignatureValid =
+      recomputedPublicationHash !== null &&
+      verifyPilotReleasePublicationSignature(
+        recomputedPublicationHash,
+        record?.publicationSignature,
+        process.env.PILOT_RELEASE_SIGNING_KEY,
+      );
     const published = Boolean(
       record?.stage === 'PILOT_READY' &&
       record.noWaiverConfirmed &&
       record.publishedAt &&
       record.publishedByIdentityId &&
-      publicationHashMatches,
+      publicationHashMatches &&
+      publicationSignatureValid,
     );
     checks.push({
       name: 'pilot-ready-publication',
@@ -194,6 +203,7 @@ async function main(): Promise<void> {
         published,
         publicationHash: record?.publicationHash ?? 'missing',
         publicationHashMatches,
+        publicationSignatureValid,
       },
     });
 

@@ -19,6 +19,8 @@ import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
 import {
   hashPilotReleasePublication,
   isUsableEvidenceReference,
+  signPilotReleasePublication,
+  verifyPilotReleasePublicationSignature,
 } from '@app/observability';
 import { WorkerJobProcessor } from '../../worker/src/worker-job.processor';
 import {
@@ -994,6 +996,15 @@ export class AdminService {
       publishedAt: publishedAt.toISOString(),
       publishedByIdentityId,
     });
+    const signingKey = process.env.PILOT_RELEASE_SIGNING_KEY;
+    if (!signingKey)
+      throw new ForbiddenException(
+        'Pilot Ready requires the configured release signing key',
+      );
+    const publicationSignature = signPilotReleasePublication(
+      publicationHash,
+      signingKey,
+    );
     const record = await this.prisma.pilotReleaseRecord.upsert({
       where: { id: 'pilot' },
       create: {
@@ -1007,6 +1018,7 @@ export class AdminService {
         rollbackPlan: input.rollbackPlan,
         evidenceRefs,
         publicationHash,
+        publicationSignature,
         publishedByIdentityId,
         publishedAt,
       },
@@ -1020,6 +1032,7 @@ export class AdminService {
         rollbackPlan: input.rollbackPlan,
         evidenceRefs,
         publicationHash,
+        publicationSignature,
         publishedByIdentityId,
         publishedAt,
       },
@@ -1301,13 +1314,21 @@ export class AdminService {
           publishedByIdentityId: record.publishedByIdentityId ?? undefined,
         })
       : null;
+    const publicationSignatureValid =
+      recomputedPublicationHash !== null &&
+      verifyPilotReleasePublicationSignature(
+        recomputedPublicationHash,
+        record?.publicationSignature,
+        process.env.PILOT_RELEASE_SIGNING_KEY,
+      );
     if (
       !record ||
       record.stage !== 'PILOT_READY' ||
       !record.noWaiverConfirmed ||
       !record.publishedAt ||
       !record.publishedByIdentityId ||
-      record.publicationHash !== recomputedPublicationHash
+      record.publicationHash !== recomputedPublicationHash ||
+      !publicationSignatureValid
     )
       throw new ForbiddenException(
         'Pilot Ready evidence and no-waiver approval are required before global start',

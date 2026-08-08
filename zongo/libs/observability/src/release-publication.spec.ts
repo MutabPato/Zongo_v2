@@ -1,4 +1,8 @@
-import { hashPilotReleasePublication } from './release-publication';
+import {
+  hashPilotReleasePublication,
+  signPilotReleasePublication,
+  verifyPilotReleasePublicationSignature,
+} from './release-publication';
 
 describe('pilot release publication fingerprint', () => {
   it('is stable across object-key ordering', () => {
@@ -58,5 +62,32 @@ describe('pilot release publication fingerprint', () => {
         publishedByIdentityId: 'operator-2',
       }),
     );
+  });
+
+  it('signs and verifies the publication fingerprint with a 32-byte key', () => {
+    const hash = hashPilotReleasePublication({
+      approvedCohort: { senderIds: ['sender-1'] },
+      numericLimits: { daily: 100 },
+      releaseConfiguration: { corridor: 'DRC-KE' },
+      rollbackPlan: 'pause',
+      evidenceRefs: { kyc: 'evidence://kyc' },
+      noWaiverConfirmed: true,
+    });
+    const key = Buffer.alloc(32, 7).toString('base64url');
+    const signature = signPilotReleasePublication(hash, key);
+
+    expect(verifyPilotReleasePublicationSignature(hash, signature, key)).toBe(
+      true,
+    );
+    expect(
+      verifyPilotReleasePublicationSignature(
+        `${hash.slice(0, -1)}0`,
+        signature,
+        key,
+      ),
+    ).toBe(false);
+    expect(
+      verifyPilotReleasePublicationSignature(hash, signature, undefined),
+    ).toBe(false);
   });
 });

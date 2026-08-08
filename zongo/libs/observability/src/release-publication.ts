@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export type PilotReleasePublicationSnapshot = {
   approvedCohort: unknown;
@@ -32,4 +32,41 @@ export function hashPilotReleasePublication(
   return createHash('sha256')
     .update(JSON.stringify(canonicalize(snapshot)))
     .digest('hex');
+}
+
+function decodeSigningKey(signingKey: string): Buffer {
+  const key = Buffer.from(signingKey, 'base64url');
+  if (key.length !== 32)
+    throw new Error('Pilot release signing key must be 32 bytes base64url');
+  return key;
+}
+
+/** Signs the canonical publication fingerprint with the release authority key. */
+export function signPilotReleasePublication(
+  publicationHash: string,
+  signingKey: string,
+): string {
+  return createHmac('sha256', decodeSigningKey(signingKey))
+    .update(publicationHash)
+    .digest('base64url');
+}
+
+/** Verifies a stored release signature without exposing the signing key. */
+export function verifyPilotReleasePublicationSignature(
+  publicationHash: string,
+  signature: string | null | undefined,
+  signingKey: string | undefined,
+): boolean {
+  if (!signature || !signingKey) return false;
+  let expected: Buffer;
+  try {
+    expected = Buffer.from(
+      signPilotReleasePublication(publicationHash, signingKey),
+      'base64url',
+    );
+  } catch {
+    return false;
+  }
+  const actual = Buffer.from(signature, 'base64url');
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
 }

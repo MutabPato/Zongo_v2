@@ -58,4 +58,27 @@ describe('verifyKeyLifecycle', () => {
       ]),
     );
   });
+
+  it('can require a separate pilot release signing key', () => {
+    const env = environment();
+    env.PILOT_RELEASE_SIGNING_KEY = key();
+
+    expect(verifyKeyLifecycle(env, ['sender-phone'], true).status).toBe('PASS');
+    delete env.PILOT_RELEASE_SIGNING_KEY;
+    expect(verifyKeyLifecycle(env, ['sender-phone'], true).status).toBe('FAIL');
+  });
+
+  it('rejects a release signing key reused for encryption', () => {
+    const env = environment();
+    env.PILOT_RELEASE_SIGNING_KEY = env.ZONGO_ENCRYPTION_KEY_SENDER_PHONE_V2;
+
+    expect(verifyKeyLifecycle(env, ['sender-phone'], true).checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'pilot-release-signing-key-separation',
+          status: 'FAIL',
+        }),
+      ]),
+    );
+  });
 });

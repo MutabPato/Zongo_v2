@@ -6,7 +6,7 @@ async function main(): Promise<void> {
       'Set ALLOW_KEY_LIFECYCLE_VERIFICATION=true to run the read-only key lifecycle verification',
     );
 
-  const result = verifyKeyLifecycle(process.env);
+  const result = verifyKeyLifecycle(process.env, undefined, true);
   console.log(
     JSON.stringify(
       {

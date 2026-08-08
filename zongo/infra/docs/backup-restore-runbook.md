@@ -36,10 +36,11 @@ ALLOW_KEY_LIFECYCLE_VERIFICATION=true pnpm verify:key-lifecycle
 ```
 
 The check verifies that each configured purpose has a current non-retired
-version, retained versions required for decryption, a blind-index key, and
-distinct key material. It never prints key values. The result is configuration
-evidence only; managed secret-manager separation, rotation execution,
-compromise response, and access-audit approval remain required release evidence.
+version, retained versions required for decryption, a blind-index key, a
+separate `PILOT_RELEASE_SIGNING_KEY`, and distinct key material. It never prints
+key values. The result is configuration evidence only; managed secret-manager
+separation, rotation execution, compromise response, and access-audit approval
+remain required release evidence.
 
 Run the restore verifier against the isolated restored database and restored key
 set:

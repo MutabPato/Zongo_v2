@@ -40,10 +40,14 @@ function readKey(
 export function verifyKeyLifecycle(
   environment: NodeJS.ProcessEnv,
   purposes: readonly string[] = DEFAULT_KEY_PURPOSES,
+  requirePilotReleaseSigningKey = false,
 ): KeyLifecycleVerification {
   const checks: KeyLifecycleCheck[] = [];
   const encryptionKeys = new Set<string>();
   const blindIndexKeys = new Set<string>();
+  const pilotReleaseSigningKey = requirePilotReleaseSigningKey
+    ? readKey(environment, 'PILOT_RELEASE_SIGNING_KEY')
+    : undefined;
 
   const provider = environment.ZONGO_KEY_MANAGEMENT_PROVIDER?.trim();
   checks.push({
@@ -141,6 +145,25 @@ export function verifyKeyLifecycle(
     status: encryptionBlindIndexOverlap ? 'FAIL' : 'PASS',
     details: { overlap: encryptionBlindIndexOverlap },
   });
+  if (requirePilotReleaseSigningKey) {
+    const signingKeyValue = pilotReleaseSigningKey?.key?.toString('base64url');
+    const signingKeyOverlaps = Boolean(
+      signingKeyValue &&
+      (encryptionKeys.has(signingKeyValue) ||
+        blindIndexKeys.has(signingKeyValue)),
+    );
+    checks.push({
+      name: 'pilot-release-signing-key-separation',
+      status:
+        Boolean(pilotReleaseSigningKey?.key) && !signingKeyOverlaps
+          ? 'PASS'
+          : 'FAIL',
+      details: {
+        configured: Boolean(pilotReleaseSigningKey?.key),
+        overlaps: signingKeyOverlaps,
+      },
+    });
+  }
 
   return {
     status: checks.every((check) => check.status === 'PASS') ? 'PASS' : 'FAIL',

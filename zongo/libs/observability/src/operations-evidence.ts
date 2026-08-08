@@ -31,6 +31,14 @@ export type OperationsEvidenceResult = {
   missing: string[];
 };
 
+function isDeploymentIdentity(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    (/^[0-9a-f]{40}$/i.test(value.trim()) ||
+      /^sha256:[0-9a-f]{64}$/i.test(value.trim()))
+  );
+}
+
 export function verifyOperationsEvidence(
   pack: OperationsEvidencePack,
 ): OperationsEvidenceResult {
@@ -40,6 +48,8 @@ export function verifyOperationsEvidence(
       const numeric = typeof value === 'number' ? value : Number(value);
       return !Number.isInteger(numeric) || numeric <= 0;
     }
+    if (field === 'deploymentCommitOrImageDigest')
+      return !isDeploymentIdentity(value);
     return !isUsableEvidenceReference(value);
   });
   return {

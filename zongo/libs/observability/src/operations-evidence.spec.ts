@@ -29,4 +29,17 @@ describe('operations evidence verification', () => {
       ]),
     );
   });
+
+  it('requires the deployment evidence to identify a commit or image digest', () => {
+    expect(
+      verifyOperationsEvidence({
+        deploymentCommitOrImageDigest: 'release-1',
+      }).missing,
+    ).toContain('deploymentCommitOrImageDigest');
+    expect(
+      verifyOperationsEvidence({
+        deploymentCommitOrImageDigest: 'a'.repeat(40),
+      }).missing,
+    ).not.toContain('deploymentCommitOrImageDigest');
+  });
 });

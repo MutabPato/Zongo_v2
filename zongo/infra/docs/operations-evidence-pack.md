@@ -9,7 +9,9 @@ OPERATIONS_EVIDENCE_PACK=/secure/evidence/operations.json \
   pnpm verify:operations-evidence
 ```
 
-The verifier requires metrics, structured logs, trace correlation, warning and
+The deployment field must be the exact 40-character Git commit SHA or an
+OCI-style `sha256:<64-hex>` image digest for the tested deployment. The
+verifier requires metrics, structured logs, trace correlation, warning and
 urgent routing, acknowledgement/escalation, backup and restore evidence,
 Postgres/Redis failure tests, approved positive RPO/RTO targets, and the pause,
 incident, reconciliation, customer-impact, and controlled-resume exercise

@@ -32,6 +32,10 @@ function nonEmptyRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function hasEntries(value: unknown): boolean {
+  return Object.keys(nonEmptyRecord(value)).length > 0;
+}
+
 async function main(): Promise<void> {
   if (process.env.ALLOW_PILOT_READINESS_VERIFICATION !== 'true')
     throw new Error(
@@ -96,10 +100,10 @@ async function main(): Promise<void> {
     });
 
     const releaseFactsPresent = Boolean(
-      record?.approvedCohort &&
-      record.numericLimits &&
-      record.releaseConfiguration &&
-      record.rollbackPlan?.trim(),
+      hasEntries(record?.approvedCohort) &&
+        hasEntries(record?.numericLimits) &&
+        hasEntries(record?.releaseConfiguration) &&
+        record?.rollbackPlan?.trim(),
     );
     checks.push({
       name: 'release-facts-and-rollback',

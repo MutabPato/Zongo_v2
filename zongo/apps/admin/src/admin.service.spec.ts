@@ -418,6 +418,39 @@ describe('AdminService', () => {
     delete process.env.ENGINEERING_LEAD_ID;
   });
 
+  it('reads staged readiness evidence without allowing a mutation', async () => {
+    const readiness = {
+      id: 'pilot',
+      stage: 'LOCAL_E2E_COMPLETE',
+      approvals: [],
+      stageRecords: [],
+    };
+    const findUnique = jest.fn().mockResolvedValue(readiness);
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'ops_1',
+          role: 'OPS',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: { findUnique },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).getPilotReadiness('ops_1'),
+    ).resolves.toEqual(readiness);
+    expect(findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          approvals: expect.any(Object),
+          stageRecords: expect.any(Object),
+        }),
+      }),
+    );
+  });
+
   it('allows only the configured engineering lead to isolate provider movement', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const upsert = jest.fn().mockResolvedValue({

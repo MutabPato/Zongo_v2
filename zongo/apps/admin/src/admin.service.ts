@@ -837,6 +837,17 @@ export class AdminService {
     return stageRecord;
   }
 
+  async getPilotReadiness(actorId: string) {
+    await this.requireActor(actorId, AdminRole.SUPPORT);
+    return this.prisma.pilotReleaseRecord.findUnique({
+      where: { id: 'pilot' },
+      include: {
+        approvals: { orderBy: { approvedAt: 'asc' } },
+        stageRecords: { orderBy: { recordedAt: 'asc' } },
+      },
+    });
+  }
+
   async publishPilotReadiness(
     actorId: string,
     input: {

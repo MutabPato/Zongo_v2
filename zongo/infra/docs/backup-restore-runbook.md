@@ -58,3 +58,17 @@ and reports durable inputs available for Redis reconstruction. The Redis
 reference must point to an actual restore exercise; setting it does not itself
 perform the rebuild. The RPO/RTO values must be the approved targets for the
 exact pilot deployment, not estimates inferred from this repository.
+
+## Legacy sensitive-data migration
+
+Legacy sender contacts, beneficiary payout-account JSON, and provider
+references are migrated only through the explicitly gated command below. It
+encrypts recoverable values, creates keyed lookup indexes, and clears legacy
+plaintext columns where the encrypted replacement is written:
+
+```sh
+ALLOW_SENSITIVE_INDEX_BACKFILL=true pnpm backfill:sensitive-blind-indexes
+```
+
+Run it only with the approved key set and an auditable backup/rollback plan;
+the opt-in is intentionally absent from normal startup and deployment.

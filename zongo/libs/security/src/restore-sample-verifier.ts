@@ -1,4 +1,7 @@
-import type { EncryptedValue, EnvelopeEncryptionService } from './security.service';
+import type {
+  EncryptedValue,
+  EnvelopeEncryptionService,
+} from './security.service';
 
 export type RestoreCheck = {
   name: string;

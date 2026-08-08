@@ -23,9 +23,7 @@ describe('verifySensitiveSample', () => {
         purpose: 'beneficiary-phone',
         ciphertext: null,
       }),
-    ).resolves.toEqual(
-      expect.objectContaining({ status: 'SKIPPED' }),
-    );
+    ).resolves.toEqual(expect.objectContaining({ status: 'SKIPPED' }));
   });
 
   it('fails when the beneficiary phone blind index does not match', async () => {
@@ -46,6 +44,7 @@ describe('verifySensitiveSample', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         status: 'FAIL',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         details: expect.objectContaining({
           decrypted: true,
           blindIndexMatches: false,

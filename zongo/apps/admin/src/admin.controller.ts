@@ -164,6 +164,26 @@ export class AdminController {
     );
   }
 
+  @Post('alerts/:alertId/acknowledge')
+  async acknowledgeAlert(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('alertId') alertId: string,
+    @Body() body: { reason: string },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.acknowledgeAlert(actor.id, alertId, body.reason);
+  }
+
+  @Post('alerts/:alertId/escalate')
+  async escalateAlert(
+    @Headers('authorization') authorization: string | undefined,
+    @Param('alertId') alertId: string,
+    @Body() body: { reason: string },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.escalateAlert(actor.id, alertId, body.reason);
+  }
+
   @Post('transactions/:reference/status-recheck')
   async recheckStatus(
     @Headers('authorization') authorization: string | undefined,

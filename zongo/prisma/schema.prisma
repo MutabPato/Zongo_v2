@@ -462,11 +462,16 @@ model AdminAlertDelivery {
   auditEventId String
   actionName String
   payload Json
+  severity String @default("URGENT")
   status AdminAlertDeliveryStatus @default(PENDING)
   attempts Int @default(0)
   nextAttemptAt DateTime?
   lastError String?
   deliveredAt DateTime?
+  acknowledgedAt DateTime?
+  acknowledgedByIdentityId String?
+  escalatedAt DateTime?
+  escalatedByIdentityId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -474,6 +479,7 @@ model AdminAlertDelivery {
 
   @@index([status, nextAttemptAt])
   @@index([auditEventId])
+  @@index([acknowledgedAt, escalatedAt])
 }
 
 model WorkerJob {

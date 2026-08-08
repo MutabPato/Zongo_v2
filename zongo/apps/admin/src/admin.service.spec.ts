@@ -451,4 +451,52 @@ describe('AdminService', () => {
       expect.objectContaining({ name: 'admin.reconciliation.escalated' }),
     );
   });
+
+  it('records Ops alert acknowledgement and escalation evidence', async () => {
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const update = jest.fn().mockResolvedValue({ id: 'alert_1' });
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'ops_1',
+          role: 'OPS',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      adminAlertDelivery: { update },
+    } as unknown as PrismaService;
+    const service = new AdminService(prisma, audit);
+
+    await expect(
+      service.acknowledgeAlert('ops_1', 'alert_1', 'Investigating'),
+    ).resolves.toEqual({ id: 'alert_1' });
+    await expect(
+      service.escalateAlert('ops_1', 'alert_1', 'Needs accountable operator'),
+    ).resolves.toEqual({ id: 'alert_1' });
+    expect(update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          acknowledgedByIdentityId: 'ops_1',
+          acknowledgedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          escalatedByIdentityId: 'ops_1',
+          escalatedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'admin.alert.acknowledged' }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'admin.alert.escalated' }),
+    );
+  });
 });

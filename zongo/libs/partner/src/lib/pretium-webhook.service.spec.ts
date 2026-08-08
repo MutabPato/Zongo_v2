@@ -133,11 +133,10 @@ describe('Pretium webhook boundary', () => {
     } as unknown as LedgerService;
 
     await expect(
-      new PretiumWebhookService(
-        prisma,
-        { append } as unknown as AuditLogPort,
-        ledger,
-      ).apply({ partnerReference: 'pt_3', providerStatus: 'FAILED' }),
+      new PretiumWebhookService(prisma, { append }, ledger).apply({
+        partnerReference: 'pt_3',
+        providerStatus: 'FAILED',
+      }),
     ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-3' });
     expect(update).not.toHaveBeenCalled();
     expect(append).toHaveBeenCalledWith(

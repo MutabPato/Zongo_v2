@@ -380,6 +380,48 @@ export class AdminService {
     return note;
   }
 
+  async acknowledgeAlert(actorId: string, alertId: string, reason: string) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    if (!reason.trim())
+      throw new ForbiddenException(
+        'An alert acknowledgement reason is required',
+      );
+    const alert = await this.prisma.adminAlertDelivery.update({
+      where: { id: alertId },
+      data: {
+        acknowledgedAt: new Date(),
+        acknowledgedByIdentityId: actor.id,
+      },
+    });
+    await this.record(
+      actor,
+      'admin.alert.acknowledged',
+      { target: `alert:${alertId}`, reason },
+      true,
+    );
+    return alert;
+  }
+
+  async escalateAlert(actorId: string, alertId: string, reason: string) {
+    const actor = await this.requireActor(actorId, AdminRole.OPS);
+    if (!reason.trim())
+      throw new ForbiddenException('An alert escalation reason is required');
+    const alert = await this.prisma.adminAlertDelivery.update({
+      where: { id: alertId },
+      data: {
+        escalatedAt: new Date(),
+        escalatedByIdentityId: actor.id,
+      },
+    });
+    await this.record(
+      actor,
+      'admin.alert.escalated',
+      { target: `alert:${alertId}`, reason },
+      true,
+    );
+    return alert;
+  }
+
   async assignReconciliation(
     actorId: string,
     reconciliationId: string,

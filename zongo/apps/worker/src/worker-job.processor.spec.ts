@@ -26,6 +26,16 @@ describe('WorkerJobProcessor', () => {
     corridorId: 'corr_1',
     status: TransactionStatus.PENDING_COLLECTION,
   };
+  const enabledPilotControls = () => ({
+    findMany: jest.fn().mockResolvedValue([
+      { key: 'GLOBAL', state: 'ENABLED' },
+      { key: 'INITIATION', state: 'ENABLED' },
+      { key: 'CORRIDOR_PROVIDER', state: 'ENABLED' },
+      { key: 'COLLECTION', state: 'ENABLED' },
+      { key: 'PAYOUT', state: 'ENABLED' },
+      { key: 'NOTIFICATION', state: 'ENABLED' },
+    ]),
+  });
 
   it('does not execute a job that another worker holds', async () => {
     const partner = {
@@ -66,6 +76,7 @@ describe('WorkerJobProcessor', () => {
         }),
         update: jest.fn().mockResolvedValue(undefined),
       },
+      pilotControl: enabledPilotControls(),
       $transaction: jest.fn().mockResolvedValue(undefined),
     } as unknown as PrismaService;
     const notifier = { send: jest.fn().mockResolvedValue(undefined) };
@@ -119,6 +130,7 @@ describe('WorkerJobProcessor', () => {
         }),
         update: intentUpdate,
       },
+      pilotControl: enabledPilotControls(),
       $transaction: jest.fn().mockResolvedValue(undefined),
       transferTransaction: { update: jest.fn() },
     } as unknown as PrismaService;
@@ -222,6 +234,7 @@ describe('WorkerJobProcessor', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update,
       },
+      pilotControl: enabledPilotControls(),
       transferTransaction: {
         findUniqueOrThrow: jest.fn().mockResolvedValue(transaction),
         update: jest.fn().mockReturnValue({}),
@@ -272,6 +285,7 @@ describe('WorkerJobProcessor', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockReturnValue({}),
       },
+      pilotControl: enabledPilotControls(),
       transferTransaction: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           ...transaction,
@@ -322,6 +336,7 @@ describe('WorkerJobProcessor', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: workerUpdate,
       },
+      pilotControl: enabledPilotControls(),
       transferTransaction: {
         findUniqueOrThrow: jest.fn().mockResolvedValue(transaction),
         update: transferUpdate,
@@ -461,6 +476,7 @@ describe('WorkerJobProcessor', () => {
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         update: jest.fn().mockReturnValue({}),
       },
+      pilotControl: enabledPilotControls(),
       transferTransaction: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           ...transaction,

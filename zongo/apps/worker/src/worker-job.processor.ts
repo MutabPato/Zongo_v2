@@ -123,13 +123,11 @@ export class WorkerJobProcessor {
           PilotControlKey.GLOBAL,
           PilotControlKey.NOTIFICATION,
         ];
-        const controlsUnavailable = this.prisma.pilotControl
-          ? requiredControlKeys.some(
-              (key) =>
-                controls.find((control) => control.key === key)?.state !==
-                'ENABLED',
-            )
-          : false;
+        const controlsUnavailable = requiredControlKeys.some(
+          (key) =>
+            controls.find((control) => control.key === key)?.state !==
+            'ENABLED',
+        );
         if (controlsUnavailable) {
           await this.prisma.workerJob.update({
             where: { id: durableJob.id },
@@ -175,13 +173,11 @@ export class WorkerJobProcessor {
         const requiredControlKeys = manualPayout
           ? [PilotControlKey.CORRIDOR_PROVIDER]
           : controlKeys;
-        const controlsUnavailable = this.prisma.pilotControl
-          ? requiredControlKeys.some(
-              (key) =>
-                controls.find((control) => control.key === key)?.state !==
-                'ENABLED',
-            )
-          : false;
+        const controlsUnavailable = requiredControlKeys.some(
+          (key) =>
+            controls.find((control) => control.key === key)?.state !==
+            'ENABLED',
+        );
         if (
           controlsUnavailable ||
           blockedControls.some((control) => control.state !== 'ENABLED')

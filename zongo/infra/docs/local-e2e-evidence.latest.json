@@ -1,0 +1,27 @@
+{
+  "commitOrImageDigest": "e0db8aafc15d221445bb81c63c755c4abab218ad",
+  "schemaHash": "32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1",
+  "executedAt": "2026-08-08T23:41:08Z",
+  "suitesPassed": 2,
+  "testsPassed": 3,
+  "workerStoppedDuringRun": true,
+  "workerRunningAfterRun": true,
+  "postgresHealthy": true,
+  "redisHealthy": true,
+  "controlledPartner": true,
+  "productionCredentialsUsed": false,
+  "externalNotificationsUsed": false,
+  "gateEvidence": {
+    "signedIntake": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#signed-intake",
+    "consentAndBeneficiary": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#consent-beneficiary",
+    "kycEligibility": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#verified-sender",
+    "idempotency": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#idempotency",
+    "activeChatContention": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#active-chat",
+    "moneyMovementAndReconciliation": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#reconciliation",
+    "timeoutAndStatusOnly": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#timeout-status",
+    "notificationFailureIsolation": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#notification-failure",
+    "callbackOrderingAndReplay": "test://libs/partner/src/lib/pretium-webhook.service.spec.ts#callback-contract",
+    "supportInvestigation": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#support-investigation",
+    "manualPayoutRecovery": "test://apps/worker/test/local-e2e.customer-journey.integration.spec.ts#manual-recovery"
+  }
+}

@@ -3,7 +3,7 @@
 Record the exact commit, configuration, database migration state, controlled
 partner behavior, and evidence links. Passing unit tests alone is insufficient.
 
-- Commit/image digest: `7c275166513b7260c7d7658b62c4e4781280a50c`
+- Commit/image digest: `e0db8aafc15d221445bb81c63c755c4abab218ad`
 - Environment and migration hash: local PostgreSQL/Redis; Prisma schema
   `32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1`
 - Partner stub/cassette: controlled in-process `PartnerPort`
@@ -37,9 +37,9 @@ credentials or send customer notifications externally.
 
 Most recent controlled run record:
 
-- Commit: `7c275166513b7260c7d7658b62c4e4781280a50c`
+- Commit: `e0db8aafc15d221445bb81c63c755c4abab218ad`
 - Prisma schema hash: `32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1`
-- Executed at: `2026-08-08T23:35:33Z`
+- Executed at: `2026-08-08T23:41:08Z`
 - Command: `DATABASE_URL='<local-only PostgreSQL URL>' pnpm test:integration`
 - Worker state during test: stopped; PostgreSQL and Redis healthy
 - Result: `2` suites passed, `3` tests passed
@@ -49,6 +49,8 @@ Most recent controlled run record:
   fingerprint does not recompute from the stored release facts.
 - Pilot Ready publication now additionally requires a valid HMAC signature
   from the runtime-only release signing key.
+- Machine-checkable artifact: `local-e2e-evidence.latest.json`; it passes
+  `pnpm verify:local-e2e-evidence` with no missing fields.
 
 Covered by `apps/worker/test/local-e2e.customer-journey.integration.spec.ts`:
 

@@ -13,4 +13,21 @@ describe('DatabaseHealthService', () => {
     ).resolves.toBeUndefined();
     expect(queryRaw).toHaveBeenCalledTimes(1);
   });
+
+  it('fails readiness with a dependency-safe error when PostgreSQL is unavailable', async () => {
+    const queryRaw = jest
+      .fn()
+      .mockRejectedValue(new Error('connection secret'));
+    const prisma = {
+      $queryRaw: queryRaw,
+    } as unknown as PrismaService;
+
+    await expect(
+      new DatabaseHealthService(prisma).check(),
+    ).rejects.toMatchObject({
+      status: 503,
+      response: { message: 'PostgreSQL is unavailable' },
+    });
+    expect(queryRaw).toHaveBeenCalledTimes(1);
+  });
 });

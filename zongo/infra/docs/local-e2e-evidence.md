@@ -3,7 +3,7 @@
 Record the exact commit, configuration, database migration state, controlled
 partner behavior, and evidence links. Passing unit tests alone is insufficient.
 
-- Commit/image digest: `3b3af6a441ac3015a444af9a11e012395938b983`
+- Commit/image digest: `f1aa024f2c859a1fbe49fecf19f5670a9f977fba`
 - Environment and migration hash: local PostgreSQL/Redis; Prisma schema
   `fd6175730db96848951b82f5b0149492b3c6bc6c2640491b4cfcde49b3efdbc8`
 - Partner stub/cassette: controlled in-process `PartnerPort`
@@ -30,14 +30,16 @@ credentials or send customer notifications externally.
 
 Most recent controlled run record:
 
-- Commit: `3b3af6a441ac3015a444af9a11e012395938b983`
+- Commit: `f1aa024f2c859a1fbe49fecf19f5670a9f977fba`
 - Prisma schema hash: `fd6175730db96848951b82f5b0149492b3c6bc6c2640491b4cfcde49b3efdbc8`
-- Executed at: `2026-08-08T23:26:35Z`
+- Executed at: `2026-08-08T23:30:33Z`
 - Command: `DATABASE_URL='<local-only PostgreSQL URL>' pnpm test:integration`
 - Worker state during test: stopped; PostgreSQL and Redis healthy
 - Result: `2` suites passed, `3` tests passed
 - Worker state after test: running; no production partner credentials or
   external customer notifications used
+- Global pilot start/resume also fails closed when the persisted publication
+  fingerprint does not recompute from the stored release facts.
 
 Covered by `apps/worker/test/local-e2e.customer-journey.integration.spec.ts`:
 

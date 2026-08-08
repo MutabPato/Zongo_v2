@@ -711,19 +711,6 @@ export class AdminService {
       throw new ForbiddenException(
         'The actor is not the configured approver for this readiness role',
       );
-    const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
-      where: { id: 'pilot' },
-      include: { approvals: true },
-    });
-    const existingApprovals = existingRecord?.approvals ?? [];
-    const missingApprovals = Object.keys(PilotApprovalAuthority).filter(
-      (approvalRole) =>
-        !existingApprovals.some((approval) => approval.role === approvalRole),
-    );
-    if (missingApprovals.length)
-      throw new ForbiddenException(
-        `Pilot Ready approvals are incomplete: ${missingApprovals.join(', ')}`,
-      );
     const record = await this.prisma.pilotReleaseRecord.upsert({
       where: { id: 'pilot' },
       create: { id: 'pilot' },
@@ -786,6 +773,20 @@ export class AdminService {
     if (missingEvidence.length)
       throw new ForbiddenException(
         `Pilot Ready evidence is incomplete: ${missingEvidence.join(', ')}`,
+      );
+    const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
+      where: { id: 'pilot' },
+      include: { approvals: true },
+    });
+    const missingApprovals = Object.keys(PilotApprovalAuthority).filter(
+      (approvalRole) =>
+        !existingRecord?.approvals.some(
+          (approval) => approval.role === approvalRole,
+        ),
+    );
+    if (missingApprovals.length)
+      throw new ForbiddenException(
+        `Pilot Ready approvals are incomplete: ${missingApprovals.join(', ')}`,
       );
     const record = await this.prisma.pilotReleaseRecord.upsert({
       where: { id: 'pilot' },

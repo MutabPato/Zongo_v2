@@ -344,6 +344,35 @@ describe('AdminService', () => {
     delete process.env.PILOT_OPERATOR_ID;
   });
 
+  it('records a named readiness approval before publication', async () => {
+    process.env.ENGINEERING_LEAD_ID = 'engineering_1';
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'engineering_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        upsert: jest.fn().mockResolvedValue({ id: 'pilot' }),
+      },
+      pilotReleaseApproval: {
+        upsert: jest.fn().mockResolvedValue({ id: 'approval_1' }),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).recordPilotApproval(
+        'engineering_1',
+        'ENGINEERING',
+        'Engineering review complete',
+      ),
+    ).resolves.toEqual({ id: 'approval_1' });
+    delete process.env.ENGINEERING_LEAD_ID;
+  });
+
   it('allows only the configured engineering lead to isolate provider movement', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const upsert = jest.fn().mockResolvedValue({

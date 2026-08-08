@@ -25,8 +25,29 @@ import {
   TransactionStatus,
   VerificationStatus,
 } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const ADMIN_ALERTS = Symbol('ADMIN_ALERTS');
+
+const REQUIRED_PILOT_EVIDENCE = [
+  'kyc',
+  'provider',
+  'security',
+  'dpiaRetention',
+  'reconciliation',
+  'recovery',
+  'observability',
+  'incident',
+  'customerJourney',
+] as const;
+
+const PilotApprovalAuthority = {
+  ENGINEERING: 'ENGINEERING_LEAD_ID',
+  OPERATIONS: 'OPS_LEAD_ID',
+  COMPLIANCE_RISK: 'COMPLIANCE_RISK_APPROVER_ID',
+  RECONCILIATION: 'RECONCILIATION_LEAD_ID',
+  PILOT_OPERATOR: 'PILOT_OPERATOR_ID',
+} as const;
 
 export interface AdminAlertPort {
   sensitiveAction(
@@ -644,6 +665,8 @@ export class AdminService {
     if (!reason.trim())
       throw new ForbiddenException('A control reason is required');
     const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
+    if (key === PilotControlKey.GLOBAL && state === PilotControlState.ENABLED)
+      await this.requirePublishedPilotReadiness();
     const pilotOperatorId = process.env.PILOT_OPERATOR_ID;
     const isPilotOperator = pilotOperatorId === actor.id;
     if (state === PilotControlState.PERMANENTLY_STOPPED) {
@@ -676,6 +699,128 @@ export class AdminService {
       true,
     );
     return control;
+  }
+
+  async recordPilotApproval(actorId: string, role: string, note: string) {
+    const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
+    if (!note.trim())
+      throw new ForbiddenException('An approval note is required');
+    const approvalRole = role as keyof typeof PilotApprovalAuthority;
+    const requiredIdentity = PilotApprovalAuthority[approvalRole];
+    if (!requiredIdentity || process.env[requiredIdentity] !== actor.id)
+      throw new ForbiddenException(
+        'The actor is not the configured approver for this readiness role',
+      );
+    const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
+      where: { id: 'pilot' },
+      include: { approvals: true },
+    });
+    const existingApprovals = existingRecord?.approvals ?? [];
+    const missingApprovals = Object.keys(PilotApprovalAuthority).filter(
+      (approvalRole) =>
+        !existingApprovals.some((approval) => approval.role === approvalRole),
+    );
+    if (missingApprovals.length)
+      throw new ForbiddenException(
+        `Pilot Ready approvals are incomplete: ${missingApprovals.join(', ')}`,
+      );
+    const record = await this.prisma.pilotReleaseRecord.upsert({
+      where: { id: 'pilot' },
+      create: { id: 'pilot' },
+      update: {},
+    });
+    const approval = await this.prisma.pilotReleaseApproval.upsert({
+      where: { recordId_role: { recordId: record.id, role: role as never } },
+      create: {
+        recordId: record.id,
+        role: role as never,
+        actorIdentityId: actor.id,
+        note,
+      },
+      update: {
+        actorIdentityId: actor.id,
+        note,
+        approvedAt: new Date(),
+      },
+    });
+    await this.record(
+      actor,
+      'admin.pilot-readiness.approval-recorded',
+      { target: `pilot-release:${record.id}`, role, approvalId: approval.id },
+      true,
+    );
+    return approval;
+  }
+
+  async publishPilotReadiness(
+    actorId: string,
+    input: {
+      approvedCohort: Record<string, unknown>;
+      numericLimits: Record<string, unknown>;
+      releaseConfiguration: Record<string, unknown>;
+      rollbackPlan: string;
+      evidenceRefs: Record<string, string>;
+      noWaiverConfirmed: boolean;
+    },
+  ) {
+    const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
+    if (process.env.PILOT_OPERATOR_ID !== actor.id)
+      throw new ForbiddenException(
+        'Only the accountable pilot operator may publish Pilot Ready',
+      );
+    if (!input.noWaiverConfirmed || !input.rollbackPlan.trim())
+      throw new ForbiddenException(
+        'Pilot Ready requires an explicit no-waiver declaration and rollback plan',
+      );
+    if (
+      !Object.keys(input.approvedCohort).length ||
+      !Object.keys(input.numericLimits).length ||
+      !Object.keys(input.releaseConfiguration).length
+    )
+      throw new ForbiddenException(
+        'Pilot Ready release configuration is incomplete',
+      );
+    const missingEvidence = REQUIRED_PILOT_EVIDENCE.filter(
+      (key) => !input.evidenceRefs[key],
+    );
+    if (missingEvidence.length)
+      throw new ForbiddenException(
+        `Pilot Ready evidence is incomplete: ${missingEvidence.join(', ')}`,
+      );
+    const record = await this.prisma.pilotReleaseRecord.upsert({
+      where: { id: 'pilot' },
+      create: {
+        id: 'pilot',
+        stage: 'PILOT_READY',
+        noWaiverConfirmed: true,
+        approvedCohort: input.approvedCohort as Prisma.InputJsonValue,
+        numericLimits: input.numericLimits as Prisma.InputJsonValue,
+        releaseConfiguration:
+          input.releaseConfiguration as Prisma.InputJsonValue,
+        rollbackPlan: input.rollbackPlan,
+        evidenceRefs: input.evidenceRefs,
+        publishedAt: new Date(),
+      },
+      update: {
+        stage: 'PILOT_READY',
+        noWaiverConfirmed: true,
+        approvedCohort: input.approvedCohort as Prisma.InputJsonValue,
+        numericLimits: input.numericLimits as Prisma.InputJsonValue,
+        releaseConfiguration:
+          input.releaseConfiguration as Prisma.InputJsonValue,
+        rollbackPlan: input.rollbackPlan,
+        evidenceRefs: input.evidenceRefs,
+        publishedAt: new Date(),
+      },
+      include: { approvals: true },
+    });
+    await this.record(
+      actor,
+      'admin.pilot-readiness.published',
+      { target: `pilot-release:${record.id}`, stage: record.stage },
+      true,
+    );
+    return record;
   }
 
   async setPilotAllowlist(
@@ -896,6 +1041,22 @@ export class AdminService {
         `${required.toLowerCase()} role is required`,
       );
     return actor;
+  }
+
+  private async requirePublishedPilotReadiness(): Promise<void> {
+    const record = await this.prisma.pilotReleaseRecord.findUnique({
+      where: { id: 'pilot' },
+      select: { stage: true, noWaiverConfirmed: true, publishedAt: true },
+    });
+    if (
+      !record ||
+      record.stage !== 'PILOT_READY' ||
+      !record.noWaiverConfirmed ||
+      !record.publishedAt
+    )
+      throw new ForbiddenException(
+        'Pilot Ready evidence and no-waiver approval are required before global start',
+      );
   }
 
   private async record(

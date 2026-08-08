@@ -115,6 +115,20 @@ enum PilotControlState {
   PERMANENTLY_STOPPED
 }
 
+enum PilotReadinessStage {
+  FOUNDATION_COMPLETE
+  LOCAL_E2E_COMPLETE
+  PILOT_READY
+}
+
+enum PilotApprovalRole {
+  ENGINEERING
+  OPERATIONS
+  COMPLIANCE_RISK
+  RECONCILIATION
+  PILOT_OPERATOR
+}
+
 enum ContactChannel {
   WHATSAPP
   SMS
@@ -553,6 +567,36 @@ model PilotControl {
   changedAt DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model PilotReleaseRecord {
+  id String @id @default("pilot")
+  stage PilotReadinessStage @default(FOUNDATION_COMPLETE)
+  noWaiverConfirmed Boolean @default(false)
+  approvedCohort Json?
+  numericLimits Json?
+  releaseConfiguration Json?
+  rollbackPlan String?
+  evidenceRefs Json?
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  approvals PilotReleaseApproval[]
+}
+
+model PilotReleaseApproval {
+  id String @id @default(cuid())
+  recordId String @default("pilot")
+  role PilotApprovalRole
+  actorIdentityId String
+  note String
+  approvedAt DateTime @default(now())
+
+  record PilotReleaseRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@unique([recordId, role])
+  @@index([actorIdentityId, approvedAt])
 }
 
 model PilotAllowlist {

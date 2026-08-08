@@ -314,6 +314,36 @@ describe('AdminService', () => {
     delete process.env.PILOT_OPERATOR_ID;
   });
 
+  it('fails closed when global pilot start has no published no-waiver record', async () => {
+    process.env.PILOT_OPERATOR_ID = 'operator_1';
+    const upsert = jest.fn();
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'operator_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      pilotControl: { upsert },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).setPilotControl(
+        'operator_1',
+        PilotControlKey.GLOBAL,
+        PilotControlState.ENABLED,
+        'Start pilot',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(upsert).not.toHaveBeenCalled();
+    delete process.env.PILOT_OPERATOR_ID;
+  });
+
   it('allows only the configured engineering lead to isolate provider movement', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const upsert = jest.fn().mockResolvedValue({

@@ -318,6 +318,28 @@ export class AdminController {
     return this.adminService.isolateProviderMovement(actor.id, body.reason);
   }
 
+  @Post('pilot/release/approvals')
+  async recordPilotApproval(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { role: string; note: string },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.recordPilotApproval(
+      actor.id,
+      body.role,
+      body.note,
+    );
+  }
+
+  @Post('pilot/release/publish')
+  async publishPilotReadiness(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Parameters<AdminService['publishPilotReadiness']>[1],
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.publishPilotReadiness(actor.id, body);
+  }
+
   @Post('pilot/allowlist/:profileId')
   async setPilotAllowlist(
     @Headers('authorization') authorization: string | undefined,

@@ -344,6 +344,52 @@ describe('AdminService', () => {
     delete process.env.PILOT_OPERATOR_ID;
   });
 
+  it('fails closed when the published release fingerprint is tampered', async () => {
+    process.env.PILOT_OPERATOR_ID = 'operator_1';
+    const upsert = jest.fn();
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'operator_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'pilot',
+          stage: 'PILOT_READY',
+          noWaiverConfirmed: true,
+          publishedAt: new Date(),
+          publishedByIdentityId: 'operator_1',
+          publicationHash: 'a'.repeat(64),
+          approvedCohort: { senderIds: ['sender_1'] },
+          numericLimits: { dailySendMinor: '100000' },
+          releaseConfiguration: { corridor: 'DRC-KENYA' },
+          rollbackPlan: 'pause',
+          evidenceRefs: { kyc: 'evidence://kyc' },
+          approvals: [],
+          stageRecords: [],
+        }),
+      },
+      pilotControl: { upsert },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).setPilotControl(
+        'operator_1',
+        PilotControlKey.GLOBAL,
+        PilotControlState.ENABLED,
+        'Start pilot',
+      ),
+    ).rejects.toThrow(
+      'Pilot Ready evidence and no-waiver approval are required before global start',
+    );
+    expect(upsert).not.toHaveBeenCalled();
+    delete process.env.PILOT_OPERATOR_ID;
+  });
+
   it('records a named readiness approval before publication', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const prisma = {

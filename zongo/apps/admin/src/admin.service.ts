@@ -1262,13 +1262,52 @@ export class AdminService {
   private async requirePublishedPilotReadiness(): Promise<void> {
     const record = await this.prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
-      select: { stage: true, noWaiverConfirmed: true, publishedAt: true },
+      include: {
+        approvals: { orderBy: { approvedAt: 'asc' } },
+        stageRecords: { orderBy: { recordedAt: 'asc' } },
+      },
     });
+    const recomputedPublicationHash = record
+      ? hashPilotReleasePublication({
+          approvedCohort: record.approvedCohort,
+          numericLimits: record.numericLimits,
+          releaseConfiguration: record.releaseConfiguration,
+          rollbackPlan: record.rollbackPlan ?? '',
+          evidenceRefs: record.evidenceRefs,
+          noWaiverConfirmed: record.noWaiverConfirmed,
+          approvals: record.approvals
+            .map((approval) => ({
+              role: approval.role,
+              actorIdentityId: approval.actorIdentityId,
+              note: approval.note,
+              approvedAt: approval.approvedAt.toISOString(),
+            }))
+            .sort((left, right) => left.role.localeCompare(right.role)),
+          stageRecords: record.stageRecords
+            .map((stageRecord) => ({
+              id: stageRecord.id,
+              stage: stageRecord.stage,
+              evidenceRefs: stageRecord.evidenceRefs,
+              approvedCohort: stageRecord.approvedCohort,
+              numericLimits: stageRecord.numericLimits,
+              releaseConfiguration: stageRecord.releaseConfiguration,
+              rollbackPlan: stageRecord.rollbackPlan,
+              noWaiverConfirmed: stageRecord.noWaiverConfirmed,
+              recordedByIdentityId: stageRecord.recordedByIdentityId,
+              recordedAt: stageRecord.recordedAt.toISOString(),
+            }))
+            .sort((left, right) => left.id.localeCompare(right.id)),
+          publishedAt: record.publishedAt?.toISOString(),
+          publishedByIdentityId: record.publishedByIdentityId ?? undefined,
+        })
+      : null;
     if (
       !record ||
       record.stage !== 'PILOT_READY' ||
       !record.noWaiverConfirmed ||
-      !record.publishedAt
+      !record.publishedAt ||
+      !record.publishedByIdentityId ||
+      record.publicationHash !== recomputedPublicationHash
     )
       throw new ForbiddenException(
         'Pilot Ready evidence and no-waiver approval are required before global start',

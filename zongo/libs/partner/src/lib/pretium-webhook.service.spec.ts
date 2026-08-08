@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/unbound-method */
 import type { AuditLogPort } from '@app/domain';
 import type { LedgerService } from '@app/ledger';
 import type { PrismaService } from '@app/db';
@@ -283,6 +284,55 @@ describe('Pretium webhook boundary', () => {
     expect(updateMany).not.toHaveBeenCalled();
     expect(append).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'transfer.callback.out-of-order' }),
+    );
+  });
+
+  it('treats a callback after a terminal state as an audit-only no-op', async () => {
+    const append = jest.fn().mockResolvedValue(undefined);
+    const sessionFind = jest.fn();
+    const transactionUpdate = jest.fn();
+    const prisma = {
+      transferTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tx-terminal',
+          reference: 'ZNG-TERMINAL',
+          corridorId: 'corr_1',
+          status: 'PAYOUT_SUCCESS',
+          partnerReference: 'pt-terminal',
+        }),
+        updateMany: transactionUpdate,
+      },
+      whatsAppSession: { findUnique: sessionFind },
+      $transaction: jest.fn(),
+    } as unknown as PrismaService;
+    const audit = { append } as unknown as AuditLogPort;
+    const ledger = {
+      appendLifecycleEntries: jest.fn(),
+      persistReconciliation: jest.fn(),
+    } as unknown as LedgerService;
+
+    await expect(
+      new PretiumWebhookService(prisma, audit, ledger).apply({
+        partnerReference: 'pt-terminal',
+        providerStatus: 'COMPLETE',
+      }),
+    ).resolves.toEqual({
+      applied: false,
+      transactionReference: 'ZNG-TERMINAL',
+    });
+
+    expect(transactionUpdate).not.toHaveBeenCalled();
+    expect(sessionFind).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'transfer.callback.duplicate',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        payload: expect.objectContaining({
+          currentStatus: 'PAYOUT_SUCCESS',
+          receivedStatus: 'PAYOUT_SUCCESS',
+        }),
+      }),
     );
   });
 

@@ -71,14 +71,17 @@ export class PretiumWebhookService {
       transaction.status === TransactionStatus.PAYOUT_FAILED ||
       transaction.status === TransactionStatus.PAYOUT_SUCCESS;
     if (closed) {
-      await this.resolveTransferOutcome(transaction.id, transaction.status);
       await this.audit.append({
         id: crypto.randomUUID(),
         eventType: 'TECHNICAL',
-        name: 'transfer.callback.late',
+        name:
+          transaction.status === status
+            ? 'transfer.callback.duplicate'
+            : 'transfer.callback.late',
         transactionId: transaction.id,
         corridorId: transaction.corridorId,
         payload: {
+          currentStatus: transaction.status,
           receivedStatus: status,
           partnerReference: input.partnerReference,
         },
@@ -241,7 +244,10 @@ export class PretiumWebhookService {
     current: TransactionStatus,
   ): TransactionStatus {
     const normalized = providerStatus.toUpperCase();
-    const payout = current === TransactionStatus.PENDING_PAYOUT;
+    const payout =
+      current === TransactionStatus.PENDING_PAYOUT ||
+      current === TransactionStatus.PAYOUT_SUCCESS ||
+      current === TransactionStatus.PAYOUT_FAILED;
     if (
       normalized === 'COMPLETE' ||
       normalized === 'SUCCESS' ||

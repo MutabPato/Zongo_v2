@@ -3,10 +3,27 @@ import { createHmac } from 'node:crypto';
 import type { AuditLogPort } from '@app/domain';
 import type { PrismaService } from '@app/db';
 import {
+  parseWhatsAppMessage,
   WhatsAppSessionService,
   WhatsAppWebhookSignatureService,
   MetaWhatsAppNotifier,
 } from './whatsapp.service';
+
+describe('WhatsApp message grammar', () => {
+  it.each([
+    ['send money', 'START_TRANSFER', 'EN'],
+    ['envoyer argent', 'START_TRANSFER', 'FR'],
+    ['tuma pesa', 'START_TRANSFER', 'SW'],
+    ['oui, j’accepte', 'CONSENT', 'FR'],
+    ['status', 'STATUS', 'EN'],
+    ['hali ya muamala', 'STATUS', 'SW'],
+    ['annuler', 'CANCEL', 'FR'],
+  ])('normalizes %s', (message, intent, locale) => {
+    expect(parseWhatsAppMessage(message)).toEqual(
+      expect.objectContaining({ intent, locale }),
+    );
+  });
+});
 
 describe('WhatsAppWebhookSignatureService', () => {
   it('accepts a valid Meta-style signature and rejects tampering', () => {
@@ -187,6 +204,67 @@ describe('WhatsAppSessionService', () => {
     expect(workerUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { dedupKey: 'status-query:ZNG-TEST-001' },
+      }),
+    );
+  });
+
+  it('cancels an unaccepted session but never cancels an accepted transfer', async () => {
+    const sessionUpdate = jest.fn().mockResolvedValue({ id: 'session_1' });
+    const tx = {
+      whatsAppInboundEvent: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
+      whatsAppSession: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'session_1',
+            status: 'ACTIVE',
+            transferId: null,
+          })
+          .mockResolvedValueOnce({
+            id: 'session_2',
+            status: 'ACTIVE',
+            transferId: 'tx_1',
+          }),
+        update: sessionUpdate,
+      },
+      workerJob: { upsert: jest.fn() },
+    };
+    const prisma = {
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+      ),
+    } as unknown as PrismaService;
+    const service = new WhatsAppSessionService(prisma, audit, protection);
+
+    await expect(
+      service.acceptInbound({
+        externalEventId: 'cancel_1',
+        chatId: 'chat_1',
+        senderPhoneNumber: '+243800000001',
+        messageText: 'annuler',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({ reason: 'SESSION_CANCELLED' }),
+    );
+    await expect(
+      service.acceptInbound({
+        externalEventId: 'cancel_2',
+        chatId: 'chat_1',
+        senderPhoneNumber: '+243800000001',
+        messageText: 'cancel',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        reason: 'CANCEL_NOT_AVAILABLE_AFTER_ACCEPTANCE',
+        transferId: 'tx_1',
+      }),
+    );
+    expect(sessionUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: 'CLOSED', activeChatKey: null },
       }),
     );
   });

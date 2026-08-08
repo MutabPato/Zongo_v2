@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { AUDIT_LOG_PORT, type AuditLogPort } from '@app/domain';
 import { PrismaService } from '@app/db';
-import { Prisma } from '@prisma/client';
+import { Prisma, WhatsAppIntent, WhatsAppLocale } from '@prisma/client';
 import { ENVELOPE_ENCRYPTION, EnvelopeEncryptionService } from '@app/security';
 
 export const WHATSAPP_APP_SECRET = Symbol('WHATSAPP_APP_SECRET');
@@ -76,7 +76,56 @@ export type WhatsAppInboundInput = {
   senderPhoneNumber: string;
   payloadRedacted?: Record<string, unknown>;
   consentGiven?: boolean;
+  messageText?: string;
 };
+
+export type ParsedWhatsAppMessage = {
+  intent: WhatsAppIntent;
+  locale: WhatsAppLocale;
+  consentGiven: boolean;
+};
+
+/** Canonical pilot command aliases; raw message text is never persisted. */
+export function parseWhatsAppMessage(
+  messageText?: string,
+): ParsedWhatsAppMessage {
+  const normalized = (messageText ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (!normalized)
+    return {
+      intent: WhatsAppIntent.UNKNOWN,
+      locale: WhatsAppLocale.UNKNOWN,
+      consentGiven: false,
+    };
+  const locale = /\b(oui|envoyer|annuler|statut|aide|j accepte)\b/.test(
+    normalized,
+  )
+    ? WhatsAppLocale.FR
+    : /\b(ndiyo|tuma|ghairi|hali|msaada|nakubali)\b/.test(normalized)
+      ? WhatsAppLocale.SW
+      : WhatsAppLocale.EN;
+  if (/\b(cancel|annuler|stop|ghairi|kata)\b/.test(normalized))
+    return { intent: WhatsAppIntent.CANCEL, locale, consentGiven: false };
+  if (
+    /\b(status|statut|check|suivi|hali|where is my transfer)\b/.test(normalized)
+  )
+    return { intent: WhatsAppIntent.STATUS, locale, consentGiven: false };
+  if (/\b(yes|oui|ndiyo|agree|j accepte|nakubali)\b/.test(normalized))
+    return { intent: WhatsAppIntent.CONSENT, locale, consentGiven: true };
+  if (/\b(send|transfer|envoyer|tuma|start)\b/.test(normalized))
+    return {
+      intent: WhatsAppIntent.START_TRANSFER,
+      locale,
+      consentGiven: false,
+    };
+  if (/\b(help|aide|msaada)\b/.test(normalized))
+    return { intent: WhatsAppIntent.HELP, locale, consentGiven: false };
+  return { intent: WhatsAppIntent.UNKNOWN, locale, consentGiven: false };
+}
 
 export type NotificationIntentInput = {
   dedupKey: string;
@@ -108,6 +157,8 @@ export class WhatsAppSessionService {
   ) {}
 
   async acceptInbound(input: WhatsAppInboundInput) {
+    const parsed = parseWhatsAppMessage(input.messageText);
+    const consentGiven = input.consentGiven === true || parsed.consentGiven;
     const result = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.whatsAppInboundEvent.findUnique({
         where: { externalEventId: input.externalEventId },
@@ -130,6 +181,9 @@ export class WhatsAppSessionService {
             'sender-phone',
           ),
           payloadRedacted: input.payloadRedacted as Prisma.InputJsonValue,
+          intent: parsed.intent,
+          locale: parsed.locale,
+          consentGiven,
         },
       });
 
@@ -164,6 +218,38 @@ export class WhatsAppSessionService {
             transferId: active.transferId,
           };
         }
+        if (parsed.intent === WhatsAppIntent.CANCEL) {
+          if (active.transferId)
+            return {
+              duplicate: false,
+              accepted: false as const,
+              reason: 'CANCEL_NOT_AVAILABLE_AFTER_ACCEPTANCE',
+              sessionId: active.id,
+              transferId: active.transferId,
+            };
+          await tx.whatsAppSession.update({
+            where: { id: active.id },
+            data: { status: 'CLOSED', activeChatKey: null },
+          });
+          return {
+            duplicate: false,
+            accepted: false as const,
+            reason: 'SESSION_CANCELLED',
+            sessionId: active.id,
+          };
+        }
+        if (parsed.intent === WhatsAppIntent.CONSENT && !active.transferId) {
+          const updated = await tx.whatsAppSession.update({
+            where: { id: active.id },
+            data: { consentGivenAt: new Date(), locale: parsed.locale },
+          });
+          return {
+            duplicate: false,
+            accepted: false as const,
+            reason: 'CONSENT_CAPTURED',
+            sessionId: updated.id,
+          };
+        }
         return {
           duplicate: false,
           accepted: false as const,
@@ -171,6 +257,16 @@ export class WhatsAppSessionService {
           sessionId: active.id,
         };
       }
+
+      if (
+        parsed.intent === WhatsAppIntent.CANCEL ||
+        parsed.intent === WhatsAppIntent.STATUS
+      )
+        return {
+          duplicate: false,
+          accepted: false as const,
+          reason: 'NO_ACTIVE_SESSION',
+        };
 
       const session = await tx.whatsAppSession.create({
         data: {
@@ -184,6 +280,8 @@ export class WhatsAppSessionService {
           ),
           senderPhoneBlindIndex: phoneIndex,
           activeChatKey: `chat:${input.chatId}`,
+          locale: parsed.locale,
+          consentGivenAt: consentGiven ? new Date() : null,
           expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         },
       });

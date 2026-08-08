@@ -78,6 +78,22 @@ enum WhatsAppSessionStatus {
   CLOSED
 }
 
+enum WhatsAppIntent {
+  START_TRANSFER
+  CONSENT
+  CANCEL
+  STATUS
+  HELP
+  UNKNOWN
+}
+
+enum WhatsAppLocale {
+  EN
+  FR
+  SW
+  UNKNOWN
+}
+
 enum NotificationIntentStatus {
   PENDING
   SENT
@@ -250,6 +266,8 @@ model WhatsAppSession {
   senderPhoneCiphertext String?
   senderPhoneBlindIndex String?
   status WhatsAppSessionStatus @default(ACTIVE)
+  locale WhatsAppLocale @default(UNKNOWN)
+  consentGivenAt DateTime?
   activeChatKey String? @unique
   transferId String? @unique
   expiresAt DateTime?
@@ -267,6 +285,9 @@ model WhatsAppInboundEvent {
   senderPhoneCiphertext String?
   senderPhoneBlindIndex String?
   payloadRedacted Json?
+  intent WhatsAppIntent @default(UNKNOWN)
+  locale WhatsAppLocale @default(UNKNOWN)
+  consentGiven Boolean @default(false)
   receivedAt DateTime @default(now())
 
   @@index([chatId, receivedAt])

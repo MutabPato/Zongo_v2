@@ -106,6 +106,11 @@ export class TransferInitiationService {
           'WHATSAPP_TRANSFER_ALREADY_ACTIVE',
           'This WhatsApp chat already owns a transfer',
         );
+      if ('consentGivenAt' in session && !session.consentGivenAt)
+        throw new DomainError(
+          'WHATSAPP_CONSENT_REQUIRED',
+          'Explicit WhatsApp consent is required before transfer initiation',
+        );
 
       const profile = await tx.senderProfile.findUniqueOrThrow({
         where: { id: input.senderProfileId },

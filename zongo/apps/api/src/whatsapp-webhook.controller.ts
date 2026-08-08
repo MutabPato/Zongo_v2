@@ -49,6 +49,7 @@ export class WhatsAppWebhookController {
       chatId,
       senderPhoneNumber,
       payloadRedacted: { type: body.type, messageId: body.message_id },
+      messageText: this.stringValue(body.text ?? body.message),
     });
     return { received: true, ...result };
   }

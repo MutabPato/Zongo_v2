@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Optional } from '@nestjs/common';
 import { WorkerService } from './worker.service';
 import { WorkerMetricsService } from './worker-metrics.service';
 
@@ -6,7 +6,7 @@ import { WorkerMetricsService } from './worker-metrics.service';
 export class WorkerController {
   constructor(
     private readonly workerService: WorkerService,
-    private readonly metrics: WorkerMetricsService,
+    @Optional() private readonly metrics?: WorkerMetricsService,
   ) {}
 
   @Get()
@@ -16,6 +16,7 @@ export class WorkerController {
 
   @Get('metrics')
   metricsSnapshot() {
+    if (!this.metrics) throw new Error('Worker metrics are not configured');
     return this.metrics.snapshot();
   }
 }

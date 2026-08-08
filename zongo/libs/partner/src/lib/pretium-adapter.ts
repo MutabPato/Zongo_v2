@@ -76,12 +76,24 @@ type PretiumPayoutStatus =
   | 'PAYOUT_FAILED';
 
 export class PretiumHttpClient implements PretiumClient {
+  private readonly baseUrl: URL;
+
   constructor(
-    private readonly baseUrl: string,
+    baseUrl: string,
     private readonly consumerKey: string,
     private readonly callbackUrl?: string,
     private readonly timeoutMs = 10_000,
-  ) {}
+  ) {
+    this.baseUrl = new URL(baseUrl);
+    if (this.baseUrl.protocol !== 'https:')
+      throw new Error('Pretium base URL must use HTTPS');
+    if (this.baseUrl.username || this.baseUrl.password)
+      throw new Error('Pretium base URL must not contain credentials');
+    if (!consumerKey.trim())
+      throw new Error('Pretium consumer key is required');
+    if (!Number.isInteger(timeoutMs) || timeoutMs <= 0)
+      throw new Error('Pretium timeout must be a positive integer');
+  }
 
   collect(input: Parameters<PretiumClient['collect']>[0]) {
     if (!input.senderPhoneNumber)
@@ -159,7 +171,7 @@ export class PretiumHttpClient implements PretiumClient {
   }
 
   private async post(path: string, body: Record<string, unknown>) {
-    const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}${path}`, {
+    const response = await fetch(new URL(path, this.baseUrl), {
       method: 'POST',
       headers: {
         'x-api-key': this.consumerKey,

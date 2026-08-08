@@ -33,7 +33,7 @@ describe('PretiumHttpClient', () => {
       status: 'PENDING_COLLECTION',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.example.test/cdf/collect',
+      new URL('/cdf/collect', 'https://api.example.test/'),
       expect.objectContaining({
         headers: expect.objectContaining({ 'x-api-key': 'consumer-key' }),
         body: JSON.stringify({
@@ -98,7 +98,7 @@ describe('PretiumHttpClient', () => {
       status: 'PENDING_PAYOUT',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.example.test/kes/disburse',
+      new URL('/kes/disburse', 'https://api.example.test/'),
       expect.objectContaining({
         body: JSON.stringify({
           shortcode: '+254700000000',
@@ -109,5 +109,22 @@ describe('PretiumHttpClient', () => {
         }),
       }),
     );
+  });
+
+  it('rejects unsafe client configuration before making a request', () => {
+    expect(
+      () => new PretiumHttpClient('http://api.example.test', 'consumer-key'),
+    ).toThrow('Pretium base URL must use HTTPS');
+    expect(
+      () =>
+        new PretiumHttpClient('https://user:pass@example.test', 'consumer-key'),
+    ).toThrow('Pretium base URL must not contain credentials');
+    expect(
+      () => new PretiumHttpClient('https://api.example.test', ' '),
+    ).toThrow('Pretium consumer key is required');
+    expect(
+      () =>
+        new PretiumHttpClient('https://api.example.test', 'key', undefined, 0),
+    ).toThrow('Pretium timeout must be a positive integer');
   });
 });

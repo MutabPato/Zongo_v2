@@ -47,6 +47,10 @@ const REQUIRED_PILOT_EVIDENCE = [
   'observability',
   'incident',
   'customerJourney',
+  'startRunbook',
+  'pauseResumeRunbook',
+  'permanentStopRunbook',
+  'releaseEvidenceRunbook',
 ] as const;
 
 const PilotApprovalAuthority = {

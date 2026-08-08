@@ -22,6 +22,10 @@ const REQUIRED_EVIDENCE = [
   'observability',
   'incident',
   'customerJourney',
+  'startRunbook',
+  'pauseResumeRunbook',
+  'permanentStopRunbook',
+  'releaseEvidenceRunbook',
 ] as const;
 
 type Check = {

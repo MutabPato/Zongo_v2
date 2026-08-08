@@ -14,13 +14,13 @@ be completed for the exact deployed commit and configuration.
 
 ## Required approval record
 
-| Role | Name/identity | Decision | Timestamp | Evidence link |
-| --- | --- | --- | --- | --- |
-| Engineering |  |  |  |  |
-| Operations |  |  |  |  |
-| Compliance/Risk |  |  |  |  |
-| Reconciliation |  |  |  |  |
-| Accountable pilot operator |  |  |  |  |
+| Role                       | Name/identity | Decision | Timestamp | Evidence link |
+| -------------------------- | ------------- | -------- | --------- | ------------- |
+| Engineering                |               |          |           |               |
+| Operations                 |               |          |           |               |
+| Compliance/Risk            |               |          |           |               |
+| Reconciliation             |               |          |           |               |
+| Accountable pilot operator |               |          |           |               |
 
 ## Release facts
 
@@ -33,6 +33,7 @@ be completed for the exact deployed commit and configuration.
 - DPIA, retention, cross-border, and processor evidence:
 - Backup/restore and RPO/RTO evidence:
 - Incident, pause/resume, and rollback references:
+- Start, pause/resume, permanent-stop, and release-evidence runbook references:
 - Explicit no-waiver declaration:
 - Release publication fingerprint and signature: generated with the
   runtime-only `PILOT_RELEASE_SIGNING_KEY`; the key is never stored in the

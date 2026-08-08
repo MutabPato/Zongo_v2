@@ -568,6 +568,10 @@ describe('AdminService', () => {
       observability: 'evidence://observability',
       incident: 'evidence://incident',
       customerJourney: 'evidence://journey',
+      startRunbook: 'evidence://runbook/start',
+      pauseResumeRunbook: 'evidence://runbook/pause-resume',
+      permanentStopRunbook: 'evidence://runbook/permanent-stop',
+      releaseEvidenceRunbook: 'evidence://runbook/release-evidence',
     };
 
     await expect(
@@ -660,6 +664,10 @@ describe('AdminService', () => {
           observability: 'evidence://observability',
           incident: 'evidence://incident',
           customerJourney: 'evidence://journey',
+          startRunbook: 'evidence://runbook/start',
+          pauseResumeRunbook: 'evidence://runbook/pause-resume',
+          permanentStopRunbook: 'evidence://runbook/permanent-stop',
+          releaseEvidenceRunbook: 'evidence://runbook/release-evidence',
         },
         noWaiverConfirmed: true,
       }),

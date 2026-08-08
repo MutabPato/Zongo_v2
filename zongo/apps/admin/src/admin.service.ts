@@ -294,12 +294,17 @@ export class AdminService {
       q && this.protection
         ? await this.protection.blindIndex(q, 'sender-phone')
         : undefined;
+    const emailBlindIndex =
+      q && this.protection
+        ? await this.protection.blindIndex(q, 'sender-email')
+        : undefined;
     const profiles = q
       ? await this.prisma.senderProfile.findMany({
           where: {
             OR: [
               { userId: { contains: q, mode: 'insensitive' } },
               { legalName: { contains: q, mode: 'insensitive' } },
+              ...(emailBlindIndex ? [{ emailBlindIndex }] : []),
               { email: { contains: q, mode: 'insensitive' } },
               ...(phoneBlindIndex
                 ? [{ senderPhoneBlindIndex: phoneBlindIndex }]

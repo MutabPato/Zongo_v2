@@ -156,7 +156,7 @@ export class EnvelopeEncryptionService {
 }
 
 const SENSITIVE_AUDIT_KEY =
-  /(?:authorization|biometric|document|email|identity|password|payout.?account|phone|provider.?payload|raw.?payload|secret|token)/i;
+  /(?:authorization|biometric|document|email|identity|password|payout.?account|phone|provider.?reference|provider.?payload|partner.?reference|raw.?payload|secret|token)/i;
 
 export function redactSensitivePayload(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactSensitivePayload);

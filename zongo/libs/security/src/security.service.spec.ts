@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import {
   EnvironmentKeyProvider,
   EnvelopeEncryptionService,
+  redactSensitivePayload,
   type EncryptionKeyProvider,
 } from './security.service';
 
@@ -54,6 +55,20 @@ describe('EnvelopeEncryptionService', () => {
     expect(service.mask('+254700000001')).toBe('•••••••••0001');
     expect(service.mask('abc')).toBe('••••');
     expect(service.mask(null)).toBeNull();
+  });
+
+  it('redacts provider identifiers from audit payloads', () => {
+    expect(
+      redactSensitivePayload({
+        partnerReference: 'pretium-secret-ref',
+        providerReference: 'openbio-secret-ref',
+        status: 'COMPLETE',
+      }),
+    ).toEqual({
+      partnerReference: '[REDACTED]',
+      providerReference: '[REDACTED]',
+      status: 'COMPLETE',
+    });
   });
 
   it('fails closed for retired encryption versions', async () => {

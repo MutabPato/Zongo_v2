@@ -36,3 +36,13 @@ be completed for the exact deployed commit and configuration.
 - Explicit no-waiver declaration:
 
 An empty field or unresolved material issue means `Pilot Ready: NO`.
+
+Run the read-only executable check with:
+
+```sh
+ALLOW_PILOT_READINESS_VERIFICATION=true pnpm verify:pilot-readiness
+```
+
+The command reports missing stage snapshots, named approvals, evidence
+references, release facts, or explicit control rows. It never starts, resumes,
+or approves real-money movement.

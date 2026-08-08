@@ -97,7 +97,30 @@ export class PretiumWebhookService {
       });
       return { applied: false, transactionReference: transaction.reference };
     }
-    this.lifecycle.assertTransition(transaction.status, status);
+    try {
+      this.lifecycle.assertTransition(transaction.status, status);
+    } catch (error) {
+      if (
+        error instanceof DomainError &&
+        error.code === 'INVALID_TRANSACTION_TRANSITION'
+      ) {
+        await this.audit.append({
+          id: crypto.randomUUID(),
+          eventType: 'TECHNICAL',
+          name: 'transfer.callback.out-of-order',
+          transactionId: transaction.id,
+          corridorId: transaction.corridorId,
+          payload: {
+            currentStatus: transaction.status,
+            receivedStatus: status,
+            partnerReference: input.partnerReference,
+          },
+          createdAt: new Date(),
+        });
+        return { applied: false, transactionReference: transaction.reference };
+      }
+      throw error;
+    }
     await this.prisma.transferTransaction.update({
       where: { id: transaction.id },
       data: {

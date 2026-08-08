@@ -111,4 +111,37 @@ describe('Pretium webhook boundary', () => {
       }),
     );
   });
+
+  it('audits and ignores an out-of-order callback without mutating lifecycle state', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    const append = jest.fn().mockResolvedValue(undefined);
+    const prisma = {
+      transferTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tx_3',
+          reference: 'ZNG-3',
+          corridorId: 'corr_1',
+          status: 'COLLECTION_SUCCESS',
+          partnerReference: 'pt_3',
+        }),
+        update,
+      },
+    } as unknown as PrismaService;
+    const ledger = {
+      appendLifecycleEntries: jest.fn(),
+      persistReconciliation: jest.fn(),
+    } as unknown as LedgerService;
+
+    await expect(
+      new PretiumWebhookService(
+        prisma,
+        { append } as unknown as AuditLogPort,
+        ledger,
+      ).apply({ partnerReference: 'pt_3', providerStatus: 'FAILED' }),
+    ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-3' });
+    expect(update).not.toHaveBeenCalled();
+    expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'transfer.callback.out-of-order' }),
+    );
+  });
 });

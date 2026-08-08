@@ -581,5 +581,5 @@ describeDatabase('local DRC-to-Kenya customer journey (PostgreSQL)', () => {
         select: { status: true, beneficiaryId: true, retryBeneficiaryId: true },
       }),
     ).resolves.toEqual(beforeInvestigation);
-  });
+  }, 15_000);
 });

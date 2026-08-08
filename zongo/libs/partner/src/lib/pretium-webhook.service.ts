@@ -71,6 +71,7 @@ export class PretiumWebhookService {
       transaction.status === TransactionStatus.PAYOUT_FAILED ||
       transaction.status === TransactionStatus.PAYOUT_SUCCESS;
     if (closed) {
+      await this.resolveTransferOutcome(transaction.id, transaction.status);
       await this.audit.append({
         id: crypto.randomUUID(),
         eventType: 'TECHNICAL',
@@ -174,6 +175,7 @@ export class PretiumWebhookService {
       );
       await this.ledger.persistReconciliation(transaction.id);
     }
+    await this.resolveTransferOutcome(transaction.id, status);
     await this.audit.append({
       id: crypto.randomUUID(),
       eventType: 'BUSINESS',
@@ -184,6 +186,54 @@ export class PretiumWebhookService {
       createdAt: new Date(),
     });
     return { applied: true, transactionReference: transaction.reference };
+  }
+
+  private async resolveTransferOutcome(
+    transactionId: string,
+    status: TransactionStatus,
+  ): Promise<void> {
+    if (
+      status !== TransactionStatus.COLLECTION_FAILED &&
+      status !== TransactionStatus.PAYOUT_SUCCESS &&
+      status !== TransactionStatus.PAYOUT_FAILED
+    )
+      return;
+    const session = await this.prisma.whatsAppSession?.findUnique({
+      where: { transferId: transactionId },
+    });
+    if (!session?.senderPhoneCiphertext) return;
+    const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
+      { where: { id: transactionId } },
+    );
+    await this.prisma.$transaction(async (tx) => {
+      await tx.whatsAppSession.update({
+        where: { id: session.id },
+        data: { status: 'CLOSED', activeChatKey: null },
+      });
+      const intent = await tx.notificationIntent.upsert({
+        where: { dedupKey: `transfer:${transaction.id}:resolved` },
+        create: {
+          dedupKey: `transfer:${transaction.id}:resolved`,
+          transactionId: transaction.id,
+          channel: 'WHATSAPP',
+          recipientPhoneCiphertext: session.senderPhoneCiphertext,
+          template: 'transfer.resolved',
+          payload: { status, reference: transaction.reference },
+        },
+        update: {},
+      });
+      await tx.workerJob.upsert({
+        where: { dedupKey: `notification:${intent.id}` },
+        create: {
+          dedupKey: `notification:${intent.id}`,
+          jobType: 'NOTIFICATION',
+          transactionReference: transaction.reference,
+          transactionId: transaction.id,
+          payload: { notificationIntentId: intent.id },
+        },
+        update: {},
+      });
+    });
   }
 
   private mapStatus(

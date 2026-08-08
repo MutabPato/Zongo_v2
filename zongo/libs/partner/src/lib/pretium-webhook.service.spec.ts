@@ -183,6 +183,68 @@ describe('Pretium webhook boundary', () => {
     );
   });
 
+  it('closes the WhatsApp session and queues a notification for terminal callbacks', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const sessionUpdate = jest.fn().mockResolvedValue(undefined);
+    const notificationUpsert = jest.fn().mockResolvedValue({ id: 'intent_1' });
+    const payoutUpsert = jest.fn().mockResolvedValue({ id: 'job_1' });
+    const tx = {
+      transferTransaction: { updateMany },
+      workerJob: { upsert: payoutUpsert },
+      whatsAppSession: { update: sessionUpdate },
+      notificationIntent: { upsert: notificationUpsert },
+    };
+    const prisma = {
+      transferTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tx_notify',
+          reference: 'ZNG-NOTIFY',
+          corridorId: 'corr_1',
+          status: 'PENDING_PAYOUT',
+          partnerReference: 'pt_notify',
+        }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'tx_notify',
+          reference: 'ZNG-NOTIFY',
+        }),
+        updateMany,
+      },
+      workerJob: { upsert: payoutUpsert },
+      whatsAppSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'session_notify',
+          senderPhoneCiphertext: '{"ciphertext":"phone"}',
+        }),
+      },
+      $transaction: jest.fn((callback: (client: never) => Promise<unknown>) =>
+        callback(tx as never),
+      ),
+    } as unknown as PrismaService;
+    const audit = {
+      append: jest.fn().mockResolvedValue(undefined),
+    } as unknown as AuditLogPort;
+    const ledger = {
+      appendLifecycleEntries: jest.fn().mockResolvedValue(undefined),
+      persistReconciliation: jest.fn().mockResolvedValue(undefined),
+    } as unknown as LedgerService;
+
+    await expect(
+      new PretiumWebhookService(prisma, audit, ledger).apply({
+        partnerReference: 'pt_notify',
+        providerStatus: 'COMPLETE',
+      }),
+    ).resolves.toEqual({ applied: true, transactionReference: 'ZNG-NOTIFY' });
+    expect(sessionUpdate).toHaveBeenCalledWith({
+      where: { id: 'session_notify' },
+      data: { status: 'CLOSED', activeChatKey: null },
+    });
+    expect(notificationUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dedupKey: 'transfer:tx_notify:resolved' },
+      }),
+    );
+  });
+
   it('audits and ignores an out-of-order callback without mutating lifecycle state', async () => {
     const updateMany = jest.fn();
     const append = jest.fn().mockResolvedValue(undefined);

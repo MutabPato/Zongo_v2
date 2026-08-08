@@ -458,6 +458,7 @@ export class WorkerJobProcessor {
           },
           createdAt: new Date(),
         });
+        await this.resolveWaitingSession(transaction.id, partnerStatus);
         return { skipped: false, status: 'SUCCEEDED' };
       }
 
@@ -558,6 +559,7 @@ export class WorkerJobProcessor {
         lifecycleOperations.push(this.payoutJob(transaction));
       await this.prisma.$transaction(lifecycleOperations);
       await this.ledger.persistReconciliation(transaction.id);
+      await this.resolveWaitingSession(transaction.id, succeededStatus);
       await this.audit.append({
         id: crypto.randomUUID(),
         eventType: 'BUSINESS',
@@ -690,16 +692,15 @@ export class WorkerJobProcessor {
     status: TransactionStatus,
   ): Promise<void> {
     if (
-      status !== TransactionStatus.COLLECTION_SUCCESS &&
       status !== TransactionStatus.COLLECTION_FAILED &&
       status !== TransactionStatus.PAYOUT_SUCCESS &&
       status !== TransactionStatus.PAYOUT_FAILED
     )
       return;
-    const session = await this.prisma.whatsAppSession.findUnique({
+    const session = await this.prisma.whatsAppSession?.findUnique({
       where: { transferId: transactionId },
     });
-    if (!session || session.status !== 'WAITING') return;
+    if (!session || !session.senderPhoneCiphertext) return;
     const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
       { where: { id: transactionId } },
     );
@@ -895,6 +896,7 @@ export class WorkerJobProcessor {
       return { applied: false };
     }
     await this.recordLifecycleSuccess(transaction.id, status);
+    await this.resolveWaitingSession(transaction.id, status);
     await this.audit.append({
       id: crypto.randomUUID(),
       eventType: 'BUSINESS',
@@ -976,6 +978,7 @@ export class WorkerJobProcessor {
       payload: { failureReason: message },
       createdAt: new Date(),
     });
+    await this.resolveWaitingSession(transaction.id, status);
   }
 
   private async failJob(id: string, message: string): Promise<void> {

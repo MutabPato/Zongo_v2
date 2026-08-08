@@ -121,15 +121,30 @@ export class PretiumWebhookService {
       }
       throw error;
     }
-    const applied = await this.prisma.transferTransaction.updateMany({
-      where: { id: transaction.id, status: transaction.status },
-      data: {
-        status,
-        partnerReference: input.partnerReference,
-        ...(providerReferenceBlindIndex
-          ? { partnerReferenceBlindIndex: providerReferenceBlindIndex }
-          : {}),
-      },
+    const applied = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.transferTransaction.updateMany({
+        where: { id: transaction.id, status: transaction.status },
+        data: {
+          status,
+          partnerReference: input.partnerReference,
+          ...(providerReferenceBlindIndex
+            ? { partnerReferenceBlindIndex: providerReferenceBlindIndex }
+            : {}),
+        },
+      });
+      if (result.count === 1 && status === TransactionStatus.COLLECTION_SUCCESS)
+        await tx.workerJob.upsert({
+          where: { dedupKey: `${transaction.reference}:PAYOUT` },
+          create: {
+            dedupKey: `${transaction.reference}:PAYOUT`,
+            transactionReference: transaction.reference,
+            transactionId: transaction.id,
+            jobType: 'PAYOUT',
+            payload: { reason: 'COLLECTION_SUCCESS' },
+          },
+          update: {},
+        });
+      return result;
     });
     if (applied.count !== 1) {
       await this.audit.append({

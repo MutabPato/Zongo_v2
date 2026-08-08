@@ -41,6 +41,15 @@ describe('Pretium webhook boundary', () => {
         }),
         updateMany,
       },
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'payout_job_1' }),
+      },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: jest.fn() },
+        } as never),
+      ),
     } as unknown as PrismaService;
     const audit = {
       append: jest.fn().mockResolvedValue(undefined),
@@ -77,6 +86,15 @@ describe('Pretium webhook boundary', () => {
     });
     const prisma = {
       transferTransaction: { findFirst, updateMany },
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'payout_job_2' }),
+      },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: jest.fn() },
+        } as never),
+      ),
     } as unknown as PrismaService;
     const audit = {
       append: jest.fn().mockResolvedValue(undefined),
@@ -112,6 +130,59 @@ describe('Pretium webhook boundary', () => {
     );
   });
 
+  it('queues a durable payout after a collection-success callback', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const payoutUpsert = jest
+      .fn()
+      .mockResolvedValue({ id: 'payout_job_collection' });
+    const prisma = {
+      transferTransaction: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'tx_collection',
+          reference: 'ZNG-COLLECTION',
+          corridorId: 'corr_1',
+          status: 'PENDING_COLLECTION',
+          partnerReference: 'pt_collection',
+        }),
+        updateMany,
+      },
+      workerJob: { upsert: payoutUpsert },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: payoutUpsert },
+        } as never),
+      ),
+    } as unknown as PrismaService;
+    const audit = {
+      append: jest.fn().mockResolvedValue(undefined),
+    } as unknown as AuditLogPort;
+    const ledger = {
+      appendLifecycleEntries: jest.fn().mockResolvedValue(undefined),
+      persistReconciliation: jest.fn().mockResolvedValue(undefined),
+    } as unknown as LedgerService;
+
+    await expect(
+      new PretiumWebhookService(prisma, audit, ledger).apply({
+        partnerReference: 'pt_collection',
+        providerStatus: 'COMPLETE',
+      }),
+    ).resolves.toEqual({
+      applied: true,
+      transactionReference: 'ZNG-COLLECTION',
+    });
+    expect(payoutUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dedupKey: 'ZNG-COLLECTION:PAYOUT' },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        create: expect.objectContaining({
+          jobType: 'PAYOUT',
+          payload: { reason: 'COLLECTION_SUCCESS' },
+        }),
+      }),
+    );
+  });
+
   it('audits and ignores an out-of-order callback without mutating lifecycle state', async () => {
     const updateMany = jest.fn();
     const append = jest.fn().mockResolvedValue(undefined);
@@ -126,6 +197,15 @@ describe('Pretium webhook boundary', () => {
         }),
         updateMany,
       },
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'payout_job_4' }),
+      },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: jest.fn() },
+        } as never),
+      ),
     } as unknown as PrismaService;
     const ledger = {
       appendLifecycleEntries: jest.fn(),
@@ -158,6 +238,15 @@ describe('Pretium webhook boundary', () => {
         }),
         updateMany,
       },
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'payout_job_4' }),
+      },
+      $transaction: jest.fn((callback: (tx: never) => Promise<unknown>) =>
+        callback({
+          transferTransaction: { updateMany },
+          workerJob: { upsert: jest.fn() },
+        } as never),
+      ),
     } as unknown as PrismaService;
     const appendLifecycleEntries = jest.fn();
     const ledger = {

@@ -269,7 +269,7 @@ export class WorkerJobProcessor {
                 'provider-reference',
               )
             : undefined;
-        await this.prisma.$transaction([
+        const statusOperations: Prisma.PrismaPromise<unknown>[] = [
           this.prisma.transferTransaction.update({
             where: { id: transaction.id },
             data: {
@@ -290,7 +290,10 @@ export class WorkerJobProcessor {
               leaseExpiresAt: null,
             },
           }),
-        ]);
+        ];
+        if (result.status === TransactionStatus.COLLECTION_SUCCESS)
+          statusOperations.push(this.payoutJob(transaction));
+        await this.prisma.$transaction(statusOperations);
         await this.recordLifecycleSuccess(transaction.id, result.status);
         await this.resolveWaitingSession(transaction.id, result.status);
         await this.audit.append({
@@ -520,7 +523,7 @@ export class WorkerJobProcessor {
         job.jobType === JobType.COLLECTION ? 'collection' : 'payout',
       );
 
-      await this.prisma.$transaction([
+      const lifecycleOperations: Prisma.PrismaPromise<unknown>[] = [
         this.prisma.transferTransaction.update({
           where: { id: transaction.id },
           data:
@@ -550,7 +553,10 @@ export class WorkerJobProcessor {
             leaseExpiresAt: null,
           },
         }),
-      ]);
+      ];
+      if (job.jobType === JobType.COLLECTION)
+        lifecycleOperations.push(this.payoutJob(transaction));
+      await this.prisma.$transaction(lifecycleOperations);
       await this.ledger.persistReconciliation(transaction.id);
       await this.audit.append({
         id: crypto.randomUUID(),
@@ -594,6 +600,20 @@ export class WorkerJobProcessor {
       else await this.failJob(durableJob.id, message);
       return { skipped: false, status: 'FAILED' };
     }
+  }
+
+  private payoutJob(transaction: { id: string; reference: string }) {
+    return this.prisma.workerJob.upsert({
+      where: { dedupKey: `${transaction.reference}:PAYOUT` },
+      create: {
+        dedupKey: `${transaction.reference}:PAYOUT`,
+        transactionReference: transaction.reference,
+        transactionId: transaction.id,
+        jobType: JobType.PAYOUT,
+        payload: { reason: 'COLLECTION_SUCCESS' },
+      },
+      update: {},
+    });
   }
 
   private async processNotification(

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
-import { JobStatus, TransactionStatus } from '@prisma/client';
+import { JobStatus, JobType, TransactionStatus } from '@prisma/client';
 import type { AuditLogPort, PartnerPort } from '@app/domain';
 import type { PrismaService } from '@app/db';
 import type { LedgerService } from '@app/ledger';
@@ -275,6 +275,15 @@ describe('WorkerJobProcessor', () => {
       currency: 'USD',
       beneficiaryId: 'ben_1',
     });
+    expect(prisma.workerJob.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dedupKey: `${job.transactionReference}:PAYOUT` },
+        create: expect.objectContaining({
+          jobType: JobType.PAYOUT,
+          payload: { reason: 'COLLECTION_SUCCESS' },
+        }),
+      }),
+    );
   });
 
   it('keeps a transfer pending when a collection failure is retryable', async () => {

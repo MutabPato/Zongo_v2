@@ -121,6 +121,16 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
     ).resolves.toEqual(
       expect.objectContaining({ status: 'COLLECTION_SUCCESS' }),
     );
+    await expect(
+      prisma.workerJob.findUnique({
+        where: { dedupKey: `${reference}:PAYOUT` },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        jobType: 'PAYOUT',
+        transactionReference: reference,
+      }),
+    );
 
     const auditEvent = await prisma.auditEvent.findFirstOrThrow({
       where: { transactionId: transaction.id },

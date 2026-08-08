@@ -71,7 +71,7 @@ export type OpenBiometricsEvidenceResult = {
 };
 
 function present(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().length > 0;
+  return isUsableEvidenceReference(value);
 }
 
 export function verifyOpenBiometricsEvidence(
@@ -138,3 +138,4 @@ export function verifyOpenBiometricsEvidence(
     checks,
   };
 }
+import { isUsableEvidenceReference } from '@app/observability';

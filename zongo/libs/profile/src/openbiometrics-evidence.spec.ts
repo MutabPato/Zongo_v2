@@ -25,4 +25,20 @@ describe('OpenBiometrics evidence verification', () => {
       result.checks.find((check) => check.name === 'scenario-matrix')?.status,
     ).toBe('FAIL');
   });
+
+  it('rejects placeholder provenance and promotion decisions', () => {
+    const result = verifyOpenBiometricsEvidence({
+      provenance: { sourceRepositoryCommit: 'NOT RUN' },
+      promotionDecision: 'NOT PROMOTED',
+    });
+
+    expect(
+      result.checks.find((check) => check.name === 'build-and-provenance')
+        ?.missing,
+    ).toContain('sourceRepositoryCommit');
+    expect(
+      result.checks.find((check) => check.name === 'promotion-decision')
+        ?.status,
+    ).toBe('FAIL');
+  });
 });

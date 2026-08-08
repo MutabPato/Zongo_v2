@@ -1,4 +1,5 @@
-const PLACEHOLDER_EVIDENCE = /^(?:tbd|todo|pending|n\/a|na)$/i;
+const PLACEHOLDER_EVIDENCE =
+  /^(?:tbd|todo|pending|n\/a|na|not\s+run|not\s+promoted)$/i;
 
 /** Returns true only for evidence references that are ready to be audited. */
 export function isUsableEvidenceReference(value: unknown): value is string {

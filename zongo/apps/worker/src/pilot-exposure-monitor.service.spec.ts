@@ -49,7 +49,10 @@ describe('PilotExposureMonitor', () => {
     await monitor.evaluate();
     expect(alertCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ actionName: 'pilot.exposure.warning' }),
+        data: expect.objectContaining({
+          actionName: 'pilot.exposure.warning',
+          severity: 'WARNING',
+        }),
       }),
     );
 

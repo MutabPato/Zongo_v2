@@ -137,6 +137,7 @@ export class PilotExposureMonitor {
         data: {
           auditEventId: auditId,
           actionName: `pilot.exposure.${severity.toLowerCase()}`,
+          severity,
           payload: {
             severity: severity.toLowerCase(),
             metric: metric.key,

@@ -18,6 +18,7 @@
     "verify:restore": "ts-node -r tsconfig-paths/register scripts/verify-restore.ts",
     "verify:key-lifecycle": "ts-node -r tsconfig-paths/register scripts/verify-key-lifecycle.ts",
     "verify:openbiometrics-evidence": "ts-node -r tsconfig-paths/register scripts/verify-openbiometrics-evidence.ts",
+    "verify:pretium-config": "ts-node -r tsconfig-paths/register scripts/verify-pretium-config.ts",
     "verify:reconciliation": "ts-node -r tsconfig-paths/register scripts/verify-reconciliation-evidence.ts",
     "verify:pilot-readiness": "ts-node -r tsconfig-paths/register scripts/verify-pilot-readiness.ts",
     "start:debug": "nest start --debug --watch",

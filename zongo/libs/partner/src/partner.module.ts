@@ -23,7 +23,9 @@ import { SecurityModule } from '@app/security';
     {
       provide: PRETIUM_CLIENT,
       useFactory: (): PretiumClient =>
-        process.env.PRETIUM_BASE_URL && process.env.PRETIUM_CONSUMER_KEY
+        process.env.PRETIUM_BASE_URL &&
+        process.env.PRETIUM_CONSUMER_KEY &&
+        process.env.PRETIUM_WEBHOOK_URL
           ? new PretiumHttpClient(
               process.env.PRETIUM_BASE_URL,
               process.env.PRETIUM_CONSUMER_KEY,

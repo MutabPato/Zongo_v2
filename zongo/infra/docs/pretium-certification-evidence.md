@@ -26,22 +26,34 @@ duplicate callbacks, out-of-order callbacks, and concurrent lifecycle updates.
 These tests are implementation evidence only and do not replace account-
 specific portal, live-rail, retry/rate-limit, or certification evidence.
 
+Before enabling the partner module in the pilot deployment, run the
+credential-redacting configuration check against the exact runtime:
+
+```sh
+pnpm verify:pretium-config
+```
+
+It requires HTTPS base and webhook URLs, runtime-only credentials, explicit
+CDF/KES rail flags, and an explicit production/no-sandbox assertion. A passing
+result proves configuration presence only; it does not prove that the webhook
+URL is registered in the Pretium portal or replace live certification.
+
 ## Controlled test log
 
 Every live test requires named operator, approved tiny amount, pre/post
 reconciliation, active kill-switch confirmation, customer/accounting treatment,
 and recovery result.
 
-| Test | Operator | Pre-reconciliation | Result | Post-reconciliation | Evidence |
-| --- | --- | --- | --- | --- | --- |
-| Duplicate request |  |  |  |  |  |
-| Duplicate callback |  |  |  |  |  |
-| Out-of-order callback |  |  |  |  |  |
-| Replay/authentication failure |  |  |  |  |  |
-| Timeout then status lookup |  |  |  |  |  |
-| Ambiguous result |  |  |  |  |  |
-| Terminal failure |  |  |  |  |  |
-| Manual recovery |  |  |  |  |  |
+| Test                          | Operator | Pre-reconciliation | Result | Post-reconciliation | Evidence |
+| ----------------------------- | -------- | ------------------ | ------ | ------------------- | -------- |
+| Duplicate request             |          |                    |        |                     |          |
+| Duplicate callback            |          |                    |        |                     |          |
+| Out-of-order callback         |          |                    |        |                     |          |
+| Replay/authentication failure |          |                    |        |                     |          |
+| Timeout then status lookup    |          |                    |        |                     |          |
+| Ambiguous result              |          |                    |        |                     |          |
+| Terminal failure              |          |                    |        |                     |          |
+| Manual recovery               |          |                    |        |                     |          |
 
 Promotion decision: `NOT CERTIFIED` until account-specific terms and every test
 are approved by Operations, Reconciliation, Compliance/Risk, and the accountable

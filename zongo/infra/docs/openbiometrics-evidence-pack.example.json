@@ -1,0 +1,43 @@
+{
+  "provenance": {
+    "sourceRepositoryCommit": "",
+    "dependencyLockfileHash": "",
+    "modelFilesAndChecksums": "",
+    "licenceReview": "",
+    "sbom": "",
+    "vulnerabilityScanAndExceptionOwner": "",
+    "deploymentImageDigest": "",
+    "supportOwnerAndEscalationPath": ""
+  },
+  "scenarios": [
+    {
+      "name": "DRC document types and quality variants",
+      "result": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "French/Swahili/English operator and customer text",
+      "result": "NOT_RUN",
+      "evidence": ""
+    },
+    { "name": "Low-light and glare", "result": "NOT_RUN", "evidence": "" },
+    {
+      "name": "Low bandwidth and interrupted upload",
+      "result": "NOT_RUN",
+      "evidence": ""
+    },
+    { "name": "Print attack", "result": "NOT_RUN", "evidence": "" },
+    { "name": "Screen replay", "result": "NOT_RUN", "evidence": "" },
+    { "name": "Mask/occlusion", "result": "NOT_RUN", "evidence": "" },
+    { "name": "Deepfake/replay attempt", "result": "NOT_RUN", "evidence": "" },
+    { "name": "Demographic coverage", "result": "NOT_RUN", "evidence": "" },
+    {
+      "name": "Recovery/retry and human escalation",
+      "result": "NOT_RUN",
+      "evidence": ""
+    }
+  ],
+  "contracts": {},
+  "decisions": {},
+  "promotionDecision": "NOT PROMOTED"
+}

@@ -3,6 +3,21 @@
 This is a controlled evidence template. It does not claim that OpenBiometrics
 has passed any gate until each result is attached and independently approved.
 
+The machine-checkable form is [`openbiometrics-evidence-pack.example.json`](./openbiometrics-evidence-pack.example.json).
+Copy it to a controlled evidence location, replace every placeholder with an
+operator-owned evidence reference, and run:
+
+```sh
+OPENBIOMETRICS_EVIDENCE_PACK=/secure/evidence/openbiometrics.json \
+  pnpm verify:openbiometrics-evidence
+```
+
+The verifier is read-only. It reports `INCOMPLETE` unless every provenance
+field, scenario result and evidence link, provider-neutral contract, named
+decision, and promotion decision is present. It does not execute biometric
+matching or liveness tests and does not manufacture a vendor, model, license,
+security, demographic, or certification result.
+
 ## Build and provenance
 
 - Source repository/commit:
@@ -19,18 +34,18 @@ has passed any gate until each result is attached and independently approved.
 Record input fixture ID, device/OS/browser, network profile, language, result,
 latency, retry count, reviewer, and evidence link for each row.
 
-| Scenario | Result | Evidence |
-| --- | --- | --- |
-| DRC document types and quality variants |  |  |
-| French/Swahili/English operator and customer text |  |  |
-| Low-light and glare |  |  |
-| Low bandwidth and interrupted upload |  |  |
-| Print attack |  |  |
-| Screen replay |  |  |
-| Mask/occlusion |  |  |
-| Deepfake/replay attempt |  |  |
-| Demographic coverage |  |  |
-| Recovery/retry and human escalation |  |  |
+| Scenario                                          | Result | Evidence |
+| ------------------------------------------------- | ------ | -------- |
+| DRC document types and quality variants           |        |          |
+| French/Swahili/English operator and customer text |        |          |
+| Low-light and glare                               |        |          |
+| Low bandwidth and interrupted upload              |        |          |
+| Print attack                                      |        |          |
+| Screen replay                                     |        |          |
+| Mask/occlusion                                    |        |          |
+| Deepfake/replay attempt                           |        |          |
+| Demographic coverage                              |        |          |
+| Recovery/retry and human escalation               |        |          |
 
 ## Contract evidence
 
@@ -45,7 +60,7 @@ Engineering:
 Operations:  
 Compliance/Risk:  
 Reconciliation:  
-Accountable pilot operator:  
+Accountable pilot operator:
 
 Promotion decision: `NOT PROMOTED` until every named decision and scenario gate
 is complete.

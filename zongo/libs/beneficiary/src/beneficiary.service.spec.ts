@@ -16,6 +16,7 @@ describe('BeneficiaryService', () => {
       ciphertext: value,
       authTag: 'tag',
     })),
+    blindIndex: jest.fn().mockResolvedValue('phone-blind-index'),
   } as any;
   const details = {
     userId: 'sender_1',
@@ -34,15 +35,25 @@ describe('BeneficiaryService', () => {
       ...details,
       isCurrent: true,
     };
+    const create = jest.fn().mockResolvedValue(created);
     const prisma = {
       beneficiary: {
-        create: jest.fn().mockResolvedValue(created),
+        create,
         findUniqueOrThrow: jest.fn().mockResolvedValue(created),
       },
     } as unknown as PrismaService;
     const service = new BeneficiaryService(prisma, audit, protection);
 
     await expect(service.create(details)).resolves.toEqual(created);
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          phoneNumber: null,
+          phoneNumberCiphertext: expect.any(String),
+          phoneNumberBlindIndex: 'phone-blind-index',
+        }),
+      }),
+    );
     await expect(
       service.selectForTransfer(created.id, details.userId, details.corridorId),
     ).resolves.toEqual(created);

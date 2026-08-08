@@ -1,4 +1,5 @@
 import {
+  buildBeneficiaryBackfillData,
   buildSenderProfileBackfillData,
   buildVerificationPhoneBackfillData,
 } from '../../../scripts/backfill-sensitive-blind-indexes';
@@ -50,6 +51,29 @@ describe('sensitive-data backfill mutations', () => {
     ).resolves.toEqual({
       verifiedPhoneNumber: null,
       verifiedPhoneNumberCiphertext: '{"ciphertext":"encrypted"}',
+    });
+  });
+
+  it('encrypts and indexes legacy beneficiary phone values', async () => {
+    const protection = {
+      encrypt: jest.fn().mockResolvedValue({ ciphertext: 'encrypted' }),
+      blindIndex: jest.fn().mockResolvedValue('phone-blind-index'),
+    };
+
+    await expect(
+      buildBeneficiaryBackfillData(
+        {
+          phoneNumber: '+254700000001',
+          phoneNumberCiphertext: null,
+          payoutAccount: null,
+          payoutAccountCiphertext: null,
+        },
+        protection as unknown as EnvelopeEncryptionService,
+      ),
+    ).resolves.toEqual({
+      phoneNumber: null,
+      phoneNumberCiphertext: '{"ciphertext":"encrypted"}',
+      phoneNumberBlindIndex: 'phone-blind-index',
     });
   });
 });

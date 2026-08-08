@@ -61,10 +61,10 @@ exact pilot deployment, not estimates inferred from this repository.
 
 ## Legacy sensitive-data migration
 
-Legacy sender contacts, beneficiary payout-account JSON, and provider
-references are migrated only through the explicitly gated command below. It
-encrypts recoverable values, creates keyed lookup indexes, and clears legacy
-plaintext columns where the encrypted replacement is written:
+Legacy sender contacts, beneficiary payout phone/account JSON, verification
+phones, and provider references are migrated only through the explicitly gated
+command below. It encrypts recoverable values, creates keyed lookup indexes,
+and clears legacy plaintext columns where the encrypted replacement is written:
 
 ```sh
 ALLOW_SENSITIVE_INDEX_BACKFILL=true pnpm backfill:sensitive-blind-indexes

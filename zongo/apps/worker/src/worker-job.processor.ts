@@ -368,6 +368,19 @@ export class WorkerJobProcessor {
           ),
         ) as Record<string, unknown>;
       }
+      let payoutPhoneNumber: string | undefined;
+      if (job.jobType === JobType.PAYOUT && beneficiary) {
+        if (beneficiary.phoneNumber) {
+          payoutPhoneNumber = beneficiary.phoneNumber;
+        } else if (beneficiary.phoneNumberCiphertext && this.protection) {
+          payoutPhoneNumber = await this.protection.decrypt(
+            JSON.parse(beneficiary.phoneNumberCiphertext as string),
+            'beneficiary-phone',
+          );
+        } else if (beneficiary.phoneNumberCiphertext) {
+          throw new Error('Beneficiary phone protection is unavailable');
+        }
+      }
       if (
         job.jobType === JobType.PAYOUT &&
         (transaction.payoutAmountMinor === null ||
@@ -386,9 +399,7 @@ export class WorkerJobProcessor {
             : transaction.payoutCurrency!,
         beneficiaryId,
         ...(senderPhoneNumber ? { senderPhoneNumber } : {}),
-        ...(beneficiary?.phoneNumber
-          ? { payoutPhoneNumber: beneficiary.phoneNumber }
-          : {}),
+        ...(payoutPhoneNumber ? { payoutPhoneNumber } : {}),
         ...(payoutAccount ? { payoutAccount } : {}),
         mobileNetwork: process.env.PRETIUM_MOBILE_NETWORK,
       };

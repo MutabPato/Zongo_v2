@@ -25,6 +25,10 @@ export class BeneficiaryService {
   ) {}
 
   async create(details: BeneficiaryDetails) {
+    const phoneNumberCiphertext = await this.protection.encrypt(
+      details.phoneNumber,
+      'beneficiary-phone',
+    );
     const payoutAccount = details.payoutAccount
       ? await this.protection.encrypt(
           JSON.stringify(details.payoutAccount),
@@ -34,6 +38,12 @@ export class BeneficiaryService {
     const beneficiary = await this.prisma.beneficiary.create({
       data: {
         ...details,
+        phoneNumber: null,
+        phoneNumberCiphertext: JSON.stringify(phoneNumberCiphertext),
+        phoneNumberBlindIndex: await this.protection.blindIndex(
+          details.phoneNumber,
+          'beneficiary-phone',
+        ),
         payoutAccount: undefined,
         payoutAccountCiphertext: payoutAccount
           ? JSON.stringify(payoutAccount)
@@ -60,6 +70,10 @@ export class BeneficiaryService {
         'Only the current beneficiary revision can be changed',
       );
 
+    const phoneNumberCiphertext = await this.protection.encrypt(
+      changes.phoneNumber,
+      'beneficiary-phone',
+    );
     const payoutAccount = changes.payoutAccount
       ? await this.protection.encrypt(
           JSON.stringify(changes.payoutAccount),
@@ -73,7 +87,12 @@ export class BeneficiaryService {
         displayName: changes.displayName,
         payoutCountryCode: changes.payoutCountryCode,
         payoutCurrency: changes.payoutCurrency,
-        phoneNumber: changes.phoneNumber,
+        phoneNumber: null,
+        phoneNumberCiphertext: JSON.stringify(phoneNumberCiphertext),
+        phoneNumberBlindIndex: await this.protection.blindIndex(
+          changes.phoneNumber,
+          'beneficiary-phone',
+        ),
         payoutAccount: undefined,
         payoutAccountCiphertext: payoutAccount
           ? JSON.stringify(payoutAccount)
@@ -95,10 +114,13 @@ export class BeneficiaryService {
   }
 
   async listSaved(userId: string, corridorId: string) {
-    return this.prisma.beneficiary.findMany({
+    const beneficiaries = await this.prisma.beneficiary.findMany({
       where: { userId, corridorId, isCurrent: true },
       orderBy: { createdAt: 'desc' },
     });
+    return Promise.all(
+      beneficiaries.map((beneficiary) => this.revealPhone(beneficiary)),
+    );
   }
 
   async selectForTransfer(
@@ -119,7 +141,7 @@ export class BeneficiaryService {
         'The beneficiary cannot be selected for this transfer',
       );
     }
-    return beneficiary;
+    return this.revealPhone(beneficiary);
   }
 
   /** Links only a corrected target; the failed transfer's original beneficiaryId is untouched. */
@@ -153,7 +175,10 @@ export class BeneficiaryService {
     corridorId?: string;
     userId?: string;
   }) {
-    return this.prisma.beneficiary.findMany({
+    const phoneBlindIndex = query.search
+      ? await this.protection.blindIndex(query.search, 'beneficiary-phone')
+      : undefined;
+    const beneficiaries = await this.prisma.beneficiary.findMany({
       where: {
         corridorId: query.corridorId,
         userId: query.userId,
@@ -161,6 +186,9 @@ export class BeneficiaryService {
           ? [
               { displayName: { contains: query.search, mode: 'insensitive' } },
               { phoneNumber: { contains: query.search } },
+              ...(phoneBlindIndex
+                ? [{ phoneNumberBlindIndex: phoneBlindIndex }]
+                : []),
             ]
           : undefined,
       },
@@ -174,6 +202,31 @@ export class BeneficiaryService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    return Promise.all(
+      beneficiaries.map((beneficiary) => this.revealPhone(beneficiary)),
+    );
+  }
+
+  private async revealPhone<
+    T extends {
+      phoneNumber: string | null;
+      phoneNumberCiphertext: unknown;
+    },
+  >(beneficiary: T): Promise<T & { phoneNumber: string }> {
+    const phoneNumber =
+      beneficiary.phoneNumber ??
+      (beneficiary.phoneNumberCiphertext
+        ? await this.protection.decrypt(
+            JSON.parse(beneficiary.phoneNumberCiphertext as string),
+            'beneficiary-phone',
+          )
+        : null);
+    if (!phoneNumber)
+      throw new DomainError(
+        'BENEFICIARY_PHONE_REQUIRED',
+        'The beneficiary phone number is unavailable',
+      );
+    return { ...beneficiary, phoneNumber };
   }
 
   private async appendAudit(

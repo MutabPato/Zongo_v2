@@ -3,6 +3,7 @@ import { JobStatus, JobType, TransactionStatus } from '@prisma/client';
 import type { AuditLogPort, PartnerPort } from '@app/domain';
 import type { PrismaService } from '@app/db';
 import type { LedgerService } from '@app/ledger';
+import type { EnvelopeEncryptionService } from '@app/security';
 import { WorkerJobProcessor } from './worker-job.processor';
 
 describe('WorkerJobProcessor', () => {
@@ -575,6 +576,64 @@ describe('WorkerJobProcessor', () => {
       'payout',
     );
     expect(ledger.persistReconciliation).toHaveBeenCalledWith(transaction.id);
+  });
+
+  it('decrypts the beneficiary phone before invoking a payout partner', async () => {
+    const payout = jest
+      .fn()
+      .mockResolvedValue({ success: true, partnerReference: 'partner_phone' });
+    const prisma = {
+      workerJob: {
+        upsert: jest.fn().mockResolvedValue({ id: 'job_phone' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        update: jest.fn().mockReturnValue({}),
+      },
+      pilotControl: enabledPilotControls(),
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ...transaction,
+          status: TransactionStatus.PENDING_PAYOUT,
+          payoutAmountMinor: 12_900n,
+          payoutCurrency: 'KES',
+          beneficiary: {
+            id: 'ben_1',
+            phoneNumber: null,
+            phoneNumberCiphertext: '{"ciphertext":"phone"}',
+          },
+        }),
+        findUnique: jest.fn().mockResolvedValue({
+          ...transaction,
+          status: TransactionStatus.PENDING_PAYOUT,
+        }),
+        update: jest.fn().mockReturnValue({}),
+      },
+      $transaction: jest.fn().mockResolvedValue([]),
+    } as unknown as PrismaService;
+    const decrypt = jest.fn().mockResolvedValue('+254700000001');
+    const blindIndex = jest.fn().mockResolvedValue('partner-blind-index');
+    const protection = {
+      decrypt,
+      blindIndex,
+    } as unknown as EnvelopeEncryptionService;
+    const processor = new WorkerJobProcessor(
+      prisma,
+      { collect: jest.fn(), payout, status: jest.fn() },
+      { append: jest.fn().mockResolvedValue(undefined) },
+      noopLedger,
+      undefined,
+      protection,
+    );
+
+    await expect(
+      processor.process({ ...job, jobType: 'PAYOUT' }),
+    ).resolves.toEqual({ skipped: false, status: 'SUCCEEDED' });
+    expect(payout).toHaveBeenCalledWith(
+      expect.objectContaining({ payoutPhoneNumber: '+254700000001' }),
+    );
+    expect(decrypt).toHaveBeenCalledWith(
+      { ciphertext: 'phone' },
+      'beneficiary-phone',
+    );
   });
 
   it('does not execute payout before the transfer enters pending payout', async () => {

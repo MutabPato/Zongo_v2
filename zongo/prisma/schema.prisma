@@ -207,7 +207,10 @@ model Beneficiary {
   displayName String
   payoutCountryCode String
   payoutCurrency CurrencyCode
-  phoneNumber String
+  /// Legacy compatibility field; new writes use phoneNumberCiphertext.
+  phoneNumber String?
+  phoneNumberCiphertext Json?
+  phoneNumberBlindIndex String?
   payoutAccount Json?
   payoutAccountCiphertext Json?
   version Int @default(1)
@@ -224,6 +227,7 @@ model Beneficiary {
 
   @@index([userId, corridorId])
   @@index([corridorId, phoneNumber])
+  @@index([corridorId, phoneNumberBlindIndex])
   @@index([userId, corridorId, isCurrent])
   @@unique([familyId, version])
 }

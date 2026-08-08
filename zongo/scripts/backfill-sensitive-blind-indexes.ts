@@ -71,6 +71,40 @@ export async function buildVerificationPhoneBackfillData(
   };
 }
 
+export type SensitiveBeneficiaryBackfillRow = {
+  phoneNumber: string | null;
+  phoneNumberCiphertext: Prisma.JsonValue;
+  payoutAccount: Prisma.JsonValue;
+  payoutAccountCiphertext: Prisma.JsonValue;
+};
+
+export async function buildBeneficiaryBackfillData(
+  row: SensitiveBeneficiaryBackfillRow,
+  protection: EnvelopeEncryptionService,
+): Promise<Prisma.BeneficiaryUpdateInput> {
+  const data: Prisma.BeneficiaryUpdateInput = {};
+  if (row.phoneNumber && !row.phoneNumberCiphertext) {
+    data.phoneNumber = null;
+    data.phoneNumberCiphertext = JSON.stringify(
+      await protection.encrypt(row.phoneNumber, 'beneficiary-phone'),
+    );
+    data.phoneNumberBlindIndex = await protection.blindIndex(
+      row.phoneNumber,
+      'beneficiary-phone',
+    );
+  }
+  if (row.payoutAccount !== null && !row.payoutAccountCiphertext) {
+    data.payoutAccountCiphertext = JSON.stringify(
+      await protection.encrypt(
+        JSON.stringify(row.payoutAccount),
+        'beneficiary-payout-account',
+      ),
+    );
+    data.payoutAccount = Prisma.JsonNull;
+  }
+  return data;
+}
+
 async function main(): Promise<void> {
   if (process.env.ALLOW_SENSITIVE_INDEX_BACKFILL !== 'true') {
     throw new Error(
@@ -127,26 +161,33 @@ async function main(): Promise<void> {
     while (true) {
       const rows = await prisma.beneficiary.findMany({
         where: {
-          payoutAccount: { not: Prisma.JsonNull },
-          payoutAccountCiphertext: { equals: Prisma.DbNull },
+          OR: [
+            {
+              payoutAccount: { not: Prisma.JsonNull },
+              payoutAccountCiphertext: { equals: Prisma.DbNull },
+            },
+            {
+              phoneNumber: { not: null },
+              phoneNumberCiphertext: { equals: Prisma.DbNull },
+            },
+          ],
         },
-        select: { id: true, payoutAccount: true },
+        select: {
+          id: true,
+          phoneNumber: true,
+          phoneNumberCiphertext: true,
+          payoutAccount: true,
+          payoutAccountCiphertext: true,
+        },
         take: BATCH_SIZE,
       });
       if (rows.length === 0) break;
       for (const row of rows) {
-        if (!row.payoutAccount) continue;
+        const data = await buildBeneficiaryBackfillData(row, protection);
+        if (Object.keys(data).length === 0) continue;
         await prisma.beneficiary.update({
           where: { id: row.id },
-          data: {
-            payoutAccountCiphertext: JSON.stringify(
-              await protection.encrypt(
-                JSON.stringify(row.payoutAccount),
-                'beneficiary-payout-account',
-              ),
-            ),
-            payoutAccount: Prisma.JsonNull,
-          },
+          data,
         });
         beneficiaries += 1;
       }

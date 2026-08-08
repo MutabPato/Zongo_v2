@@ -293,11 +293,15 @@ export class AdminService {
     const q = query.q?.trim();
     const phoneBlindIndex =
       q && this.protection
-        ? await this.protection.blindIndex(q, 'sender-phone')
+        ? await this.protection.blindIndex(q, 'beneficiary-phone')
         : undefined;
     const emailBlindIndex =
       q && this.protection
         ? await this.protection.blindIndex(q, 'sender-email')
+        : undefined;
+    const beneficiaryPhoneBlindIndex =
+      q && this.protection
+        ? await this.protection.blindIndex(q, 'sender-phone')
         : undefined;
     const profiles = q
       ? await this.prisma.senderProfile.findMany({
@@ -333,6 +337,13 @@ export class AdminService {
                     OR: [
                       { displayName: { contains: q, mode: 'insensitive' } },
                       { phoneNumber: { contains: q } },
+                      ...(beneficiaryPhoneBlindIndex
+                        ? [
+                            {
+                              phoneNumberBlindIndex: beneficiaryPhoneBlindIndex,
+                            },
+                          ]
+                        : []),
                     ],
                   },
                 },

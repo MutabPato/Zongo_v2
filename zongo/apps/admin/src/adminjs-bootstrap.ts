@@ -376,7 +376,15 @@ export async function mountAdminJs(app: INestApplication): Promise<void> {
                 senderPhoneBlindIndex: { isVisible: false },
                 backupPhoneCiphertext: { isVisible: false },
               }
-            : undefined,
+            : model === 'Beneficiary'
+              ? {
+                  phoneNumber: { isVisible: false },
+                  phoneNumberCiphertext: { isVisible: false },
+                  phoneNumberBlindIndex: { isVisible: false },
+                  payoutAccount: { isVisible: false },
+                  payoutAccountCiphertext: { isVisible: false },
+                }
+              : undefined,
         actions:
           model === 'TierLimitPolicy'
             ? tierPolicyActions

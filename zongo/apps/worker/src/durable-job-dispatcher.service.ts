@@ -1,7 +1,13 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Optional,
+} from '@nestjs/common';
 import { JobStatus, JobType, Prisma } from '@prisma/client';
 import { PrismaService } from '@app/db';
 import { WorkerJobProcessor } from './worker-job.processor';
+import { PilotExposureMonitor } from './pilot-exposure-monitor.service';
 
 /** Polls the database-backed queue; claims in WorkerJobProcessor prevent races. */
 @Injectable()
@@ -12,6 +18,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly processor: WorkerJobProcessor,
+    @Optional() private readonly monitor?: PilotExposureMonitor,
   ) {}
 
   onModuleInit(): void {
@@ -28,6 +35,7 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
     if (this.running) return;
     this.running = true;
     try {
+      await this.monitor?.evaluate();
       const jobs = await this.prisma.workerJob.findMany({
         where: {
           jobType: {

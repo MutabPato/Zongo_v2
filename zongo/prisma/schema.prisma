@@ -545,6 +545,17 @@ model PilotExposurePolicy {
   updatedAt DateTime @updatedAt
 }
 
+model PilotExposureSignal {
+  id String @id @default(cuid())
+  key String @unique
+  severity String
+  observedValue BigInt
+  threshold BigInt
+  lastEmittedAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 /// Provider-neutral verification cases are immutable evidence; only an approved human review may promote the profile.
 model SenderVerification {
   id String @id @default(cuid())

@@ -5,6 +5,7 @@ import type { PrismaService } from '@app/db';
 import {
   WhatsAppSessionService,
   WhatsAppWebhookSignatureService,
+  MetaWhatsAppNotifier,
 } from './whatsapp.service';
 
 describe('WhatsAppWebhookSignatureService', () => {
@@ -27,14 +28,14 @@ describe('WhatsAppSessionService', () => {
     append: jest.fn().mockResolvedValue(undefined),
   } as unknown as AuditLogPort;
   const protection = {
-    encrypt: jest.fn(async (value: string) => ({
+    encrypt: jest.fn((value: string) => ({
       algorithm: 'aes-256-gcm' as const,
       keyVersion: 'v1',
       iv: 'iv',
       ciphertext: value,
       authTag: 'tag',
     })),
-    blindIndex: jest.fn(async (value: string) => `blind:${value}`),
+    blindIndex: jest.fn((value: string) => `blind:${value}`),
   } as any;
 
   it('deduplicates inbound events and blocks a second active chat session', async () => {
@@ -218,6 +219,30 @@ describe('WhatsAppSessionService', () => {
     expect(tx.workerJob.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ jobType: 'NOTIFICATION' }),
+      }),
+    );
+  });
+});
+
+describe('MetaWhatsAppNotifier', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('posts an approved-template notification through the configured sender', async () => {
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200 }));
+    await new MetaWhatsAppNotifier('phone-number-id', 'access-token').send({
+      recipientPhoneNumber: '+243800000001',
+      template: 'transfer.resolved',
+      payload: { reference: 'ZNG-1', status: 'PAYOUT_SUCCESS' },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/phone-number-id/messages'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: 'Bearer access-token',
+        }),
+        body: expect.stringContaining('transfer_resolved'),
       }),
     );
   });

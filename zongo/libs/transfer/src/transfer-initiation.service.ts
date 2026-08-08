@@ -246,6 +246,49 @@ export class TransferInitiationService {
             'The pilot global daily exposure limit has been reached',
           );
       }
+      if (
+        exposure?.maxAmbiguousTransfers !== null &&
+        exposure?.maxAmbiguousTransfers !== undefined
+      ) {
+        const ambiguous = await tx.whatsAppSession.count({
+          where: { status: 'WAITING' },
+        });
+        if (ambiguous >= exposure.maxAmbiguousTransfers)
+          throw new DomainError(
+            'AMBIGUOUS_EXPOSURE_LIMIT_EXCEEDED',
+            'The pilot ambiguous-transfer exposure limit has been reached',
+          );
+      }
+      if (
+        exposure?.maxRecoveryCapacity !== null &&
+        exposure?.maxRecoveryCapacity !== undefined
+      ) {
+        const recovery = await tx.transferTransaction.count({
+          where: { status: 'PAYOUT_FAILED' },
+        });
+        if (recovery >= exposure.maxRecoveryCapacity)
+          throw new DomainError(
+            'RECOVERY_CAPACITY_EXCEEDED',
+            'The pilot recovery capacity has been reached',
+          );
+      }
+      if (
+        exposure?.maxPartnerSettlementMinor !== null &&
+        exposure?.maxPartnerSettlementMinor !== undefined
+      ) {
+        const settlement = await tx.transferTransaction.aggregate({
+          where: { status: 'PENDING_PAYOUT' },
+          _sum: { payoutAmountMinor: true },
+        });
+        if (
+          (settlement._sum.payoutAmountMinor ?? 0n) + input.payoutAmountMinor >
+          exposure.maxPartnerSettlementMinor
+        )
+          throw new DomainError(
+            'PARTNER_SETTLEMENT_EXPOSURE_LIMIT_EXCEEDED',
+            'The pilot partner-settlement exposure limit has been reached',
+          );
+      }
 
       const reference = this.references.generate();
       const transaction = await tx.transferTransaction.create({

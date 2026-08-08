@@ -138,6 +138,12 @@ export class WorkerJobProcessor {
         job.jobType === JobType.COLLECTION ||
         job.jobType === JobType.PAYOUT
       ) {
+        const manualPayout =
+          job.jobType === JobType.PAYOUT &&
+          typeof job.payload === 'object' &&
+          job.payload !== null &&
+          !Array.isArray(job.payload) &&
+          (job.payload as Record<string, unknown>).manual === true;
         const controlKeys: PilotControlKey[] = [
           PilotControlKey.GLOBAL,
           job.jobType === JobType.COLLECTION
@@ -149,7 +155,10 @@ export class WorkerJobProcessor {
             where: { key: { in: controlKeys } },
             select: { key: true, state: true },
           })) ?? [];
-        if (controls.some((control) => control.state !== 'ENABLED')) {
+        if (
+          !manualPayout &&
+          controls.some((control) => control.state !== 'ENABLED')
+        ) {
           const reason =
             'Pilot money movement is paused by operational control';
           await this.prisma.workerJob.update({

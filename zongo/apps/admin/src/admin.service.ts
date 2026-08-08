@@ -553,13 +553,10 @@ export class AdminService {
     const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
     const pilotOperatorId = process.env.PILOT_OPERATOR_ID;
     const isPilotOperator = pilotOperatorId === actor.id;
-    if (
-      state === PilotControlState.PERMANENTLY_STOPPED ||
-      state === PilotControlState.ENABLED
-    ) {
+    if (state === PilotControlState.PERMANENTLY_STOPPED) {
       if (!isPilotOperator)
         throw new ForbiddenException(
-          'Only the accountable pilot operator may start or permanently stop the pilot',
+          'Only the accountable pilot operator may permanently stop the pilot',
         );
     } else if (!isPilotOperator && actor.role !== AdminRole.OPS) {
       throw new ForbiddenException('Only Ops may pause the pilot');

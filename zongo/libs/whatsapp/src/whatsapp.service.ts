@@ -20,6 +20,56 @@ export const unavailableWhatsAppNotifier: WhatsAppNotificationPort = {
   send: () => Promise.reject(new Error('WhatsApp notifier is not configured')),
 };
 
+export class MetaWhatsAppNotifier implements WhatsAppNotificationPort {
+  constructor(
+    private readonly phoneNumberId: string,
+    private readonly accessToken: string,
+    private readonly graphVersion = process.env.META_GRAPH_VERSION ?? 'v20.0',
+  ) {}
+
+  async send(input: {
+    recipientPhoneNumber: string;
+    template: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    const parameters = Object.values(input.payload).map((value) => ({
+      type: 'text',
+      text: String(value),
+    }));
+    const response = await fetch(
+      `https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${this.accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: input.recipientPhoneNumber,
+          type: 'template',
+          template: {
+            name: input.template.replace(/[^a-zA-Z0-9_]/g, '_'),
+            language: {
+              code: process.env.META_WHATSAPP_TEMPLATE_LANGUAGE ?? 'en',
+            },
+            components: parameters.length
+              ? [{ type: 'body', parameters }]
+              : undefined,
+          },
+        }),
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(
+        `WhatsApp notification failed (${response.status}): ${detail.slice(0, 200)}`,
+      );
+    }
+  }
+}
+
 export type WhatsAppInboundInput = {
   externalEventId: string;
   chatId: string;

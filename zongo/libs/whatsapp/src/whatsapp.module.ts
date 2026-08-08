@@ -5,6 +5,7 @@ import { SecurityModule } from '@app/security';
 import {
   WhatsAppSessionService,
   WhatsAppWebhookSignatureService,
+  MetaWhatsAppNotifier,
   WHATSAPP_NOTIFIER,
   unavailableWhatsAppNotifier,
 } from './whatsapp.service';
@@ -14,7 +15,17 @@ import {
   providers: [
     WhatsAppSessionService,
     WhatsAppWebhookSignatureService,
-    { provide: WHATSAPP_NOTIFIER, useValue: unavailableWhatsAppNotifier },
+    {
+      provide: WHATSAPP_NOTIFIER,
+      useFactory: () =>
+        process.env.META_WHATSAPP_PHONE_NUMBER_ID &&
+        process.env.META_WHATSAPP_ACCESS_TOKEN
+          ? new MetaWhatsAppNotifier(
+              process.env.META_WHATSAPP_PHONE_NUMBER_ID,
+              process.env.META_WHATSAPP_ACCESS_TOKEN,
+            )
+          : unavailableWhatsAppNotifier,
+    },
   ],
   exports: [
     WhatsAppSessionService,

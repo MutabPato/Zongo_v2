@@ -7,6 +7,7 @@ import { LedgerModule } from '@app/ledger';
 import { SecurityModule } from '@app/security';
 import { WhatsAppModule } from '@app/whatsapp';
 import { WorkerJobProcessor } from './worker-job.processor';
+import { PilotExposureMonitor } from './pilot-exposure-monitor.service';
 
 /**
  * Provides durable job processing without exposing the worker's HTTP
@@ -23,7 +24,7 @@ import { WorkerJobProcessor } from './worker-job.processor';
     SecurityModule,
     WhatsAppModule,
   ],
-  providers: [WorkerJobProcessor],
-  exports: [WorkerJobProcessor],
+  providers: [WorkerJobProcessor, PilotExposureMonitor],
+  exports: [WorkerJobProcessor, PilotExposureMonitor],
 })
 export class WorkerJobsModule {}

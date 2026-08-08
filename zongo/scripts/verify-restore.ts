@@ -104,7 +104,11 @@ async function main(): Promise<void> {
         },
       }),
       prisma.beneficiary.findFirst({
-        select: { payoutAccountCiphertext: true },
+        select: {
+          phoneNumberCiphertext: true,
+          phoneNumberBlindIndex: true,
+          payoutAccountCiphertext: true,
+        },
       }),
       prisma.senderVerification.findFirst({
         select: { evidenceCiphertext: true },
@@ -138,6 +142,13 @@ async function main(): Promise<void> {
         name: 'beneficiary-payout-ciphertext-decrypts',
         purpose: 'beneficiary-payout-account',
         ciphertext: beneficiary?.payoutAccountCiphertext,
+      },
+      {
+        name: 'beneficiary-phone-ciphertext-decrypts',
+        purpose: 'beneficiary-phone',
+        ciphertext: beneficiary?.phoneNumberCiphertext,
+        blindIndex: beneficiary?.phoneNumberBlindIndex,
+        verifyBlindIndex: Boolean(beneficiary?.phoneNumberCiphertext),
       },
       {
         name: 'kyc-evidence-ciphertext-decrypts',

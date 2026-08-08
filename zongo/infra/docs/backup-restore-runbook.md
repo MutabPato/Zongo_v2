@@ -52,8 +52,8 @@ ALLOW_RESTORE_VERIFICATION=true \
   pnpm verify:restore
 ```
 
-It samples sender, beneficiary payout, KYC, session, inbound-event, and
-notification ciphertext domains when present, checks keyed-index consistency,
+It samples sender, beneficiary phone and payout, KYC, session, inbound-event,
+and notification ciphertext domains when present, checks keyed-index consistency,
 and reports durable inputs available for Redis reconstruction. The Redis
 reference must point to an actual restore exercise; setting it does not itself
 perform the rebuild. The RPO/RTO values must be the approved targets for the

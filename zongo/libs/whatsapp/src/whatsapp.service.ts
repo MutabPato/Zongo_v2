@@ -62,10 +62,7 @@ export class MetaWhatsAppNotifier implements WhatsAppNotificationPort {
       },
     );
     if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error(
-        `WhatsApp notification failed (${response.status}): ${detail.slice(0, 200)}`,
-      );
+      throw new Error(`WhatsApp notification failed (${response.status})`);
     }
   }
 }

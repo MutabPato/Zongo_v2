@@ -324,4 +324,27 @@ describe('MetaWhatsAppNotifier', () => {
       }),
     );
   });
+
+  it('does not include the raw Meta response in notification errors', async () => {
+    const response = new Response(
+      '{"access_token":"secret","recipient":"+243800000001"}',
+      { status: 400 },
+    );
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+
+    await expect(
+      new MetaWhatsAppNotifier('phone-number-id', 'access-token').send({
+        recipientPhoneNumber: '+243800000001',
+        template: 'transfer.resolved',
+        payload: {},
+      }),
+    ).rejects.toThrow('WhatsApp notification failed (400)');
+    await expect(
+      new MetaWhatsAppNotifier('phone-number-id', 'access-token').send({
+        recipientPhoneNumber: '+243800000001',
+        template: 'transfer.resolved',
+        payload: {},
+      }),
+    ).rejects.not.toThrow('secret');
+  });
 });

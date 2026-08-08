@@ -58,6 +58,7 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
         { key: 'GLOBAL', state: 'ENABLED' },
         { key: 'CORRIDOR_PROVIDER', state: 'ENABLED' },
         { key: 'COLLECTION', state: 'ENABLED' },
+        { key: 'PAYOUT', state: 'ENABLED' },
       ],
       skipDuplicates: true,
     });
@@ -83,6 +84,8 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
         beneficiaryId,
         sendAmountMinor: 100n,
         sendCurrency: 'USD',
+        payoutAmountMinor: 12_900n,
+        payoutCurrency: 'KES',
         idempotencyKey: `idem-${suffix}`,
       },
     });
@@ -90,7 +93,9 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
       collect: jest
         .fn()
         .mockResolvedValue({ success: true, partnerReference: 'pt-db-1' }),
-      payout: jest.fn(),
+      payout: jest
+        .fn()
+        .mockResolvedValue({ success: true, partnerReference: 'pt-db-2' }),
       status: jest.fn(),
     };
     const ledger = new LedgerService(prisma, audit, {
@@ -121,14 +126,39 @@ describeDatabase('platform foundation (PostgreSQL)', () => {
     ).resolves.toEqual(
       expect.objectContaining({ status: 'COLLECTION_SUCCESS' }),
     );
-    await expect(
-      prisma.workerJob.findUnique({
-        where: { dedupKey: `${reference}:PAYOUT` },
-      }),
-    ).resolves.toEqual(
+    const payoutJob = await prisma.workerJob.findUniqueOrThrow({
+      where: { dedupKey: `${reference}:PAYOUT` },
+    });
+    expect(payoutJob).toEqual(
       expect.objectContaining({
         jobType: 'PAYOUT',
         transactionReference: reference,
+      }),
+    );
+    await expect(
+      processor.process({
+        transactionReference: reference,
+        jobType: 'PAYOUT',
+        payload: { reason: 'COLLECTION_SUCCESS' },
+        persistedJobId: payoutJob.id,
+      }),
+    ).resolves.toEqual({ skipped: false, status: 'SUCCEEDED' });
+    expect(partner.payout).toHaveBeenCalledTimes(1);
+    await expect(
+      prisma.transferTransaction.findUniqueOrThrow({
+        where: { id: transaction.id },
+        include: { ledgerEntries: true, reconciliation: true },
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        status: 'PAYOUT_SUCCESS',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        ledgerEntries: expect.arrayContaining([
+          expect.objectContaining({ eventName: 'collection' }),
+          expect.objectContaining({ eventName: 'payout' }),
+        ]),
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        reconciliation: expect.objectContaining({ status: 'CONSISTENT' }),
       }),
     );
 

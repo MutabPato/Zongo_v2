@@ -1,5 +1,6 @@
 export const DEFAULT_KEY_PURPOSES = [
   'sender-phone',
+  'sender-email',
   'beneficiary-phone',
   'beneficiary-payout-account',
   'provider-reference',

@@ -15,6 +15,17 @@ in this file.
 - Status/retry/rate-limit contract:
 - Support/escalation/retention terms:
 
+## Repository boundary evidence
+
+The repository tests cover the non-production adapter boundary in
+`apps/api/src/pretium-webhook.controller.spec.ts`,
+`libs/partner/src/lib/pretium-adapter.spec.ts`, and
+`libs/partner/src/lib/pretium-webhook.service.spec.ts`: raw-body and signature
+failure, normalized callback identity, CDF/KES request mapping, status lookup,
+duplicate callbacks, out-of-order callbacks, and concurrent lifecycle updates.
+These tests are implementation evidence only and do not replace account-
+specific portal, live-rail, retry/rate-limit, or certification evidence.
+
 ## Controlled test log
 
 Every live test requires named operator, approved tiny amount, pre/post

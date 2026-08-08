@@ -335,7 +335,8 @@ export class SenderProfileService {
       const updatedProfile = await tx.senderProfile.update({
         where: { id: verification.senderProfile.id },
         data: {
-          senderPhoneNumber: undefined,
+          senderPhoneNumber: null,
+          whatsappPhoneNumber: null,
           senderPhoneCiphertext: JSON.stringify(encryptedPhone),
           senderPhoneBlindIndex: await this.protection.blindIndex(
             verification.verifiedPhoneNumber,

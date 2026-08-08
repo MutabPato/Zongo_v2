@@ -148,6 +148,14 @@ describe('SenderProfileService', () => {
     expect(result.profile.tier).toBe(KycTier.TIER_1);
     expect(result.replacedPhone).toBe(true);
     expect(tx.senderPhoneReplacement.create).toHaveBeenCalled();
+    expect(tx.senderProfile.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          senderPhoneNumber: null,
+          whatsappPhoneNumber: null,
+        }),
+      }),
+    );
     expect(tx.auditEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

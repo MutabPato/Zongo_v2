@@ -26,3 +26,17 @@ by this repository.
 
 Never restore production data into a developer environment without approved
 access controls and a documented deletion/legal-hold decision.
+
+## Key lifecycle evidence
+
+Run the read-only configuration check against the exact deployment environment:
+
+```sh
+ALLOW_KEY_LIFECYCLE_VERIFICATION=true pnpm verify:key-lifecycle
+```
+
+The check verifies that each configured purpose has a current non-retired
+version, retained versions required for decryption, a blind-index key, and
+distinct key material. It never prints key values. The result is configuration
+evidence only; managed secret-manager separation, rotation execution,
+compromise response, and access-audit approval remain required release evidence.

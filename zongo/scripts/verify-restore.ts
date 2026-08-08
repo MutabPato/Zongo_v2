@@ -1,67 +1,12 @@
 import { PrismaService } from '@app/db';
+import { Prisma } from '@prisma/client';
 import {
   EnvironmentKeyProvider,
   EnvelopeEncryptionService,
-  type EncryptedValue,
+  verifySensitiveSample,
+  type RestoreCheck,
+  type SensitiveSample,
 } from '@app/security';
-
-type RestoreCheck = {
-  name: string;
-  status: 'PASS' | 'SKIPPED' | 'FAIL';
-  details: Record<string, number | string | boolean>;
-};
-
-type SensitiveSample = {
-  name: string;
-  purpose: string;
-  ciphertext: unknown;
-  blindIndex?: string | null;
-  verifyBlindIndex?: boolean;
-};
-
-async function verifySensitiveSample(
-  protection: EnvelopeEncryptionService,
-  sample: SensitiveSample,
-): Promise<RestoreCheck> {
-  if (!sample.ciphertext)
-    return {
-      name: sample.name,
-      status: 'SKIPPED',
-      details: { reason: 'No encrypted sample exists' },
-    };
-  try {
-    const serialized =
-      typeof sample.ciphertext === 'string'
-        ? (JSON.parse(sample.ciphertext) as unknown)
-        : sample.ciphertext;
-    const plaintext = await protection.decrypt(
-      serialized as EncryptedValue,
-      sample.purpose,
-    );
-    let blindIndexMatches = true;
-    if (sample.verifyBlindIndex) {
-      const derivedIndex = await protection.blindIndex(
-        plaintext,
-        sample.purpose,
-      );
-      blindIndexMatches = sample.blindIndex === derivedIndex;
-    }
-    return {
-      name: sample.name,
-      status: blindIndexMatches ? 'PASS' : 'FAIL',
-      details: {
-        decrypted: true,
-        ...(sample.verifyBlindIndex ? { blindIndexMatches } : {}),
-      },
-    };
-  } catch {
-    return {
-      name: sample.name,
-      status: 'FAIL',
-      details: { decrypted: false },
-    };
-  }
-}
 
 async function main(): Promise<void> {
   if (process.env.ALLOW_RESTORE_VERIFICATION !== 'true') {
@@ -87,6 +32,7 @@ async function main(): Promise<void> {
       controls,
       sender,
       beneficiary,
+      beneficiaryPayout,
       verification,
       session,
       inboundEvent,
@@ -97,29 +43,39 @@ async function main(): Promise<void> {
       prisma.workerJob.count(),
       prisma.pilotControl.count(),
       prisma.senderProfile.findFirst({
+        where: { senderPhoneCiphertext: { not: null } },
         select: {
-          emailCiphertext: true,
           senderPhoneCiphertext: true,
           senderPhoneBlindIndex: true,
         },
       }),
       prisma.beneficiary.findFirst({
+        where: { phoneNumberCiphertext: { not: Prisma.JsonNull } },
         select: {
           phoneNumberCiphertext: true,
           phoneNumberBlindIndex: true,
+        },
+      }),
+      prisma.beneficiary.findFirst({
+        where: { payoutAccountCiphertext: { not: Prisma.JsonNull } },
+        select: {
           payoutAccountCiphertext: true,
         },
       }),
       prisma.senderVerification.findFirst({
+        where: { evidenceCiphertext: { not: Prisma.JsonNull } },
         select: { evidenceCiphertext: true },
       }),
       prisma.whatsAppSession.findFirst({
+        where: { senderPhoneCiphertext: { not: null } },
         select: { senderPhoneCiphertext: true },
       }),
       prisma.whatsAppInboundEvent.findFirst({
+        where: { senderPhoneCiphertext: { not: null } },
         select: { senderPhoneCiphertext: true },
       }),
       prisma.notificationIntent.findFirst({
+        where: { recipientPhoneCiphertext: { not: null } },
         select: { recipientPhoneCiphertext: true },
       }),
       prisma.whatsAppIngressRateLimitBucket.count(),
@@ -141,7 +97,7 @@ async function main(): Promise<void> {
       {
         name: 'beneficiary-payout-ciphertext-decrypts',
         purpose: 'beneficiary-payout-account',
-        ciphertext: beneficiary?.payoutAccountCiphertext,
+        ciphertext: beneficiaryPayout?.payoutAccountCiphertext,
       },
       {
         name: 'beneficiary-phone-ciphertext-decrypts',

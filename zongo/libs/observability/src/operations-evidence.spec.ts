@@ -15,4 +15,18 @@ describe('operations evidence verification', () => {
       expect.arrayContaining(['approvedRpoMinutes', 'approvedRtoMinutes']),
     );
   });
+
+  it('rejects placeholder operational evidence references', () => {
+    const result = verifyOperationsEvidence({
+      deploymentCommitOrImageDigest: 'TBD',
+      metricsEvidence: '<attach-link>',
+    });
+
+    expect(result.missing).toEqual(
+      expect.arrayContaining([
+        'deploymentCommitOrImageDigest',
+        'metricsEvidence',
+      ]),
+    );
+  });
 });

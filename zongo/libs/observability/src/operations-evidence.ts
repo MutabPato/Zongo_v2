@@ -1,3 +1,5 @@
+import { isUsableEvidenceReference } from './pilot-evidence';
+
 export const OPERATIONS_EVIDENCE_FIELDS = [
   'deploymentCommitOrImageDigest',
   'metricsEvidence',
@@ -38,7 +40,7 @@ export function verifyOperationsEvidence(
       const numeric = typeof value === 'number' ? value : Number(value);
       return !Number.isInteger(numeric) || numeric <= 0;
     }
-    return typeof value !== 'string' || value.trim().length === 0;
+    return !isUsableEvidenceReference(value);
   });
   return {
     status: missing.length === 0 ? 'PASS' : 'INCOMPLETE',

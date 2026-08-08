@@ -178,4 +178,18 @@ describe('DurableJobDispatcher', () => {
     );
     delete process.env.RECONCILIATION_SWEEP_INTERVAL_MS;
   });
+
+  it('contains a Postgres failure without dispatching partner work', async () => {
+    const processor = { process: jest.fn() } as unknown as WorkerJobProcessor;
+    const prisma = {
+      transferTransaction: {
+        findMany: jest.fn().mockRejectedValue(new Error('connection refused')),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new DurableJobDispatcher(prisma, processor).dispatch(),
+    ).resolves.toBeUndefined();
+    expect(processor.process).not.toHaveBeenCalled();
+  });
 });

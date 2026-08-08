@@ -1,6 +1,7 @@
 import {
   Inject,
   Injectable,
+  Logger,
   OnModuleDestroy,
   OnModuleInit,
   Optional,
@@ -14,6 +15,7 @@ import { PilotExposureMonitor } from './pilot-exposure-monitor.service';
 /** Polls the database-backed queue; claims in WorkerJobProcessor prevent races. */
 @Injectable()
 export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(DurableJobDispatcher.name);
   private timer?: NodeJS.Timeout;
   private running = false;
   private lastReconciliationSweepAt = 0;
@@ -114,6 +116,15 @@ export class DurableJobDispatcher implements OnModuleInit, OnModuleDestroy {
           },
           createdAt: new Date(),
         });
+    } catch (error) {
+      this.logger.error(
+        JSON.stringify({
+          event: 'dependency.failure',
+          dependency: 'postgres',
+          operation: 'worker.dispatch',
+          message: error instanceof Error ? error.message : 'unknown failure',
+        }),
+      );
     } finally {
       this.running = false;
     }

@@ -904,8 +904,13 @@ export class AdminService {
       throw new ForbiddenException(
         'Pilot Ready release configuration is incomplete',
       );
+    const evidenceRefs = Object.fromEntries(
+      Object.entries(input.evidenceRefs).filter(([, value]) =>
+        isUsableEvidenceReference(value),
+      ),
+    );
     const missingEvidence = REQUIRED_PILOT_EVIDENCE.filter(
-      (key) => !isUsableEvidenceReference(input.evidenceRefs[key]),
+      (key) => !evidenceRefs[key],
     );
     if (missingEvidence.length)
       throw new ForbiddenException(
@@ -952,7 +957,7 @@ export class AdminService {
         releaseConfiguration:
           input.releaseConfiguration as Prisma.InputJsonValue,
         rollbackPlan: input.rollbackPlan,
-        evidenceRefs: input.evidenceRefs,
+        evidenceRefs,
         publishedAt: new Date(),
       },
       update: {
@@ -963,7 +968,7 @@ export class AdminService {
         releaseConfiguration:
           input.releaseConfiguration as Prisma.InputJsonValue,
         rollbackPlan: input.rollbackPlan,
-        evidenceRefs: input.evidenceRefs,
+        evidenceRefs,
         publishedAt: new Date(),
       },
       include: { approvals: true },

@@ -84,6 +84,16 @@ async function main(): Promise<void> {
         count: REQUIRED_APPROVALS.length - missingApprovals.length,
       },
     });
+    const incompleteApprovals =
+      record?.approvals.filter(
+        (approval) =>
+          !approval.actorIdentityId.trim() || !approval.note.trim(),
+      ).length ?? REQUIRED_APPROVALS.length;
+    checks.push({
+      name: 'substantive-pilot-approvals',
+      status: incompleteApprovals ? 'FAIL' : 'PASS',
+      details: { incomplete: incompleteApprovals },
+    });
 
     const evidence = nonEmptyRecord(record?.evidenceRefs);
     const missingEvidence = REQUIRED_EVIDENCE.filter(

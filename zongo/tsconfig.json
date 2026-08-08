@@ -44,7 +44,9 @@
       "@app/whatsapp": ["libs/whatsapp/src"],
       "@app/whatsapp/*": ["libs/whatsapp/src/*"],
       "@app/transfer": ["libs/transfer/src"],
-      "@app/transfer/*": ["libs/transfer/src/*"]
+      "@app/transfer/*": ["libs/transfer/src/*"],
+      "@app/observability": ["libs/observability/src"],
+      "@app/observability/*": ["libs/observability/src/*"]
     }
   }
 }

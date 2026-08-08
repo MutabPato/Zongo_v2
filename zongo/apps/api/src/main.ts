@@ -5,6 +5,7 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { StructuredRequestLoggingInterceptor } from '@app/observability';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -20,6 +21,7 @@ async function bootstrap(): Promise<void> {
     .setVersion('1.0')
     .build();
   const document = SwaggerModule.createDocument(app, config);
+  app.useGlobalInterceptors(new StructuredRequestLoggingInterceptor());
   SwaggerModule.setup('docs', app, document, {
     jsonDocumentUrl: 'docs-json',
   });

@@ -86,18 +86,24 @@ async function main(): Promise<void> {
       details: { unresolvedDiscrepancies },
     });
 
-    const decisionEvents = await prisma.auditEvent.count({
-      where: {
-        OR: [
-          { name: { startsWith: 'admin.pilot-control.' } },
-          { name: 'admin.pilot-readiness.published' },
-        ],
-      },
-    });
+    const [controlDecisionEvents, readinessPublicationEvents] =
+      await Promise.all([
+        prisma.auditEvent.count({
+          where: { name: { startsWith: 'admin.pilot-control.' } },
+        }),
+        prisma.auditEvent.count({
+          where: { name: 'admin.pilot-readiness.published' },
+        }),
+      ]);
+    const decisionHistoryComplete =
+      controlDecisionEvents > 0 && readinessPublicationEvents > 0;
     checks.push({
       name: 'release-and-control-decision-history',
-      status: decisionEvents > 0 ? 'PASS' : 'FAIL',
-      details: { decisionEvents },
+      status: decisionHistoryComplete ? 'PASS' : 'FAIL',
+      details: {
+        controlDecisionEvents,
+        readinessPublicationEvents,
+      },
     });
 
     const passed = checks.every((check) => check.status === 'PASS');

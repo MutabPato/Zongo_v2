@@ -62,6 +62,7 @@ ALLOW_RECONCILIATION_VERIFICATION=true pnpm verify:reconciliation
 ```
 
 `PASS` requires current reconciliation coverage, owned/escalated discrepancies,
-completed sweep evidence, and durable control/readiness decision history. A
+completed sweep evidence, durable control/readiness decision history, and an
+explicit enabled-control decision representing a reviewed resume/start. A
 `FAIL` is evidence to pause or withhold release; the command cannot mutate
 controls or settle transfers.

@@ -90,23 +90,30 @@ async function main(): Promise<void> {
       details: { unresolvedDiscrepancies },
     });
 
-    const [controlDecisionEvents, readinessPublicationEvents, latestSweep] =
-      await Promise.all([
-        prisma.auditEvent.count({
-          where: { name: { startsWith: 'admin.pilot-control.' } },
-        }),
-        prisma.auditEvent.count({
-          where: { name: 'admin.pilot-readiness.published' },
-        }),
-        prisma.auditEvent.findFirst({
-          where: {
-            name: 'reconciliation.sweep.completed',
-            createdAt: { gte: cutoff },
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true, payload: true },
-        }),
-      ]);
+    const [
+      controlDecisionEvents,
+      resumeDecisionEvents,
+      readinessPublicationEvents,
+      latestSweep,
+    ] = await Promise.all([
+      prisma.auditEvent.count({
+        where: { name: { startsWith: 'admin.pilot-control.' } },
+      }),
+      prisma.auditEvent.count({
+        where: { name: 'admin.pilot-control.enabled' },
+      }),
+      prisma.auditEvent.count({
+        where: { name: 'admin.pilot-readiness.published' },
+      }),
+      prisma.auditEvent.findFirst({
+        where: {
+          name: 'reconciliation.sweep.completed',
+          createdAt: { gte: cutoff },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, payload: true },
+      }),
+    ]);
     const sweepPayload =
       latestSweep?.payload &&
       typeof latestSweep.payload === 'object' &&
@@ -137,6 +144,7 @@ async function main(): Promise<void> {
     });
     const decisionHistoryComplete =
       controlDecisionEvents > 0 &&
+      resumeDecisionEvents > 0 &&
       readinessPublicationEvents > 0 &&
       sweepHealthy;
     checks.push({
@@ -144,6 +152,7 @@ async function main(): Promise<void> {
       status: decisionHistoryComplete ? 'PASS' : 'FAIL',
       details: {
         controlDecisionEvents,
+        resumeDecisionEvents,
         readinessPublicationEvents,
         recentHealthySweep: sweepHealthy,
       },

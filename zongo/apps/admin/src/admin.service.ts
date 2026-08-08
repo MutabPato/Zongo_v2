@@ -788,7 +788,7 @@ export class AdminService {
       );
     const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
-      include: { approvals: true },
+      include: { approvals: true, stageRecords: true },
     });
     const missingRoles = requiredRoles.filter(
       (role) =>
@@ -797,6 +797,16 @@ export class AdminService {
     if (missingRoles.length)
       throw new ForbiddenException(
         `Stage approvals are incomplete: ${missingRoles.join(', ')}`,
+      );
+    if (
+      stage === PilotReadinessStage.LOCAL_E2E_COMPLETE &&
+      !existingRecord?.stageRecords.some(
+        (stageRecord) =>
+          stageRecord.stage === PilotReadinessStage.FOUNDATION_COMPLETE,
+      )
+    )
+      throw new ForbiddenException(
+        'Foundation Complete evidence must be recorded before Local E2E Complete',
       );
     const record = await this.prisma.pilotReleaseRecord.upsert({
       where: { id: 'pilot' },
@@ -885,7 +895,7 @@ export class AdminService {
       );
     const existingRecord = await this.prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
-      include: { approvals: true },
+      include: { approvals: true, stageRecords: true },
     });
     const missingApprovals = Object.keys(PilotApprovalAuthority).filter(
       (approvalRole) =>
@@ -896,6 +906,24 @@ export class AdminService {
     if (missingApprovals.length)
       throw new ForbiddenException(
         `Pilot Ready approvals are incomplete: ${missingApprovals.join(', ')}`,
+      );
+    const hasStageEvidence = (stage: PilotReadinessStage) =>
+      existingRecord?.stageRecords.some(
+        (stageRecord) =>
+          stageRecord.stage === stage &&
+          Object.values(
+            stageRecord.evidenceRefs as Record<string, unknown>,
+          ).some(
+            (value) => typeof value === 'string' && value.trim().length > 0,
+          ),
+      ) ?? false;
+    if (!hasStageEvidence(PilotReadinessStage.FOUNDATION_COMPLETE))
+      throw new ForbiddenException(
+        'Foundation Complete evidence must be recorded before Pilot Ready',
+      );
+    if (!hasStageEvidence(PilotReadinessStage.LOCAL_E2E_COMPLETE))
+      throw new ForbiddenException(
+        'Local E2E Complete evidence must be recorded before Pilot Ready',
       );
     const record = await this.prisma.pilotReleaseRecord.upsert({
       where: { id: 'pilot' },

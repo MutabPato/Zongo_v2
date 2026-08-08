@@ -49,16 +49,23 @@ async function main(): Promise<void> {
       select: { key: true, state: true },
     });
 
-    const stages = new Set(record?.stageRecords.map((entry) => entry.stage));
+    const stageHasEvidence = (stage: string) =>
+      record?.stageRecords.some(
+        (entry) =>
+          entry.stage === stage &&
+          Object.values(nonEmptyRecord(entry.evidenceRefs)).some(
+            (value) => typeof value === 'string' && value.trim().length > 0,
+          ),
+      ) ?? false;
     checks.push({
       name: 'foundation-stage-recorded',
-      status: stages.has('FOUNDATION_COMPLETE') ? 'PASS' : 'FAIL',
-      details: { recorded: stages.has('FOUNDATION_COMPLETE') },
+      status: stageHasEvidence('FOUNDATION_COMPLETE') ? 'PASS' : 'FAIL',
+      details: { recorded: stageHasEvidence('FOUNDATION_COMPLETE') },
     });
     checks.push({
       name: 'local-e2e-stage-recorded',
-      status: stages.has('LOCAL_E2E_COMPLETE') ? 'PASS' : 'FAIL',
-      details: { recorded: stages.has('LOCAL_E2E_COMPLETE') },
+      status: stageHasEvidence('LOCAL_E2E_COMPLETE') ? 'PASS' : 'FAIL',
+      details: { recorded: stageHasEvidence('LOCAL_E2E_COMPLETE') },
     });
 
     const missingApprovals = REQUIRED_APPROVALS.filter(

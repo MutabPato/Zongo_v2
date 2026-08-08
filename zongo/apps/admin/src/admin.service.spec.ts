@@ -451,6 +451,62 @@ describe('AdminService', () => {
     );
   });
 
+  it('cannot publish Pilot Ready before Foundation and Local E2E stage evidence', async () => {
+    process.env.PILOT_OPERATOR_ID = 'operator_1';
+    const upsert = jest.fn();
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'operator_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'pilot',
+          approvals: [
+            { role: 'ENGINEERING' },
+            { role: 'OPERATIONS' },
+            { role: 'COMPLIANCE_RISK' },
+            { role: 'RECONCILIATION' },
+            { role: 'PILOT_OPERATOR' },
+          ],
+          stageRecords: [],
+        }),
+        upsert,
+      },
+    } as unknown as PrismaService;
+    const evidenceRefs = {
+      kyc: 'evidence://kyc',
+      provider: 'evidence://provider',
+      security: 'evidence://security',
+      dpiaRetention: 'evidence://dpia',
+      reconciliation: 'evidence://reconciliation',
+      recovery: 'evidence://recovery',
+      observability: 'evidence://observability',
+      incident: 'evidence://incident',
+      customerJourney: 'evidence://journey',
+    };
+
+    await expect(
+      new AdminService(prisma).publishPilotReadiness('operator_1', {
+        approvedCohort: { senderIds: ['sender_1'] },
+        numericLimits: { dailySendMinor: '100000' },
+        releaseConfiguration: { corridor: 'DRC-KENYA' },
+        rollbackPlan:
+          'Pause all movement controls and reconcile open transfers.',
+        evidenceRefs,
+        noWaiverConfirmed: true,
+      }),
+    ).rejects.toThrow(
+      'Foundation Complete evidence must be recorded before Pilot Ready',
+    );
+    expect(upsert).not.toHaveBeenCalled();
+    delete process.env.PILOT_OPERATOR_ID;
+  });
+
   it('allows only the configured engineering lead to isolate provider movement', async () => {
     process.env.ENGINEERING_LEAD_ID = 'engineering_1';
     const upsert = jest.fn().mockResolvedValue({

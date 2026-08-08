@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { AuditService } from '@app/audit';
 import { PartnerPort } from '@app/domain';
@@ -9,17 +9,27 @@ import { WorkerJobProcessor } from '../src/worker-job.processor';
 
 function loadDatabaseUrl(): void {
   if (process.env.DATABASE_URL) return;
-  const envFile = readFileSync(resolve(process.cwd(), '.env'), 'utf8');
+  const envPath = resolve(process.cwd(), '.env');
+  if (!existsSync(envPath)) return;
+  const envFile = readFileSync(envPath, 'utf8');
   const value = envFile.match(
     /^DATABASE_URL=(?:"([^"]+)"|'([^']+)'|([^\s#]+))/m,
   );
   if (value) process.env.DATABASE_URL = value[1] ?? value[2] ?? value[3];
 }
 
-const databaseIntegrationEnabled =
+const databaseIntegrationRequested =
   process.env.RUN_DATABASE_INTEGRATION === 'true';
-
-if (databaseIntegrationEnabled) loadDatabaseUrl();
+if (databaseIntegrationRequested) loadDatabaseUrl();
+const databaseIntegrationEnabled =
+  databaseIntegrationRequested &&
+  Boolean(
+    process.env.DATABASE_URL ||
+    (process.env.POSTGRES_HOST &&
+      process.env.POSTGRES_USER &&
+      process.env.POSTGRES_PASSWORD &&
+      process.env.POSTGRES_DB),
+  );
 
 const describeDatabase = databaseIntegrationEnabled ? describe : describe.skip;
 

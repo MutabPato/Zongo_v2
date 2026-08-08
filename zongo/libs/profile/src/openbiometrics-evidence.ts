@@ -1,8 +1,11 @@
 export const OPEN_BIOMETRICS_SCENARIOS = [
   'DRC document types and quality variants',
   'French/Swahili/English operator and customer text',
+  'Supported device and camera coverage',
   'Low-light and glare',
   'Low bandwidth and interrupted upload',
+  'Face matching baseline and rejection',
+  'Liveness baseline and rejection',
   'Print attack',
   'Screen replay',
   'Mask/occlusion',
@@ -31,6 +34,8 @@ export const OPEN_BIOMETRICS_DECISIONS = [
   'Reconciliation',
   'Accountable pilot operator',
 ] as const;
+
+export const OPEN_BIOMETRICS_REQUIRED_PROMOTION_DECISION = 'PROMOTED';
 
 const PROVENANCE_FIELDS = [
   'sourceRepositoryCommit',
@@ -124,7 +129,8 @@ export function verifyOpenBiometricsEvidence(
     missing: missingDecisions,
   });
 
-  const promotionRecorded = present(pack.promotionDecision);
+  const promotionRecorded =
+    pack.promotionDecision === OPEN_BIOMETRICS_REQUIRED_PROMOTION_DECISION;
   checks.push({
     name: 'promotion-decision',
     status: promotionRecorded ? 'PASS' : 'FAIL',

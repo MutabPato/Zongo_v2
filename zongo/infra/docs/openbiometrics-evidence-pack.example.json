@@ -20,9 +20,24 @@
       "result": "NOT_RUN",
       "evidence": ""
     },
+    {
+      "name": "Supported device and camera coverage",
+      "result": "NOT_RUN",
+      "evidence": ""
+    },
     { "name": "Low-light and glare", "result": "NOT_RUN", "evidence": "" },
     {
       "name": "Low bandwidth and interrupted upload",
+      "result": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "Face matching baseline and rejection",
+      "result": "NOT_RUN",
+      "evidence": ""
+    },
+    {
+      "name": "Liveness baseline and rejection",
       "result": "NOT_RUN",
       "evidence": ""
     },

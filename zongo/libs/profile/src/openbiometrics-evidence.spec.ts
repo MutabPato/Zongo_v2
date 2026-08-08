@@ -41,4 +41,23 @@ describe('OpenBiometrics evidence verification', () => {
         ?.status,
     ).toBe('FAIL');
   });
+
+  it('keeps the aggregate pack incomplete for a negative decision', () => {
+    const result = verifyOpenBiometricsEvidence({
+      promotionDecision: 'NOT PROMOTED',
+    });
+
+    expect(result.status).toBe('INCOMPLETE');
+  });
+
+  it('requires the affirmative promotion decision', () => {
+    const result = verifyOpenBiometricsEvidence({
+      promotionDecision: 'PROMOTED',
+    });
+
+    expect(
+      result.checks.find((check) => check.name === 'promotion-decision')
+        ?.status,
+    ).toBe('PASS');
+  });
 });

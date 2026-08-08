@@ -12,9 +12,9 @@ OPENBIOMETRICS_EVIDENCE_PACK=/secure/evidence/openbiometrics.json \
   pnpm verify:openbiometrics-evidence
 ```
 
-The verifier is read-only. It reports `INCOMPLETE` unless every provenance
-field, scenario result and evidence link, provider-neutral contract, named
-decision, and promotion decision is present. It does not execute biometric
+The verifier is read-only. It reports `INCOMPLETE` unless all provenance
+fields, scenario results and evidence links, provider-neutral contracts, named
+decisions, and an affirmative `PROMOTED` decision are present. It does not execute biometric
 matching or liveness tests and does not manufacture a vendor, model, license,
 security, demographic, or certification result.
 
@@ -38,8 +38,11 @@ latency, retry count, reviewer, and evidence link for each row.
 | ------------------------------------------------- | ------ | -------- |
 | DRC document types and quality variants           |        |          |
 | French/Swahili/English operator and customer text |        |          |
+| Supported device and camera coverage              |        |          |
 | Low-light and glare                               |        |          |
 | Low bandwidth and interrupted upload              |        |          |
+| Face matching baseline and rejection              |        |          |
+| Liveness baseline and rejection                   |        |          |
 | Print attack                                      |        |          |
 | Screen replay                                     |        |          |
 | Mask/occlusion                                    |        |          |

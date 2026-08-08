@@ -589,14 +589,14 @@ describe('WorkerJobProcessor', () => {
   });
 
   it('posts and reconciles ledger entries for a valid success callback', async () => {
-    const update = jest.fn().mockResolvedValue({});
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       transferTransaction: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           ...transaction,
           status: TransactionStatus.PENDING_PAYOUT,
         }),
-        update,
+        updateMany,
       },
     } as unknown as PrismaService;
     const ledger = {
@@ -685,5 +685,44 @@ describe('WorkerJobProcessor', () => {
       ),
     ).rejects.toMatchObject({ code: 'INVALID_TRANSACTION_TRANSITION' });
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a callback state changed concurrently', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 0 });
+    const auditAppend = jest.fn().mockResolvedValue(undefined);
+    const appendLifecycleEntries = jest.fn();
+    const ledger = {
+      appendLifecycleEntries,
+      persistReconciliation: jest.fn(),
+    } as unknown as LedgerService;
+    const prisma = {
+      transferTransaction: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          ...transaction,
+          status: TransactionStatus.PENDING_COLLECTION,
+        }),
+        updateMany,
+      },
+    } as unknown as PrismaService;
+    const processor = new WorkerJobProcessor(
+      prisma,
+      {} as PartnerPort,
+      { append: auditAppend },
+      ledger,
+    );
+
+    await expect(
+      processor.handlePartnerCallback(
+        transaction.reference,
+        TransactionStatus.COLLECTION_SUCCESS,
+        'partner_race',
+      ),
+    ).resolves.toEqual({ applied: false });
+    expect(auditAppend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'transfer.callback.concurrent-state-change',
+      }),
+    );
+    expect(appendLifecycleEntries).not.toHaveBeenCalled();
   });
 });

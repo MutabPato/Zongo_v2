@@ -835,14 +835,30 @@ export class WorkerJobProcessor {
     const partnerReferenceBlindIndex = this.protection
       ? await this.protection.blindIndex(partnerReference, 'provider-reference')
       : undefined;
-    await this.prisma.transferTransaction.update({
-      where: { id: transaction.id },
+    const applied = await this.prisma.transferTransaction.updateMany({
+      where: { id: transaction.id, status: transaction.status },
       data: {
         status,
         partnerReference,
         ...(partnerReferenceBlindIndex ? { partnerReferenceBlindIndex } : {}),
       },
     });
+    if (applied.count !== 1) {
+      await this.audit.append({
+        id: crypto.randomUUID(),
+        eventType: 'TECHNICAL',
+        name: 'transfer.callback.concurrent-state-change',
+        transactionId: transaction.id,
+        corridorId: transaction.corridorId,
+        payload: {
+          observedStatus: transaction.status,
+          receivedStatus: status,
+          partnerReference,
+        },
+        createdAt: new Date(),
+      });
+      return { applied: false };
+    }
     await this.recordLifecycleSuccess(transaction.id, status);
     await this.audit.append({
       id: crypto.randomUUID(),

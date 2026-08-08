@@ -7,9 +7,12 @@ in this file.
 ## Account facts
 
 - Account/merchant identifier (masked):
-- CDF collection enabled evidence:
-- KES disbursement enabled evidence:
-- Portal webhook URL verification evidence:
+- CDF collection enabled evidence: operator reports rail enabled; attach
+  account-specific proof before certification.
+- KES disbursement enabled evidence: operator reports rail enabled; attach
+  account-specific proof before certification.
+- Portal webhook URL verification evidence: pending portal registration and
+  verification.
 - Webhook authentication contract:
 - Idempotency contract:
 - Status/retry/rate-limit contract:
@@ -25,6 +28,17 @@ failure, normalized callback identity, CDF/KES request mapping, status lookup,
 duplicate callbacks, out-of-order callbacks, and concurrent lifecycle updates.
 These tests are implementation evidence only and do not replace account-
 specific portal, live-rail, retry/rate-limit, or certification evidence.
+
+The current public provider references used by the adapter are:
+
+- [Collection and disbursement API](https://docs.pretium.africa/api-reference/countries/collection-and-disbursement)
+  for `/{currency}/collect`, `/{currency}/disburse`, and transaction status.
+- [Onramp guide](https://docs.pretium.africa/guides/onramp) and [offramp
+  guide](https://docs.pretium.africa/guides/offramp) for the provider’s broader
+  crypto-settlement flows.
+
+These public references do not establish this account’s enabled limits,
+authentication, retry/rate-limit, retention, support, or escalation terms.
 
 Before enabling the partner module in the pilot deployment, run the
 credential-redacting configuration check against the exact runtime:

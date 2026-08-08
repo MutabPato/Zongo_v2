@@ -65,17 +65,17 @@ covered at the API/service boundaries listed above.
 
 | Gate                                           | Result | Evidence                                                    |
 | ---------------------------------------------- | ------ | ----------------------------------------------------------- |
-| Signed WhatsApp intake and normalization       |        |                                                             |
-| Consent, language, quote, beneficiary          |        |                                                             |
-| KYC eligibility and phone binding              |        |                                                             |
-| Same-key replay and conflicting-key rejection  |        |                                                             |
-| Active-chat contention                         |        |                                                             |
-| Collection, payout, ledger, reconciliation     |        |                                                             |
-| Timeout, waiting, status-only query            |        |                                                             |
-| Notification retry and failure isolation       |        | Database journey failure-isolation assertion + worker tests |
-| Late/duplicate/out-of-order callback           |        | API/service callback tests                                  |
-| Support/admin masked investigation             |        |                                                             |
-| Manual payout recovery without automatic retry |        |                                                             |
+| Signed WhatsApp intake and normalization       | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Consent, language, quote, beneficiary          | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| KYC eligibility and phone binding              | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Same-key replay and conflicting-key rejection  | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Active-chat contention                         | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Collection, payout, ledger, reconciliation     | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Timeout, waiting, status-only query            | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Notification retry and failure isolation       | PASS   | Database journey assertion + worker notification tests      |
+| Late/duplicate/out-of-order callback           | PASS   | API/service callback tests                                  |
+| Support/admin masked investigation             | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Manual payout recovery without automatic retry | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
 
 Local E2E decision: `INCOMPLETE` until every gate has executable evidence and
 the named reviewers sign the release record.

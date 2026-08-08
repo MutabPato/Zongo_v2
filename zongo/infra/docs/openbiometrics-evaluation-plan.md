@@ -19,6 +19,9 @@ approved.
   supports self-hosted multipart detection, document scan, face verification,
   and liveness-session calls. It is transport-only and cannot promote a
   sender or bypass human review.
+- Case orchestration boundary: `libs/profile/src/openbiometrics-verification.service.ts`
+  maps successful checks to `HUMAN_REVIEW` and failures to
+  `TECHNICAL_REVIEW`; it persists only redacted check summaries.
 
 The project documentation identifies the community model tier as the default
 and lists YuNet, SFace, MiniFASNet, Face Mesh, and document-processing models

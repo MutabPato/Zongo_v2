@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
+  EnvironmentKeyProvider,
   EnvelopeEncryptionService,
   type EncryptionKeyProvider,
 } from './security.service';
@@ -53,5 +54,20 @@ describe('EnvelopeEncryptionService', () => {
     expect(service.mask('+254700000001')).toBe('•••••••••0001');
     expect(service.mask('abc')).toBe('••••');
     expect(service.mask(null)).toBeNull();
+  });
+
+  it('fails closed for retired encryption versions', async () => {
+    const keys = new EnvironmentKeyProvider({
+      ZONGO_RETIRED_ENCRYPTION_KEY_VERSIONS_KYC: 'v1, v2',
+      ZONGO_ENCRYPTION_KEY_KYC_V3: key.toString('base64url'),
+      ZONGO_ENCRYPTION_KEY_VERSION_KYC: 'v3',
+    });
+    expect(() => keys.keyForVersion('kyc', 'v1')).toThrow(
+      'retired or compromised',
+    );
+    expect(await keys.currentKey('kyc')).toEqual({
+      version: 'v3',
+      key,
+    });
   });
 });

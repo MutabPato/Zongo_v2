@@ -22,12 +22,13 @@ export class EnvironmentKeyProvider implements EncryptionKeyProvider {
   constructor(private readonly environment: NodeJS.ProcessEnv = process.env) {}
 
   currentKey(purpose: string): Promise<EncryptionKey> {
-    return Promise.resolve(
-      this.readEncryptionKey(purpose, this.version(purpose)),
-    );
+    const version = this.version(purpose);
+    this.assertUsableVersion(purpose, version);
+    return Promise.resolve(this.readEncryptionKey(purpose, version));
   }
 
   keyForVersion(purpose: string, version: string): Promise<EncryptionKey> {
+    this.assertUsableVersion(purpose, version);
     return Promise.resolve(this.readEncryptionKey(purpose, version));
   }
 
@@ -52,6 +53,19 @@ export class EnvironmentKeyProvider implements EncryptionKeyProvider {
         `ZONGO_ENCRYPTION_KEY_VERSION_${this.normalize(purpose)}`
       ] ?? 'V1'
     );
+  }
+
+  private assertUsableVersion(purpose: string, version: string): void {
+    const retired = this.environment[
+      `ZONGO_RETIRED_ENCRYPTION_KEY_VERSIONS_${this.normalize(purpose)}`
+    ]
+      ?.split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    if (retired?.includes(version))
+      throw new Error(
+        `Encryption key version ${version} for ${purpose} is retired or compromised`,
+      );
   }
 
   private readKey(name: string): Buffer {

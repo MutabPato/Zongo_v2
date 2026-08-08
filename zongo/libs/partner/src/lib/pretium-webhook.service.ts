@@ -125,70 +125,36 @@ export class PretiumWebhookService {
       }
       throw error;
     }
-    const applied = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.transferTransaction.updateMany({
-        where: { id: transaction.id, status: transaction.status },
-        data: {
-          status,
-          partnerReference: input.partnerReference,
-          ...(providerReferenceBlindIndex
-            ? { partnerReferenceBlindIndex: providerReferenceBlindIndex }
-            : {}),
-        },
-      });
-      if (result.count === 1 && status === TransactionStatus.COLLECTION_SUCCESS)
-        await tx.workerJob.upsert({
-          where: { dedupKey: `${transaction.reference}:PAYOUT` },
-          create: {
-            dedupKey: `${transaction.reference}:PAYOUT`,
-            transactionReference: transaction.reference,
-            transactionId: transaction.id,
-            jobType: 'PAYOUT',
-            payload: { reason: 'COLLECTION_SUCCESS' },
-          },
-          update: {},
-        });
-      return result;
-    });
-    if (applied.count !== 1) {
-      await this.audit.append({
-        id: crypto.randomUUID(),
-        eventType: 'TECHNICAL',
-        name: 'transfer.callback.concurrent-state-change',
+    const statusRecheck = await this.prisma.workerJob.upsert({
+      where: {
+        dedupKey: `callback-status-recheck:${transaction.id}:${status}`,
+      },
+      create: {
+        dedupKey: `callback-status-recheck:${transaction.id}:${status}`,
+        transactionReference: transaction.reference,
         transactionId: transaction.id,
-        corridorId: transaction.corridorId,
+        jobType: 'STATUS_RECHECK',
         payload: {
-          observedStatus: transaction.status,
-          receivedStatus: status,
-          partnerReference: input.partnerReference,
+          reason: 'PROVIDER_CALLBACK_REQUIRES_STATUS_CONFIRMATION',
+          callbackStatus: status,
         },
-        createdAt: new Date(),
-      });
-      return { applied: false, transactionReference: transaction.reference };
-    }
-    if (
-      status === TransactionStatus.COLLECTION_SUCCESS ||
-      status === TransactionStatus.PAYOUT_SUCCESS
-    ) {
-      await this.ledger.appendLifecycleEntries(
-        transaction.id,
-        status === TransactionStatus.COLLECTION_SUCCESS
-          ? 'collection'
-          : 'payout',
-      );
-      await this.ledger.persistReconciliation(transaction.id);
-    }
-    await this.resolveTransferOutcome(transaction.id, status);
+      },
+      update: {},
+    });
     await this.audit.append({
       id: crypto.randomUUID(),
-      eventType: 'BUSINESS',
-      name: 'transfer.callback.applied',
+      eventType: 'TECHNICAL',
+      name: 'transfer.callback.received',
       transactionId: transaction.id,
       corridorId: transaction.corridorId,
-      payload: { status, partnerReference: input.partnerReference },
+      payload: {
+        status,
+        partnerReference: input.partnerReference,
+        statusRecheckJobId: statusRecheck.id,
+      },
       createdAt: new Date(),
     });
-    return { applied: true, transactionReference: transaction.reference };
+    return { applied: false, transactionReference: transaction.reference };
   }
 
   private async resolveTransferOutcome(

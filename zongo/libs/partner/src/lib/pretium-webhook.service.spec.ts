@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/unbound-method */
 import type { AuditLogPort } from '@app/domain';
 import type { LedgerService } from '@app/ledger';
 import type { PrismaService } from '@app/db';
@@ -29,7 +29,7 @@ describe('Pretium webhook boundary', () => {
     );
   });
 
-  it('applies a terminal callback and records reconciliation evidence', async () => {
+  it('queues status confirmation instead of trusting a terminal callback', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       transferTransaction: {
@@ -67,13 +67,23 @@ describe('Pretium webhook boundary', () => {
         partnerReference: 'pt_1',
         providerStatus: 'COMPLETE',
       }),
-    ).resolves.toEqual({ applied: true, transactionReference: 'ZNG-1' });
-    expect(updateMany).toHaveBeenCalledWith(
+    ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-1' });
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(prisma.workerJob.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { status: 'PAYOUT_SUCCESS', partnerReference: 'pt_1' },
+        where: {
+          dedupKey: 'callback-status-recheck:tx_1:PAYOUT_SUCCESS',
+        },
+        create: expect.objectContaining({
+          jobType: 'STATUS_RECHECK',
+          payload: {
+            reason: 'PROVIDER_CALLBACK_REQUIRES_STATUS_CONFIRMATION',
+            callbackStatus: 'PAYOUT_SUCCESS',
+          },
+        }),
       }),
     );
-    expect(appendLifecycleEntries).toHaveBeenCalledWith('tx_1', 'payout');
+    expect(appendLifecycleEntries).not.toHaveBeenCalled();
   });
 
   it('can resolve callbacks through the keyed provider-reference index', async () => {
@@ -121,12 +131,10 @@ describe('Pretium webhook boundary', () => {
         ],
       },
     });
-    expect(updateMany).toHaveBeenCalledWith(
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(prisma.workerJob.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        data: expect.objectContaining({
-          partnerReferenceBlindIndex: 'blind-provider-ref',
-        }),
+        create: expect.objectContaining({ jobType: 'STATUS_RECHECK' }),
       }),
     );
   });
@@ -169,22 +177,27 @@ describe('Pretium webhook boundary', () => {
         providerStatus: 'COMPLETE',
       }),
     ).resolves.toEqual({
-      applied: true,
+      applied: false,
       transactionReference: 'ZNG-COLLECTION',
     });
     expect(payoutUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { dedupKey: 'ZNG-COLLECTION:PAYOUT' },
+        where: {
+          dedupKey: 'callback-status-recheck:tx_collection:COLLECTION_SUCCESS',
+        },
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         create: expect.objectContaining({
-          jobType: 'PAYOUT',
-          payload: { reason: 'COLLECTION_SUCCESS' },
+          jobType: 'STATUS_RECHECK',
+          payload: {
+            reason: 'PROVIDER_CALLBACK_REQUIRES_STATUS_CONFIRMATION',
+            callbackStatus: 'COLLECTION_SUCCESS',
+          },
         }),
       }),
     );
   });
 
-  it('closes the WhatsApp session and queues a notification for terminal callbacks', async () => {
+  it('does not close a WhatsApp session before callback status confirmation', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const sessionUpdate = jest.fn().mockResolvedValue(undefined);
     const notificationUpsert = jest.fn().mockResolvedValue({ id: 'intent_1' });
@@ -234,16 +247,9 @@ describe('Pretium webhook boundary', () => {
         partnerReference: 'pt_notify',
         providerStatus: 'COMPLETE',
       }),
-    ).resolves.toEqual({ applied: true, transactionReference: 'ZNG-NOTIFY' });
-    expect(sessionUpdate).toHaveBeenCalledWith({
-      where: { id: 'session_notify' },
-      data: { status: 'CLOSED', activeChatKey: null },
-    });
-    expect(notificationUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { dedupKey: 'transfer:tx_notify:resolved' },
-      }),
-    );
+    ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-NOTIFY' });
+    expect(sessionUpdate).not.toHaveBeenCalled();
+    expect(notificationUpsert).not.toHaveBeenCalled();
   });
 
   it('audits and ignores an out-of-order callback without mutating lifecycle state', async () => {
@@ -336,7 +342,7 @@ describe('Pretium webhook boundary', () => {
     );
   });
 
-  it('does not overwrite a lifecycle state changed by a concurrent callback', async () => {
+  it('queues a callback recheck without mutating lifecycle state', async () => {
     const updateMany = jest.fn().mockResolvedValue({ count: 0 });
     const append = jest.fn().mockResolvedValue(undefined);
     const prisma = {
@@ -373,10 +379,14 @@ describe('Pretium webhook boundary', () => {
       }),
     ).resolves.toEqual({ applied: false, transactionReference: 'ZNG-4' });
     expect(append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'transfer.callback.received' }),
+    );
+    expect(prisma.workerJob.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: 'transfer.callback.concurrent-state-change',
+        create: expect.objectContaining({ jobType: 'STATUS_RECHECK' }),
       }),
     );
+    expect(updateMany).not.toHaveBeenCalled();
     expect(appendLifecycleEntries).not.toHaveBeenCalled();
   });
 });

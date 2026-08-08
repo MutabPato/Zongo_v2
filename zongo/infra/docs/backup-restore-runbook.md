@@ -40,3 +40,18 @@ version, retained versions required for decryption, a blind-index key, and
 distinct key material. It never prints key values. The result is configuration
 evidence only; managed secret-manager separation, rotation execution,
 compromise response, and access-audit approval remain required release evidence.
+
+Run the restore verifier against the isolated restored database and restored key
+set:
+
+```sh
+ALLOW_RESTORE_VERIFICATION=true \
+  REDIS_REBUILD_EVIDENCE_REF='evidence://restore/redis-rebuild-<run-id>' \
+  pnpm verify:restore
+```
+
+It samples sender, beneficiary payout, KYC, session, inbound-event, and
+notification ciphertext domains when present, checks keyed-index consistency,
+and reports durable inputs available for Redis reconstruction. The Redis
+reference must point to an actual restore exercise; setting it does not itself
+perform the rebuild.

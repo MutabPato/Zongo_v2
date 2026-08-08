@@ -2,6 +2,7 @@ import { PrismaService } from '@app/db';
 import {
   EnvironmentKeyProvider,
   EnvelopeEncryptionService,
+  type EncryptedValue,
 } from '@app/security';
 
 type RestoreCheck = {
@@ -9,6 +10,58 @@ type RestoreCheck = {
   status: 'PASS' | 'SKIPPED' | 'FAIL';
   details: Record<string, number | string | boolean>;
 };
+
+type SensitiveSample = {
+  name: string;
+  purpose: string;
+  ciphertext: unknown;
+  blindIndex?: string | null;
+  verifyBlindIndex?: boolean;
+};
+
+async function verifySensitiveSample(
+  protection: EnvelopeEncryptionService,
+  sample: SensitiveSample,
+): Promise<RestoreCheck> {
+  if (!sample.ciphertext)
+    return {
+      name: sample.name,
+      status: 'SKIPPED',
+      details: { reason: 'No encrypted sample exists' },
+    };
+  try {
+    const serialized =
+      typeof sample.ciphertext === 'string'
+        ? (JSON.parse(sample.ciphertext) as unknown)
+        : sample.ciphertext;
+    const plaintext = await protection.decrypt(
+      serialized as EncryptedValue,
+      sample.purpose,
+    );
+    let blindIndexMatches = true;
+    if (sample.verifyBlindIndex) {
+      const derivedIndex = await protection.blindIndex(
+        plaintext,
+        sample.purpose,
+      );
+      blindIndexMatches = sample.blindIndex === derivedIndex;
+    }
+    return {
+      name: sample.name,
+      status: blindIndexMatches ? 'PASS' : 'FAIL',
+      details: {
+        decrypted: true,
+        ...(sample.verifyBlindIndex ? { blindIndexMatches } : {}),
+      },
+    };
+  } catch {
+    return {
+      name: sample.name,
+      status: 'FAIL',
+      details: { decrypted: false },
+    };
+  }
+}
 
 async function main(): Promise<void> {
   if (process.env.ALLOW_RESTORE_VERIFICATION !== 'true') {
@@ -25,11 +78,21 @@ async function main(): Promise<void> {
 
   try {
     const checks: RestoreCheck[] = [];
-    let encryptionRestoreVerified = false;
     await prisma.$queryRaw`SELECT 1`;
     checks.push({ name: 'postgres-connectivity', status: 'PASS', details: {} });
 
-    const [auditRows, workerJobs, controls, sender] = await Promise.all([
+    const [
+      auditRows,
+      workerJobs,
+      controls,
+      sender,
+      beneficiary,
+      verification,
+      session,
+      inboundEvent,
+      notification,
+      rateLimitBuckets,
+    ] = await Promise.all([
       prisma.auditEvent.count(),
       prisma.workerJob.count(),
       prisma.pilotControl.count(),
@@ -40,6 +103,22 @@ async function main(): Promise<void> {
           senderPhoneBlindIndex: true,
         },
       }),
+      prisma.beneficiary.findFirst({
+        select: { payoutAccountCiphertext: true },
+      }),
+      prisma.senderVerification.findFirst({
+        select: { evidenceCiphertext: true },
+      }),
+      prisma.whatsAppSession.findFirst({
+        select: { senderPhoneCiphertext: true },
+      }),
+      prisma.whatsAppInboundEvent.findFirst({
+        select: { senderPhoneCiphertext: true },
+      }),
+      prisma.notificationIntent.findFirst({
+        select: { recipientPhoneCiphertext: true },
+      }),
+      prisma.whatsAppIngressRateLimitBucket.count(),
     ]);
     checks.push({
       name: 'durable-facts-present',
@@ -47,28 +126,52 @@ async function main(): Promise<void> {
       details: { auditRows, workerJobs, controls },
     });
 
-    if (!sender?.senderPhoneCiphertext) {
-      checks.push({
-        name: 'sender-ciphertext-decrypts',
-        status: 'SKIPPED',
-        details: { reason: 'No encrypted sender sample exists' },
-      });
-    } else {
-      const phone = await protection.decrypt(
-        JSON.parse(sender.senderPhoneCiphertext),
-        'sender-phone',
-      );
-      const derivedIndex = await protection.blindIndex(phone, 'sender-phone');
-      const matchingIndexes = sender.senderPhoneBlindIndex === derivedIndex;
-      checks.push({
-        name: 'sender-ciphertext-decrypts',
-        status: 'PASS',
-        details: { blindIndexMatches: matchingIndexes },
-      });
-      if (!matchingIndexes)
-        throw new Error('Sender blind-index verification failed');
-      encryptionRestoreVerified = true;
-    }
+    const sensitiveSamples: SensitiveSample[] = [
+      {
+        name: 'sender-phone-ciphertext-decrypts',
+        purpose: 'sender-phone',
+        ciphertext: sender?.senderPhoneCiphertext,
+        blindIndex: sender?.senderPhoneBlindIndex,
+        verifyBlindIndex: Boolean(sender?.senderPhoneCiphertext),
+      },
+      {
+        name: 'beneficiary-payout-ciphertext-decrypts',
+        purpose: 'beneficiary-payout-account',
+        ciphertext: beneficiary?.payoutAccountCiphertext,
+      },
+      {
+        name: 'kyc-evidence-ciphertext-decrypts',
+        purpose: 'kyc-evidence',
+        ciphertext: verification?.evidenceCiphertext,
+      },
+      {
+        name: 'session-phone-ciphertext-decrypts',
+        purpose: 'sender-phone',
+        ciphertext: session?.senderPhoneCiphertext,
+      },
+      {
+        name: 'inbound-phone-ciphertext-decrypts',
+        purpose: 'sender-phone',
+        ciphertext: inboundEvent?.senderPhoneCiphertext,
+      },
+      {
+        name: 'notification-recipient-ciphertext-decrypts',
+        purpose: 'sender-phone',
+        ciphertext: notification?.recipientPhoneCiphertext,
+      },
+    ];
+    const sensitiveChecks = await Promise.all(
+      sensitiveSamples.map((sample) =>
+        verifySensitiveSample(protection, sample),
+      ),
+    );
+    checks.push(...sensitiveChecks);
+    const encryptedSamplesVerified = sensitiveChecks.some(
+      (check) => check.status === 'PASS',
+    );
+    const encryptedSampleFailed = sensitiveChecks.some(
+      (check) => check.status === 'FAIL',
+    );
 
     checks.push({
       name: 'audit-and-control-state-readable',
@@ -76,11 +179,28 @@ async function main(): Promise<void> {
       details: { auditRows, controls },
     });
     checks.push({
-      name: 'redis-rebuild-required',
+      name: 'redis-rebuild-inputs-readable',
       status: 'PASS',
-      details: { rebuildFromDurableFacts: true },
+      details: {
+        rebuildFromDurableFacts: true,
+        workerJobs,
+        sessions: session ? 1 : 0,
+        rateLimitBuckets,
+      },
     });
-    const complete = encryptionRestoreVerified;
+    const redisLossEvidenceReference =
+      process.env.REDIS_REBUILD_EVIDENCE_REF?.trim();
+    checks.push({
+      name: 'redis-loss-rebuild-executed',
+      status: redisLossEvidenceReference ? 'PASS' : 'SKIPPED',
+      details: {
+        evidenceReferenceProvided: Boolean(redisLossEvidenceReference),
+      },
+    });
+    const complete =
+      encryptedSamplesVerified &&
+      !encryptedSampleFailed &&
+      Boolean(redisLossEvidenceReference);
     console.log(
       JSON.stringify(
         {
@@ -89,7 +209,7 @@ async function main(): Promise<void> {
           checks,
           note: complete
             ? 'This artifact proves read-only restore invariants; it does not approve production release.'
-            : 'Restore verification is incomplete until an encrypted sample is decrypted with the restored key set; this does not approve production release.',
+            : 'Restore verification is incomplete until encrypted samples decrypt and Redis-loss rebuild evidence is attached; this does not approve production release.',
         },
         null,
         2,

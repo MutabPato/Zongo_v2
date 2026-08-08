@@ -55,6 +55,45 @@ describe('AdminService', () => {
     ).resolves.toEqual(transaction);
   });
 
+  it('masks provider and customer values in support search results', async () => {
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'support_1',
+          userId: 'support@example.test',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      transferTransaction: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'tx_1',
+          reference: 'ZNG-2026-0001',
+          partnerReference: 'pretium-secret-ref',
+          senderPhoneNumber: '+254700000001',
+        }),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).searchTransaction('support_1', 'ZNG-2026-0001'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'tx_1',
+        reference: 'ZNG-2026-0001',
+        partnerReference: '[MASKED]',
+        senderPhoneNumber: '[MASKED]',
+      }),
+    );
+    const result = await new AdminService(prisma).searchTransaction(
+      'support_1',
+      'ZNG-2026-0001',
+    );
+    expect(JSON.stringify(result)).not.toContain('pretium-secret-ref');
+    expect(JSON.stringify(result)).not.toContain('+254700000001');
+  });
+
   it('preserves a support note and records its privileged audit context', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const create = jest
@@ -273,6 +312,47 @@ describe('AdminService', () => {
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
     delete process.env.PILOT_OPERATOR_ID;
+  });
+
+  it('allows only the configured engineering lead to isolate provider movement', async () => {
+    process.env.ENGINEERING_LEAD_ID = 'engineering_1';
+    const upsert = jest.fn().mockResolvedValue({
+      key: PilotControlKey.CORRIDOR_PROVIDER,
+      state: PilotControlState.PAUSED,
+    });
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'engineering_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotControl: { upsert },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma, audit).isolateProviderMovement(
+        'engineering_1',
+        'Partner outage',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({ state: PilotControlState.PAUSED }),
+    );
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { key: PilotControlKey.CORRIDOR_PROVIDER },
+        create: expect.objectContaining({ state: PilotControlState.PAUSED }),
+      }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'admin.engineering-isolation.provider-paused',
+      }),
+    );
+    delete process.env.ENGINEERING_LEAD_ID;
   });
 
   it('queues an ops status recheck and records its operational and audit results', async () => {

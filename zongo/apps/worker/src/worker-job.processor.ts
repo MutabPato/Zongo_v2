@@ -146,6 +146,7 @@ export class WorkerJobProcessor {
           (job.payload as Record<string, unknown>).manual === true;
         const controlKeys: PilotControlKey[] = [
           PilotControlKey.GLOBAL,
+          PilotControlKey.CORRIDOR_PROVIDER,
           job.jobType === JobType.COLLECTION
             ? PilotControlKey.COLLECTION
             : PilotControlKey.PAYOUT,
@@ -155,10 +156,12 @@ export class WorkerJobProcessor {
             where: { key: { in: controlKeys } },
             select: { key: true, state: true },
           })) ?? [];
-        if (
-          !manualPayout &&
-          controls.some((control) => control.state !== 'ENABLED')
-        ) {
+        const blockedControls = manualPayout
+          ? controls.filter(
+              (control) => control.key === PilotControlKey.CORRIDOR_PROVIDER,
+            )
+          : controls;
+        if (blockedControls.some((control) => control.state !== 'ENABLED')) {
           const reason =
             'Pilot money movement is paused by operational control';
           await this.prisma.workerJob.update({
@@ -711,9 +714,16 @@ export class WorkerJobProcessor {
       );
     }
     this.lifecycle.assertTransition(transaction.status, status);
+    const partnerReferenceBlindIndex = this.protection
+      ? await this.protection.blindIndex(partnerReference, 'provider-reference')
+      : undefined;
     await this.prisma.transferTransaction.update({
       where: { id: transaction.id },
-      data: { status, partnerReference },
+      data: {
+        status,
+        partnerReference,
+        ...(partnerReferenceBlindIndex ? { partnerReferenceBlindIndex } : {}),
+      },
     });
     await this.recordLifecycleSuccess(transaction.id, status);
     await this.audit.append({

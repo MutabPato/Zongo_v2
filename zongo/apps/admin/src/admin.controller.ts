@@ -272,6 +272,15 @@ export class AdminController {
     );
   }
 
+  @Post('pilot/engineering-isolation')
+  async isolateProviderMovement(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { reason: string },
+  ) {
+    const actor = await this.actor(authorization);
+    return this.adminService.isolateProviderMovement(actor.id, body.reason);
+  }
+
   @Post('pilot/allowlist/:profileId')
   async setPilotAllowlist(
     @Headers('authorization') authorization: string | undefined,

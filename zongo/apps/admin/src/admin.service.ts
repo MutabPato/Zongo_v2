@@ -136,7 +136,10 @@ export class AdminService {
     reference: string,
   ): Promise<unknown> {
     await this.requireActor(actorId, AdminRole.SUPPORT);
-    return this.prisma.transferTransaction.findUnique({ where: { reference } });
+    const transaction = await this.prisma.transferTransaction.findUnique({
+      where: { reference },
+    });
+    return this.maskAdminData(transaction);
   }
 
   async revealSenderProfile(actorId: string, profileId: string) {
@@ -245,11 +248,11 @@ export class AdminService {
       : [];
     return {
       role: actor.role,
-      failed,
-      pending,
-      reconciliation,
-      sensitiveActions,
-      alerts,
+      failed: this.maskAdminData(failed),
+      pending: this.maskAdminData(pending),
+      reconciliation: this.maskAdminData(reconciliation),
+      sensitiveActions: this.maskAdminData(sensitiveActions),
+      alerts: this.maskAdminData(alerts),
       canAdminister,
     };
   }
@@ -274,7 +277,7 @@ export class AdminService {
         })
       : [];
     const page = Math.max(query.page ?? 1, 1);
-    return this.prisma.transferTransaction.findMany({
+    const transactions = await this.prisma.transferTransaction.findMany({
       where: {
         status: query.status,
         OR: q
@@ -301,6 +304,7 @@ export class AdminService {
       skip: (page - 1) * 25,
       take: 25,
     });
+    return this.maskAdminData(transactions);
   }
 
   async investigateTransfer(
@@ -335,7 +339,10 @@ export class AdminService {
     const sender = await this.prisma.senderProfile.findUnique({
       where: { userId: transaction.senderUserId },
     });
-    return { transaction, sender };
+    return {
+      transaction: this.maskAdminData(transaction),
+      sender: this.maskAdminData(sender),
+    };
   }
 
   async addTransactionNote(actorId: string, reference: string, body: string) {
@@ -473,11 +480,13 @@ export class AdminService {
     query: { search?: string; corridorId?: string; userId?: string },
   ): Promise<unknown> {
     await this.requireActor(actorId, AdminRole.OPS);
-    if (this.beneficiaries) return this.beneficiaries.reviewForOps(query);
-    return this.prisma.beneficiary.findMany({
-      where: { corridorId: query.corridorId, userId: query.userId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const beneficiaries = this.beneficiaries
+      ? await this.beneficiaries.reviewForOps(query)
+      : await this.prisma.beneficiary.findMany({
+          where: { corridorId: query.corridorId, userId: query.userId },
+          orderBy: { createdAt: 'desc' },
+        });
+    return this.maskAdminData(beneficiaries);
   }
 
   async setUserBlocked(
@@ -650,7 +659,7 @@ export class AdminService {
 
   async listVerificationCases(actorId: string) {
     await this.requireActor(actorId, AdminRole.OPS);
-    return this.prisma.senderVerification.findMany({
+    const verifications = await this.prisma.senderVerification.findMany({
       where: {
         status: {
           in: [
@@ -666,6 +675,40 @@ export class AdminService {
       },
       orderBy: { createdAt: 'asc' },
     });
+    return this.maskAdminData(verifications);
+  }
+
+  /** Engineering may isolate provider movement, but has no resume or release authority. */
+  async isolateProviderMovement(actorId: string, reason: string) {
+    if (!reason.trim())
+      throw new ForbiddenException('An isolation reason is required');
+    const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
+    if (process.env.ENGINEERING_LEAD_ID !== actor.id)
+      throw new ForbiddenException(
+        'Only the configured engineering lead may execute technical isolation',
+      );
+    const control = await this.prisma.pilotControl.upsert({
+      where: { key: PilotControlKey.CORRIDOR_PROVIDER },
+      create: {
+        key: PilotControlKey.CORRIDOR_PROVIDER,
+        state: PilotControlState.PAUSED,
+        reason,
+        changedByIdentityId: actor.id,
+      },
+      update: {
+        state: PilotControlState.PAUSED,
+        reason,
+        changedByIdentityId: actor.id,
+        changedAt: new Date(),
+      },
+    });
+    await this.record(
+      actor,
+      'admin.engineering-isolation.provider-paused',
+      { target: 'pilot-control:CORRIDOR_PROVIDER', reason },
+      true,
+    );
+    return control;
   }
 
   async reviewVerification(
@@ -796,6 +839,31 @@ export class AdminService {
         },
         auditEventId,
       );
+  }
+
+  private maskAdminData(value: unknown): unknown {
+    if (Array.isArray(value))
+      return value.map((entry) => this.maskAdminData(entry));
+    if (value === null || typeof value !== 'object') return value;
+    return Object.fromEntries(
+      Object.entries(value).flatMap(([key, entry]) => {
+        if (/ciphertext|payoutAccount|evidenceCiphertext/i.test(key))
+          return [[key, '[REDACTED]']];
+        if (
+          /email|phone|legalName|providerReference|partnerReference/i.test(key)
+        ) {
+          return [
+            [
+              key,
+              typeof entry === 'string'
+                ? (this.protection?.mask(entry) ?? '[MASKED]')
+                : '[REDACTED]',
+            ],
+          ];
+        }
+        return [[key, this.maskAdminData(entry)]];
+      }),
+    );
   }
 
   private hashToken(token: string): string {

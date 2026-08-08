@@ -49,12 +49,32 @@ and recovery result.
 | Duplicate request             |          |                    |        |                     |          |
 | Duplicate callback            |          |                    |        |                     |          |
 | Out-of-order callback         |          |                    |        |                     |          |
-| Replay/authentication failure |          |                    |        |                     |          |
-| Timeout then status lookup    |          |                    |        |                     |          |
+| Replay                        |          |                    |        |                     |          |
+| Authentication failure       |          |                    |        |                     |          |
+| Timeout                      |          |                    |        |                     |          |
+| Status lookup                 |          |                    |        |                     |          |
 | Ambiguous result              |          |                    |        |                     |          |
 | Terminal failure              |          |                    |        |                     |          |
 | Manual recovery               |          |                    |        |                     |          |
+| Reconciliation                |          |                    |        |                     |          |
 
 Promotion decision: `NOT CERTIFIED` until account-specific terms and every test
 are approved by Operations, Reconciliation, Compliance/Risk, and the accountable
 pilot operator.
+
+## Machine-checkable completeness check
+
+Copy [`pretium-certification-evidence.example.json`](./pretium-certification-evidence.example.json)
+to an access-controlled evidence location, replace every field with an
+operator-owned evidence reference, and run:
+
+```sh
+PRETIUM_CERTIFICATION_EVIDENCE_PACK=/secure/evidence/pretium-certification.json \
+  pnpm verify:pretium-certification
+```
+
+The verifier requires the masked account facts, all controlled live-test
+records, named approvals including Pretium support/certification, and a
+`CERTIFIED` promotion decision. It checks
+completeness only; it never performs a live request, prints credentials, or
+certifies the account itself.

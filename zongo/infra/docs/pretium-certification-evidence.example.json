@@ -1,0 +1,34 @@
+{
+  "account": {
+    "merchantIdentifier": "",
+    "cdfEnabledEvidence": "",
+    "kesEnabledEvidence": "",
+    "portalWebhookEvidence": "",
+    "webhookAuthenticationContract": "",
+    "idempotencyContract": "",
+    "statusRetryRateLimitContract": "",
+    "supportEscalationRetentionTerms": ""
+  },
+  "tests": {
+    "duplicateRequest": {},
+    "duplicateCallback": {},
+    "outOfOrderCallback": {},
+    "replay": {},
+    "authenticationFailure": {},
+    "timeout": {},
+    "statusLookup": {},
+    "ambiguousResult": {},
+    "terminalFailure": {},
+    "manualRecovery": {},
+    "reconciliation": {}
+  },
+  "approvals": {
+    "operations": "",
+    "reconciliation": "",
+    "complianceRisk": "",
+    "pilotOperator": "",
+    "pretiumSupportCertification": ""
+  },
+  "promotionDecision": "NOT_CERTIFIED",
+  "promotionDecisionEvidence": ""
+}

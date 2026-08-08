@@ -1,4 +1,8 @@
 import { PrismaService } from '@app/db';
+import {
+  hasCompleteReconciliationCoverage,
+  isHealthyReconciliationSweep,
+} from '@app/observability';
 
 const RECONCILABLE_STATUSES = [
   'COLLECTION_SUCCESS',
@@ -46,6 +50,7 @@ async function main(): Promise<void> {
         }),
         prisma.transactionReconciliation.count({
           where: {
+            status: { not: 'PENDING' },
             transaction: { status: { in: [...RECONCILABLE_STATUSES] } },
           },
         }),
@@ -56,9 +61,11 @@ async function main(): Promise<void> {
           },
         }),
       ]);
-    const coverageComplete =
-      eligibleTransactions === reconciledTransactions &&
-      staleTransactions === 0;
+    const coverageComplete = hasCompleteReconciliationCoverage({
+      eligibleTransactions,
+      reconciledTransactions,
+      staleTransactions,
+    });
     checks.push({
       name: 'reconciliation-cadence-and-coverage',
       status: coverageComplete ? 'PASS' : 'FAIL',
@@ -83,7 +90,7 @@ async function main(): Promise<void> {
       details: { unresolvedDiscrepancies },
     });
 
-    const [controlDecisionEvents, readinessPublicationEvents, completedSweeps] =
+    const [controlDecisionEvents, readinessPublicationEvents, latestSweep] =
       await Promise.all([
         prisma.auditEvent.count({
           where: { name: { startsWith: 'admin.pilot-control.' } },
@@ -91,21 +98,54 @@ async function main(): Promise<void> {
         prisma.auditEvent.count({
           where: { name: 'admin.pilot-readiness.published' },
         }),
-        prisma.auditEvent.count({
-          where: { name: 'reconciliation.sweep.completed' },
+        prisma.auditEvent.findFirst({
+          where: {
+            name: 'reconciliation.sweep.completed',
+            createdAt: { gte: cutoff },
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true, payload: true },
         }),
       ]);
+    const sweepPayload =
+      latestSweep?.payload &&
+      typeof latestSweep.payload === 'object' &&
+      !Array.isArray(latestSweep.payload)
+        ? (latestSweep.payload as Record<string, unknown>)
+        : {};
+    const sweepSummary = {
+      eligibleTransactions: Number(sweepPayload.eligibleTransactions),
+      jobsObserved: Number(sweepPayload.jobsObserved),
+      succeeded: Number(sweepPayload.succeeded),
+      failed: Number(sweepPayload.failed),
+      skipped: Number(sweepPayload.skipped),
+    };
+    const sweepHealthy =
+      Boolean(latestSweep) &&
+      Object.values(sweepSummary).every(Number.isFinite) &&
+      isHealthyReconciliationSweep(sweepSummary);
+    checks.push({
+      name: 'recent-reconciliation-sweep-health',
+      status: sweepHealthy ? 'PASS' : 'FAIL',
+      details: {
+        recentSweep: Boolean(latestSweep),
+        ...(latestSweep
+          ? { latestSweepAt: latestSweep.createdAt.toISOString() }
+          : {}),
+        ...sweepSummary,
+      },
+    });
     const decisionHistoryComplete =
       controlDecisionEvents > 0 &&
       readinessPublicationEvents > 0 &&
-      completedSweeps > 0;
+      sweepHealthy;
     checks.push({
       name: 'release-and-control-decision-history',
       status: decisionHistoryComplete ? 'PASS' : 'FAIL',
       details: {
         controlDecisionEvents,
         readinessPublicationEvents,
-        completedSweeps,
+        recentHealthySweep: sweepHealthy,
       },
     });
 

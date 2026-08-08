@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { ReconciliationStatus, TransactionStatus } from '@prisma/client';
+import {
+  LedgerAccount,
+  LedgerDirection,
+  ReconciliationStatus,
+  TransactionStatus,
+} from '@prisma/client';
 import type { AuditLogPort } from '@app/domain';
 import type { PrismaService } from '@app/db';
 import { LedgerService, type LedgerAlertPort } from './ledger.service';
@@ -54,15 +59,95 @@ describe('LedgerService', () => {
       service.deriveReconciliation(
         { status: TransactionStatus.PAYOUT_SUCCESS },
         [
-          { eventName: 'collection', amountMinor: 100n },
-          { eventName: 'collection', amountMinor: 100n },
-          { eventName: 'payout', amountMinor: 90n },
-          { eventName: 'payout', amountMinor: 100n },
+          {
+            eventName: 'collection',
+            amountMinor: 100n,
+            account: LedgerAccount.CUSTOMER_COLLECTION,
+            direction: LedgerDirection.DEBIT,
+            currency: 'USD',
+          },
+          {
+            eventName: 'collection',
+            amountMinor: 100n,
+            account: LedgerAccount.PARTNER_CLEARING,
+            direction: LedgerDirection.CREDIT,
+            currency: 'USD',
+          },
+          {
+            eventName: 'payout',
+            amountMinor: 90n,
+            account: LedgerAccount.PARTNER_CLEARING,
+            direction: LedgerDirection.DEBIT,
+            currency: 'KES',
+          },
+          {
+            eventName: 'payout',
+            amountMinor: 100n,
+            account: LedgerAccount.BENEFICIARY_PAYOUT,
+            direction: LedgerDirection.CREDIT,
+            currency: 'KES',
+          },
         ],
       ),
     ).toEqual({
       status: ReconciliationStatus.MISMATCH,
-      reason: 'Ledger debit and credit differ',
+      reason: 'Ledger entries do not match expected accounts and amounts',
+    });
+  });
+
+  it('rejects equal amounts posted to the wrong ledger accounts', () => {
+    const service = new LedgerService({} as PrismaService, audit, alerts);
+    expect(
+      service.deriveReconciliation(
+        { status: TransactionStatus.COLLECTION_SUCCESS },
+        [
+          {
+            eventName: 'collection',
+            amountMinor: 100n,
+            account: LedgerAccount.PARTNER_CLEARING,
+            direction: LedgerDirection.DEBIT,
+            currency: 'USD',
+          },
+          {
+            eventName: 'collection',
+            amountMinor: 100n,
+            account: LedgerAccount.CUSTOMER_COLLECTION,
+            direction: LedgerDirection.CREDIT,
+            currency: 'USD',
+          },
+        ],
+      ),
+    ).toEqual({
+      status: ReconciliationStatus.MISMATCH,
+      reason: 'Ledger entries do not match expected accounts and amounts',
+    });
+  });
+
+  it('rejects a balanced pair with mismatched currencies', () => {
+    const service = new LedgerService({} as PrismaService, audit, alerts);
+    expect(
+      service.deriveReconciliation(
+        { status: TransactionStatus.COLLECTION_SUCCESS },
+        [
+          {
+            eventName: 'collection',
+            amountMinor: 100n,
+            account: LedgerAccount.CUSTOMER_COLLECTION,
+            direction: LedgerDirection.DEBIT,
+            currency: 'USD',
+          },
+          {
+            eventName: 'collection',
+            amountMinor: 100n,
+            account: LedgerAccount.PARTNER_CLEARING,
+            direction: LedgerDirection.CREDIT,
+            currency: 'KES',
+          },
+        ],
+      ),
+    ).toEqual({
+      status: ReconciliationStatus.MISMATCH,
+      reason: 'Ledger entries do not match expected accounts and amounts',
     });
   });
 
@@ -76,8 +161,20 @@ describe('LedgerService', () => {
           id: 'tx_1',
           status: TransactionStatus.PAYOUT_SUCCESS,
           ledgerEntries: [
-            { eventName: 'collection', amountMinor: 100n },
-            { eventName: 'collection', amountMinor: 100n },
+            {
+              eventName: 'collection',
+              amountMinor: 100n,
+              account: LedgerAccount.CUSTOMER_COLLECTION,
+              direction: LedgerDirection.DEBIT,
+              currency: 'USD',
+            },
+            {
+              eventName: 'collection',
+              amountMinor: 100n,
+              account: LedgerAccount.PARTNER_CLEARING,
+              direction: LedgerDirection.CREDIT,
+              currency: 'USD',
+            },
           ],
         }),
       },

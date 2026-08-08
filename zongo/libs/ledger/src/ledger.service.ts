@@ -4,6 +4,7 @@ import { PrismaService } from '@app/db';
 import {
   LedgerAccount,
   LedgerDirection,
+  CurrencyCode,
   ReconciliationStatus,
   TransactionStatus,
 } from '@prisma/client';
@@ -13,6 +14,14 @@ export interface LedgerAlertPort {
   warning(name: string, details: Record<string, unknown>): Promise<void>;
   urgent(name: string, details: Record<string, unknown>): Promise<void>;
 }
+
+type LedgerFact = {
+  eventName: string;
+  amountMinor: bigint;
+  account: LedgerAccount;
+  direction: LedgerDirection;
+  currency: CurrencyCode;
+};
 
 @Injectable()
 export class LedgerService {
@@ -77,22 +86,54 @@ export class LedgerService {
   /** Pure comparison: it never writes a reconciliation record. */
   deriveReconciliation(
     transaction: { status: TransactionStatus },
-    entries: Array<{ eventName: string; amountMinor: bigint }>,
+    entries: LedgerFact[],
   ) {
     const collection = entries.filter(
       (entry) => entry.eventName === 'collection',
     );
     const payout = entries.filter((entry) => entry.eventName === 'payout');
     if (
-      (
-        [
-          TransactionStatus.COLLECTION_SUCCESS,
-          TransactionStatus.PENDING_PAYOUT,
-          TransactionStatus.PAYOUT_SUCCESS,
-        ] as TransactionStatus[]
-      ).includes(transaction.status) &&
-      collection.length !== 2
+      entries.some(
+        (entry) =>
+          entry.eventName !== 'collection' && entry.eventName !== 'payout',
+      )
     )
+      return {
+        status: ReconciliationStatus.MISMATCH,
+        reason: 'Ledger contains an unknown lifecycle event',
+      };
+    const balancedPair = (
+      pair: LedgerFact[],
+      debitAccount: LedgerAccount,
+      creditAccount: LedgerAccount,
+    ) => {
+      if (pair.length !== 2) return false;
+      const debit = pair.find(
+        (entry) =>
+          entry.account === debitAccount &&
+          entry.direction === LedgerDirection.DEBIT,
+      );
+      const credit = pair.find(
+        (entry) =>
+          entry.account === creditAccount &&
+          entry.direction === LedgerDirection.CREDIT,
+      );
+      return Boolean(
+        debit &&
+        credit &&
+        debit.amountMinor === credit.amountMinor &&
+        debit.currency &&
+        debit.currency === credit.currency,
+      );
+    };
+    const collectionRequired = (
+      [
+        TransactionStatus.COLLECTION_SUCCESS,
+        TransactionStatus.PENDING_PAYOUT,
+        TransactionStatus.PAYOUT_SUCCESS,
+      ] as TransactionStatus[]
+    ).includes(transaction.status);
+    if (collectionRequired && collection.length !== 2)
       return {
         status: ReconciliationStatus.MISSING_COLLECTION_ENTRY,
         reason: 'Collection lifecycle requires balanced entries',
@@ -105,12 +146,24 @@ export class LedgerService {
         status: ReconciliationStatus.MISSING_PAYOUT_ENTRY,
         reason: 'Payout lifecycle requires balanced entries',
       };
-    for (const pair of [collection, payout])
-      if (pair.length === 2 && pair[0].amountMinor !== pair[1].amountMinor)
-        return {
-          status: ReconciliationStatus.MISMATCH,
-          reason: 'Ledger debit and credit differ',
-        };
+    if (
+      (collection.length > 0 &&
+        !balancedPair(
+          collection,
+          LedgerAccount.CUSTOMER_COLLECTION,
+          LedgerAccount.PARTNER_CLEARING,
+        )) ||
+      (payout.length > 0 &&
+        !balancedPair(
+          payout,
+          LedgerAccount.PARTNER_CLEARING,
+          LedgerAccount.BENEFICIARY_PAYOUT,
+        ))
+    )
+      return {
+        status: ReconciliationStatus.MISMATCH,
+        reason: 'Ledger entries do not match expected accounts and amounts',
+      };
     return { status: ReconciliationStatus.CONSISTENT, reason: null };
   }
 

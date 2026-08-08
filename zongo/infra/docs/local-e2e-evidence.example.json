@@ -1,0 +1,27 @@
+{
+  "commitOrImageDigest": "",
+  "schemaHash": "",
+  "executedAt": "",
+  "suitesPassed": 0,
+  "testsPassed": 0,
+  "workerStoppedDuringRun": false,
+  "workerRunningAfterRun": false,
+  "postgresHealthy": false,
+  "redisHealthy": false,
+  "controlledPartner": false,
+  "productionCredentialsUsed": true,
+  "externalNotificationsUsed": true,
+  "gateEvidence": {
+    "signedIntake": "",
+    "consentAndBeneficiary": "",
+    "kycEligibility": "",
+    "idempotency": "",
+    "activeChatContention": "",
+    "moneyMovementAndReconciliation": "",
+    "timeoutAndStatusOnly": "",
+    "notificationFailureIsolation": "",
+    "callbackOrderingAndReplay": "",
+    "supportInvestigation": "",
+    "manualPayoutRecovery": ""
+  }
+}

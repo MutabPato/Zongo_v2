@@ -22,6 +22,13 @@ DATABASE_URL='postgresql://<local-credentials>@<postgres-host>:<port>/zongo?sche
   pnpm test:integration
 ```
 
+The machine-checkable companion artifact is validated with:
+
+```sh
+LOCAL_E2E_EVIDENCE_PACK=/secure/evidence/local-e2e.json \
+  pnpm verify:local-e2e-evidence
+```
+
 Latest verified result in the local stack: `2` suites passed and `3` tests
 passed. The worker container must be stopped during this controlled run so it
 cannot claim the test's durable jobs with a different runtime configuration;
@@ -63,19 +70,19 @@ covered at the API/service boundaries listed above.
 
 ## Journey gates
 
-| Gate                                           | Result | Evidence                                                    |
-| ---------------------------------------------- | ------ | ----------------------------------------------------------- |
-| Signed WhatsApp intake and normalization       | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Consent, language, quote, beneficiary          | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| KYC eligibility and phone binding              | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Same-key replay and conflicting-key rejection  | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Active-chat contention                         | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Collection, payout, ledger, reconciliation     | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Timeout, waiting, status-only query            | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Notification retry and failure isolation       | PASS   | Database journey assertion + worker notification tests      |
-| Late/duplicate/out-of-order callback           | PASS   | API/service callback tests                                  |
-| Support/admin masked investigation             | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
-| Manual payout recovery without automatic retry | PASS   | `local-e2e.customer-journey.integration.spec.ts`            |
+| Gate                                           | Result | Evidence                                               |
+| ---------------------------------------------- | ------ | ------------------------------------------------------ |
+| Signed WhatsApp intake and normalization       | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Consent, language, quote, beneficiary          | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| KYC eligibility and phone binding              | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Same-key replay and conflicting-key rejection  | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Active-chat contention                         | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Collection, payout, ledger, reconciliation     | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Timeout, waiting, status-only query            | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Notification retry and failure isolation       | PASS   | Database journey assertion + worker notification tests |
+| Late/duplicate/out-of-order callback           | PASS   | API/service callback tests                             |
+| Support/admin masked investigation             | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
+| Manual payout recovery without automatic retry | PASS   | `local-e2e.customer-journey.integration.spec.ts`       |
 
 Local E2E decision: `INCOMPLETE` until every gate has executable evidence and
 the named reviewers sign the release record.

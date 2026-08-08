@@ -21,6 +21,7 @@
     "verify:pretium-config": "ts-node -r tsconfig-paths/register scripts/verify-pretium-config.ts",
     "verify:pretium-certification": "ts-node -r tsconfig-paths/register scripts/verify-pretium-certification-evidence.ts",
     "verify:operations-evidence": "ts-node -r tsconfig-paths/register scripts/verify-operations-evidence.ts",
+    "verify:local-e2e-evidence": "ts-node -r tsconfig-paths/register scripts/verify-local-e2e-evidence.ts",
     "verify:reconciliation": "ts-node -r tsconfig-paths/register scripts/verify-reconciliation-evidence.ts",
     "verify:pilot-readiness": "ts-node -r tsconfig-paths/register scripts/verify-pilot-readiness.ts",
     "start:debug": "nest start --debug --watch",

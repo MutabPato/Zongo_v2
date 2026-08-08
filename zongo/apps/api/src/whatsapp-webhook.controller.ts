@@ -6,8 +6,10 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  Optional,
 } from '@nestjs/common';
 import {
+  WhatsAppIngressThrottleService,
   WhatsAppSessionService,
   WhatsAppWebhookSignatureService,
 } from '@app/whatsapp';
@@ -19,6 +21,7 @@ export class WhatsAppWebhookController {
   constructor(
     private readonly signatures: WhatsAppWebhookSignatureService,
     private readonly sessions: WhatsAppSessionService,
+    @Optional() private readonly throttle?: WhatsAppIngressThrottleService,
   ) {}
 
   @Post()
@@ -43,6 +46,13 @@ export class WhatsAppWebhookController {
     );
     if (!externalEventId || !chatId || !senderPhoneNumber)
       throw new BadRequestException('Webhook event identity is incomplete');
+    if (this.throttle) {
+      const throttleResult = await this.throttle.consume({
+        chatId,
+        senderPhoneNumber,
+      });
+      this.throttle.assertAllowed(throttleResult);
+    }
 
     const result = await this.sessions.acceptInbound({
       externalEventId,

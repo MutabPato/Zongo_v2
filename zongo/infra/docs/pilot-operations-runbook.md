@@ -39,6 +39,11 @@ mutation, and job claims. Redis unavailable: rebuild disposable locks,
 wakeups, and rate-limit state from durable facts; keep Postgres-backed work
 running only when ingress throttling can be proven conservatively.
 
+The WhatsApp ingress fallback is a Postgres-authoritative keyed-hash bucket
+(`WHATSAPP_INGRESS_RATE_LIMIT_PER_MINUTE`). It does not persist raw phone/chat
+identifiers and rejects ingress with HTTP 429 when the configured window is
+exhausted.
+
 ## Evidence fields
 
 Every pause/resume record includes incident ID, actor identity, control key,

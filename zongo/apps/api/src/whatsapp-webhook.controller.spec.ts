@@ -1,6 +1,14 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { UnauthorizedException, BadRequestException } from '@nestjs/common';
-import type { WhatsAppSessionService } from '@app/whatsapp';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
+import type {
+  WhatsAppIngressThrottleService,
+  WhatsAppSessionService,
+} from '@app/whatsapp';
 import { WhatsAppWebhookController } from './whatsapp-webhook.controller';
 import type { WhatsAppWebhookSignatureService } from '@app/whatsapp';
 
@@ -82,6 +90,37 @@ describe('WhatsAppWebhookController', () => {
         text: 'status',
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(sessions.acceptInbound).not.toHaveBeenCalled();
+  });
+
+  it('applies conservative ingress throttling before creating a session', async () => {
+    (signatures.verify as jest.Mock).mockReturnValue(true);
+    const throttle = {
+      consume: jest.fn().mockResolvedValue({
+        allowed: false,
+        retryAfterSeconds: 12,
+      }),
+      assertAllowed: jest.fn(() => {
+        throw new HttpException('rate limited', HttpStatus.TOO_MANY_REQUESTS);
+      }),
+    } as unknown as WhatsAppIngressThrottleService;
+    const rateLimitedController = new WhatsAppWebhookController(
+      signatures,
+      sessions,
+      throttle,
+    );
+
+    await expect(
+      rateLimitedController.receive({ rawBody: '{}' }, 'sha256=valid', {
+        id: 'event-rate-limited',
+        from: '+243800000001',
+        text: 'start',
+      }),
+    ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
+    expect(throttle.consume).toHaveBeenCalledWith({
+      chatId: '+243800000001',
+      senderPhoneNumber: '+243800000001',
+    });
     expect(sessions.acceptInbound).not.toHaveBeenCalled();
   });
 });

@@ -9,12 +9,14 @@ import {
   WHATSAPP_NOTIFIER,
   unavailableWhatsAppNotifier,
 } from './whatsapp.service';
+import { WhatsAppIngressThrottleService } from './whatsapp-ingress-throttle.service';
 
 @Module({
   imports: [DbModule, AuditModule, SecurityModule],
   providers: [
     WhatsAppSessionService,
     WhatsAppWebhookSignatureService,
+    WhatsAppIngressThrottleService,
     {
       provide: WHATSAPP_NOTIFIER,
       useFactory: () =>
@@ -30,6 +32,7 @@ import {
   exports: [
     WhatsAppSessionService,
     WhatsAppWebhookSignatureService,
+    WhatsAppIngressThrottleService,
     WHATSAPP_NOTIFIER,
   ],
 })

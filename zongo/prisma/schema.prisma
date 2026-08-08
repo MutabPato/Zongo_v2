@@ -307,6 +307,19 @@ model WhatsAppInboundEvent {
   @@index([chatId, receivedAt])
 }
 
+/// Disposable ingress throttling state; the key is a keyed hash, never raw identity data.
+model WhatsAppIngressRateLimitBucket {
+  id String @id @default(cuid())
+  keyHash String @unique
+  windowStartedAt DateTime
+  expiresAt DateTime
+  requestCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
 model NotificationIntent {
   id String @id @default(cuid())
   dedupKey String @unique

@@ -27,6 +27,17 @@ cannot claim the test's durable jobs with a different runtime configuration;
 restart it immediately after the run. The test does not use production partner
 credentials or send customer notifications externally.
 
+Most recent controlled run record:
+
+- Commit: `ef8d9618a92492bee6e8253ddc82380d0b0e50e3`
+- Prisma schema hash: `a0325a7cb291ee077af753cf55065f545ff9bf03`
+- Executed at: `2026-08-08T22:13:38Z`
+- Command: `DATABASE_URL='<local-only PostgreSQL URL>' pnpm test:integration`
+- Worker state during test: stopped; PostgreSQL and Redis healthy
+- Result: `2` suites passed, `3` tests passed
+- Worker state after test: running; no production partner credentials or
+  external customer notifications used
+
 Covered by `apps/worker/test/local-e2e.customer-journey.integration.spec.ts`:
 
 - signed WhatsApp intake and localized consent;

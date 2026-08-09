@@ -21,4 +21,4 @@ For the required three-role HTTP matrix, run `infra/admin-panel/verify-role-matr
 
 For the reproducible Compose route-gate rehearsal, run `infra/admin-panel/verify-route-gate.sh [compose-file] [admin-hostname]`. It renders both `ADMIN_PANEL_ENABLED=true` and `false`, verifies panel priority 100 and the AdminJS fallback priority 10, and uses synthetic placeholder values only for config rendering.
 
-Before a cutover, run `infra/admin-panel/verify-evidence-pack.sh infra/admin-panel/evidence --require-complete`. The strict mode fails closed unless the parity matrix, browser report, live rollback evidence, and all required approvals are present and recorded.
+Before a cutover, run `infra/admin-panel/verify-evidence-pack.sh infra/admin-panel/evidence --require-complete`. The strict mode fails closed unless the parity matrix covers every required workflow, includes Support/Ops/Admin rows with passing unit/API/browser evidence, and the browser report, live rollback evidence, and all required approvals are present and recorded.

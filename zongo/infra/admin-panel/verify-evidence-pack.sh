@@ -36,8 +36,48 @@ for required_file in \
 done
 
 if [ "$REQUIRE_COMPLETE" = '--require-complete' ]; then
-  test -f "${EVIDENCE_DIR}/parity-matrix.csv" || {
+  MATRIX="${EVIDENCE_DIR}/parity-matrix.csv"
+  test -f "$MATRIX" || {
     echo 'release gate incomplete: parity-matrix.csv is missing' >&2
+    exit 1
+  }
+  awk -F, '
+    BEGIN {
+      expected["overview"] = 1
+      expected["operations-search"] = 1
+      expected["transaction-investigation"] = 1
+      expected["transaction-recovery"] = 1
+      expected["reconciliation"] = 1
+      expected["verification"] = 1
+      expected["beneficiaries"] = 1
+      expected["alerts"] = 1
+      expected["pilot-readiness"] = 1
+      expected["audit"] = 1
+      expected["admin-controls"] = 1
+    }
+    NR == 1 {
+      if ($1 != "workflow" || $13 != "unit_evidence" || $14 != "api_evidence" || $15 != "browser_evidence" || $16 != "status")
+        invalid = 1
+      next
+    }
+    NF < 16 || $1 == "" || $3 == "" || $13 == "" || $14 == "" || $15 == "" {
+      invalid = 1
+    }
+    {
+      workflows[$1] = 1
+      roles[$3] = 1
+      status = tolower($16)
+      if (status == "pass" || status == "passed" || status == "complete" || status == "verified")
+        passed[$1] = 1
+    }
+    END {
+      for (workflow in expected)
+        if (!workflows[workflow] || !passed[workflow]) missing = 1
+      if (!roles["SUPPORT"] || !roles["OPS"] || !roles["ADMIN"]) missing = 1
+      if (invalid || missing) exit 1
+    }
+  ' "$MATRIX" || {
+    echo 'release gate incomplete: parity matrix is malformed, incomplete, or lacks passing evidence for every workflow/role' >&2
     exit 1
   }
   test -d "${EVIDENCE_DIR}/browser-report" || {

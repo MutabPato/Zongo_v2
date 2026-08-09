@@ -42,5 +42,6 @@ Passed:
 - The paired admin services were recreated from the current release source, and the authenticated contract smoke plus `verify-preview.sh` passed again against the current containers.
 - The three-role matrix runner is available at `infra/admin-panel/verify-role-matrix.sh`; it uses named synthetic Support, Ops, and Admin credentials when enabled in the local environment.
 - With opt-in local Support/Ops fixtures enabled, `verify-role-matrix.sh` passed for Support, Ops, and Admin, including session-role assertions, read visibility, role-appropriate mutation denial, CSRF, and logout.
+- Against release `custom-admin-panel-20260809-1407-local`, the same three-role matrix was rerun after seeding the optional synthetic fixtures and passed without printing TOTP codes or response bodies.
 
 Not release-complete: this is local evidence only. The full three-role parity matrix, deployed preview/isolated Playwright evidence, rollback rehearsal, observation window, and operations-owner approvals remain required before AdminJS removal.

@@ -13,7 +13,7 @@ Verified locally:
 - Typed panel loaders cover beneficiary pages, admin controls, and Pilot readiness
 - Panel API errors preserve server correlation IDs in operator-safe messages
 - Rebuilt-image three-role Support/Ops/Admin HTTP matrix: passed
-- `pnpm test:e2e` with local environment: API suite 1/1 and legacy Admin compatibility suite 1/1 passed; these do not replace custom-panel browser parity.
+- `pnpm test:e2e` with local environment: API suite 1/1 and Admin HTTP boundary suite 3/3 passed; these do not replace custom-panel browser parity.
 - pnpm typecheck: passed
 - pnpm --filter @zongo/admin-panel build: passed
 - verify-contract-smoke.sh: passed against current local containers

@@ -47,6 +47,27 @@ export type Page<T> = {
   total: number;
 };
 
+export type WorkflowRecord = Record<string, unknown> & { id?: string };
+
+export type BeneficiarySummary = WorkflowRecord & {
+  id: string;
+  displayName: string;
+  phoneNumber?: string | null;
+};
+
+export type AdminControlsSnapshot = {
+  controls: WorkflowRecord[];
+  tier1: WorkflowRecord | null;
+  exposure: WorkflowRecord | null;
+  allowlistCount: number;
+};
+
+export type PilotReadiness = WorkflowRecord & {
+  stage?: string;
+  approvals?: WorkflowRecord[];
+  stageRecords?: WorkflowRecord[];
+};
+
 export type TransactionInvestigation = {
   transaction: Record<string, unknown>;
   sender: Record<string, unknown> | null;
@@ -89,8 +110,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-export async function loadCollection(path: string) {
-  return request<unknown>(path);
+export async function loadCollection<T>(path: string) {
+  return request<T>(path);
 }
 
 export async function login(userId: string, totpCode: string) {
@@ -244,9 +265,32 @@ export async function revealSender(profileId: string, csrfToken: string) {
 }
 
 export async function loadBeneficiaryDetail(id: string) {
-  return request<Record<string, unknown>>(
+  return request<BeneficiarySummary>(
     `/admin/v1/beneficiaries/${encodeURIComponent(id)}`,
   );
+}
+
+export async function loadBeneficiaries(
+  search: string,
+  page = 1,
+  pageSize = 25,
+) {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  if (search.trim()) params.set('search', search.trim());
+  return request<Page<BeneficiarySummary>>(
+    `/admin/v1/beneficiaries?${params.toString()}`,
+  );
+}
+
+export async function loadAdminControls() {
+  return request<AdminControlsSnapshot>('/admin/v1/admin-controls');
+}
+
+export async function loadPilotReadiness() {
+  return request<PilotReadiness | null>('/admin/v1/pilot/readiness');
 }
 
 export async function mutate<T>(

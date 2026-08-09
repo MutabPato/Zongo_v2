@@ -102,15 +102,23 @@ describe('AdminV1Controller', () => {
     const controller = new AdminV1Controller(admin as never, {} as never);
     const clearCookie = jest.fn();
 
-    await controller.logout(
-      {
-        headers: {
-          cookie: 'zongo_admin_session=session-token',
-        },
-      } as never,
-      { clearCookie } as never,
-      'csrf-token',
-    );
+    const previousCookieSecure = process.env.ADMIN_COOKIE_SECURE;
+    process.env.ADMIN_COOKIE_SECURE = 'false';
+    try {
+      await controller.logout(
+        {
+          headers: {
+            cookie: 'zongo_admin_session=session-token',
+          },
+        } as never,
+        { clearCookie } as never,
+        'csrf-token',
+      );
+    } finally {
+      if (previousCookieSecure === undefined)
+        delete process.env.ADMIN_COOKIE_SECURE;
+      else process.env.ADMIN_COOKIE_SECURE = previousCookieSecure;
+    }
 
     expect(admin.assertCsrfToken).toHaveBeenCalledWith(
       'session-token',
@@ -119,7 +127,43 @@ describe('AdminV1Controller', () => {
     expect(admin.logoutSession).toHaveBeenCalledWith('session-token');
     expect(clearCookie).toHaveBeenCalledWith(
       'zongo_admin_session',
-      expect.objectContaining({ httpOnly: true, sameSite: 'lax', path: '/' }),
+      expect.objectContaining({
+        httpOnly: true,
+        secure: false,
+        sameSite: 'lax',
+        path: '/',
+      }),
+    );
+  });
+
+  it('keeps the Secure attribute consistent when clearing a production session', async () => {
+    const admin = {
+      csrfToken: jest.fn().mockReturnValue('csrf-token'),
+      assertCsrfToken: jest.fn(),
+      logoutSession: jest.fn().mockResolvedValue(undefined),
+    };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+    const clearCookie = jest.fn();
+    const previousCookieSecure = process.env.ADMIN_COOKIE_SECURE;
+    delete process.env.ADMIN_COOKIE_SECURE;
+    try {
+      await controller.logout(
+        {
+          headers: {
+            cookie: 'zongo_admin_session=session-token',
+          },
+        } as never,
+        { clearCookie } as never,
+        'csrf-token',
+      );
+    } finally {
+      if (previousCookieSecure === undefined)
+        delete process.env.ADMIN_COOKIE_SECURE;
+      else process.env.ADMIN_COOKIE_SECURE = previousCookieSecure;
+    }
+    expect(clearCookie).toHaveBeenCalledWith(
+      'zongo_admin_session',
+      expect.objectContaining({ secure: true }),
     );
   });
 

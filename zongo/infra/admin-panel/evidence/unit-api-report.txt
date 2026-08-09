@@ -2,7 +2,7 @@ Release: custom-admin-panel-20260809-1423-local
 
 Verified locally:
 - pnpm lint: 0 errors, 28 pre-existing warnings
-- pnpm test: 53 passed suites, 233 passed tests, 3 skipped tests
+- pnpm test: 53 passed suites, 234 passed tests, 3 skipped tests
 - WebAuthn envelope validation: 4 focused DTO/controller assertions passed
 - Role-aware Overview read model: Support queue visibility regression passed
 - Verification reviewer independence: approval and rejection decision tests passed
@@ -11,6 +11,7 @@ Verified locally:
 - Tier 1 cap mutation decimal-string response test passed
 - Beneficiary review pagination uses service-side skip/take/count before reveal and masking
 - Typed panel loaders cover beneficiary pages, admin controls, and Pilot readiness
+- Session creation and logout clearing share the same Secure-cookie configuration
 - Panel API errors preserve server correlation IDs in operator-safe messages
 - Rebuilt-image three-role Support/Ops/Admin HTTP matrix: passed
 - `pnpm test:e2e` with local environment: API suite 1/1 and Admin HTTP boundary suite 3/3 passed; these do not replace custom-panel browser parity.

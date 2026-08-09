@@ -168,7 +168,7 @@ export class AdminV1Controller {
     }
     response.clearCookie(SESSION_COOKIE, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: this.cookieSecure(),
       sameSite: 'lax',
       path: '/',
     });
@@ -845,10 +845,14 @@ export class AdminV1Controller {
   private setSessionCookie(response: BrowserResponse, token: string): void {
     response.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
-      secure: process.env.ADMIN_COOKIE_SECURE !== 'false',
+      secure: this.cookieSecure(),
       sameSite: 'lax',
       path: '/',
       maxAge: 8 * 60 * 60 * 1000,
     });
+  }
+
+  private cookieSecure(): boolean {
+    return process.env.ADMIN_COOKIE_SECURE !== 'false';
   }
 }

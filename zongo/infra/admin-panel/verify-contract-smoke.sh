@@ -23,6 +23,8 @@ expect_status 200 "${BASE_URL}/backoffice/"
 expect_status 200 "${BASE_URL}/backoffice/transactions"
 expect_status 200 "${BASE_URL}/admin/v1/openapi-json"
 expect_status 401 "${BASE_URL}/admin/v1/auth/session"
+expect_status 401 -H 'Authorization: Bearer legacy-compatibility-token' \
+  "${BASE_URL}/admin/v1/auth/session"
 
 if [ -n "${ADMIN_SMOKE_USER:-}" ] && [ -n "${ADMIN_SMOKE_TOTP:-}" ]; then
   LOGIN_HEADERS="${TMP_DIR}/login.headers"

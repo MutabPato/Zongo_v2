@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import type { PrismaService } from '@app/db';
+import {
+  hashPilotReleasePublication,
+  signPilotReleasePublication,
+} from '@app/observability';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { PilotControlKey, PilotControlState } from '@prisma/client';
@@ -388,6 +392,70 @@ describe('AdminService', () => {
     );
     expect(upsert).not.toHaveBeenCalled();
     delete process.env.PILOT_OPERATOR_ID;
+  });
+
+  it('fails closed when a valid publication lacks provider and key configuration', async () => {
+    const signingKey = Buffer.alloc(32, 7).toString('base64url');
+    const publishedAt = new Date('2026-08-08T23:00:00.000Z');
+    const snapshot = {
+      approvedCohort: { senderIds: ['sender_1'] },
+      numericLimits: { dailySendMinor: '100000' },
+      releaseConfiguration: { corridor: 'DRC-KENYA' },
+      rollbackPlan: 'pause',
+      evidenceRefs: { kyc: 'evidence://kyc' },
+      noWaiverConfirmed: true,
+      approvals: [],
+      stageRecords: [],
+      publishedAt: publishedAt.toISOString(),
+      publishedByIdentityId: 'operator_1',
+    };
+    const publicationHash = hashPilotReleasePublication(snapshot);
+    const upsert = jest.fn();
+    process.env.PILOT_OPERATOR_ID = 'operator_1';
+    process.env.PILOT_RELEASE_SIGNING_KEY = signingKey;
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'operator_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      pilotReleaseRecord: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'pilot',
+          stage: 'PILOT_READY',
+          ...snapshot,
+          noWaiverConfirmed: true,
+          publishedAt,
+          publishedByIdentityId: 'operator_1',
+          publicationHash,
+          publicationSignature: signPilotReleasePublication(
+            publicationHash,
+            signingKey,
+          ),
+        }),
+      },
+      pilotControl: { upsert },
+    } as unknown as PrismaService;
+
+    try {
+      await expect(
+        new AdminService(prisma).setPilotControl(
+          'operator_1',
+          PilotControlKey.GLOBAL,
+          PilotControlState.ENABLED,
+          'Start pilot',
+        ),
+      ).rejects.toThrow(
+        'Pilot Ready evidence and no-waiver approval are required before global start',
+      );
+      expect(upsert).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.PILOT_OPERATOR_ID;
+      delete process.env.PILOT_RELEASE_SIGNING_KEY;
+    }
   });
 
   it('records a named readiness approval before publication', async () => {

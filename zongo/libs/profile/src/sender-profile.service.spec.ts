@@ -217,6 +217,7 @@ describe('SenderProfileService', () => {
     } as unknown as PrismaService;
 
     await expect(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       new SenderProfileService(prisma, audit, protection).resolveVerification({
         verificationId: 'verification_1',
         reviewerIdentityId: 'reviewer_1',

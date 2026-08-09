@@ -5,7 +5,7 @@
   "frontendImageDigest": "sha256:9166a660985f052fbbeab6755e3a4b6732d0728c5ed0ad67f01b503d963070b6",
   "backendArtifact": "zongo:local",
   "backendImageDigest": "sha256:f11ea75341d84ea96d86afabc50a8e6a2c3beb79f8746b6150ee31958a733c92",
-  "gitSha": "021bbf9",
+  "gitSha": "6cc86dc",
   "apiContract": "/admin/v1",
   "route": "/backoffice",
   "previewHost": "http://127.0.0.1:4173",

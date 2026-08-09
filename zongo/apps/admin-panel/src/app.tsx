@@ -13,6 +13,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  MenuItem,
   Paper,
   Stack,
   TextField,
@@ -397,6 +398,7 @@ function Overview({ session }: { session: api.AdminSession }) {
 
 function Operations({ title }: { title: string }) {
   const [query, setQuery] = useState('');
+  const [status, setStatus] = useState('');
   const [results, setResults] = useState<api.Page<Record<string, unknown>>>({
     items: [],
     page: 1,
@@ -411,7 +413,7 @@ function Operations({ title }: { title: string }) {
     setLoading(true);
     setError(undefined);
     try {
-      setResults(await api.searchOperations(query));
+      setResults(await api.searchOperations(query, 1, status || undefined));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Search failed');
     } finally {
@@ -433,7 +435,7 @@ function Operations({ title }: { title: string }) {
       <Paper
         component="form"
         onSubmit={search}
-        sx={{ p: 2.5, display: 'flex', gap: 1.5 }}
+        sx={{ p: 2.5, display: 'flex', gap: 1.5, flexWrap: 'wrap' }}
       >
         <TextField
           fullWidth
@@ -442,6 +444,28 @@ function Operations({ title }: { title: string }) {
           onChange={(event) => setQuery(event.target.value)}
           size="small"
         />
+        <TextField
+          select
+          label="Status"
+          value={status}
+          onChange={(event) => setStatus(event.target.value)}
+          size="small"
+          sx={{ minWidth: 190 }}
+        >
+          <MenuItem value="">All statuses</MenuItem>
+          {[
+            'INITIATED',
+            'COLLECTION_PENDING',
+            'COLLECTION_FAILED',
+            'PAYOUT_PENDING',
+            'PAYOUT_FAILED',
+            'COMPLETED',
+          ].map((value) => (
+            <MenuItem key={value} value={value}>
+              {value}
+            </MenuItem>
+          ))}
+        </TextField>
         <Button type="submit" variant="contained" disabled={loading}>
           {loading ? 'Searching…' : 'Search'}
         </Button>
@@ -473,6 +497,54 @@ function Operations({ title }: { title: string }) {
           <Typography color="text.secondary" sx={{ py: 3 }}>
             Search for an operation to begin.
           </Typography>
+        )}
+        {results.total > results.pageSize && (
+          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+            <Button
+              disabled={results.page <= 1 || loading}
+              onClick={() => {
+                setLoading(true);
+                void api
+                  .searchOperations(
+                    query,
+                    results.page - 1,
+                    status || undefined,
+                  )
+                  .then(setResults)
+                  .catch((cause) =>
+                    setError(
+                      cause instanceof Error ? cause.message : 'Search failed',
+                    ),
+                  )
+                  .finally(() => setLoading(false));
+              }}
+            >
+              Previous
+            </Button>
+            <Button
+              disabled={
+                results.page * results.pageSize >= results.total || loading
+              }
+              onClick={() => {
+                setLoading(true);
+                void api
+                  .searchOperations(
+                    query,
+                    results.page + 1,
+                    status || undefined,
+                  )
+                  .then(setResults)
+                  .catch((cause) =>
+                    setError(
+                      cause instanceof Error ? cause.message : 'Search failed',
+                    ),
+                  )
+                  .finally(() => setLoading(false));
+              }}
+            >
+              Next
+            </Button>
+          </Stack>
         )}
       </Paper>
     </Stack>
@@ -522,6 +594,15 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
   const transaction = data.transaction;
   const sender = data.sender;
   const senderProfileId = sender?.id ? String(sender.id) : undefined;
+  const contextSections = [
+    ['Ledger entries', transaction.ledgerEntries],
+    ['Worker jobs', transaction.workerJobs],
+    ['Transaction notes', transaction.adminNotes],
+    ['Reconciliation', transaction.reconciliation],
+    ['Audit events', transaction.auditEvents],
+    ['Beneficiary context', transaction.beneficiary],
+    ['Retry beneficiary', transaction.retryBeneficiary],
+  ].filter(([, value]) => value !== undefined && value !== null);
   return (
     <Stack spacing={3}>
       <Box>
@@ -600,6 +681,32 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
             {JSON.stringify(revealedSender, null, 2)}
           </Box>
         )}
+      </Paper>
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Investigation context
+        </Typography>
+        <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+          {contextSections.map(([label, value]) => (
+            <Box key={label as string}>
+              <Typography fontWeight={700}>{label as string}</Typography>
+              <Box
+                component="pre"
+                sx={{
+                  mt: 0.5,
+                  mb: 0,
+                  p: 1.25,
+                  bgcolor: '#f7f9fc',
+                  borderRadius: 1,
+                  overflowX: 'auto',
+                  fontSize: 12,
+                }}
+              >
+                {JSON.stringify(value, null, 2)}
+              </Box>
+            </Box>
+          ))}
+        </Stack>
       </Paper>
       <Paper sx={{ p: 2.5 }}>
         <Typography variant="h6" fontWeight={800}>
@@ -1225,6 +1332,7 @@ function WorkflowPage({
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [message, setMessage] = useState<string>();
   async function load() {
     setLoading(true);
     try {
@@ -1251,10 +1359,15 @@ function WorkflowPage({
     if (!reason?.trim()) return;
     try {
       const token = (await api.loadCsrfToken()).token;
-      await api.mutate(
+      const result = await api.mutate<{ handling?: string }>(
         `/admin/v1/alerts/${encodeURIComponent(id)}/${action}`,
         token,
         { reason },
+      );
+      setMessage(
+        result.handling === 'ALREADY_HANDLED'
+          ? 'Alert was already handled; no duplicate audit action was written.'
+          : 'Alert handling accepted and audited.',
       );
       await load();
     } catch (cause) {
@@ -1279,21 +1392,31 @@ function WorkflowPage({
       setError(cause instanceof Error ? cause.message : 'Review failed');
     }
   }
-  async function reconciliationAction(id: string, action: 'notes' | 'assign') {
+  async function reconciliationAction(
+    id: string,
+    action: 'notes' | 'assign' | 'escalate',
+  ) {
     const reason = window.prompt(
       action === 'notes'
         ? 'Append-only reconciliation note'
-        : 'Reason for ownership assignment',
+        : action === 'escalate'
+          ? 'Reason for reconciliation escalation'
+          : 'Reason for ownership assignment',
     );
     if (!reason?.trim()) return;
     const body =
       action === 'notes'
         ? { body: reason }
-        : { ownerIdentityId: window.prompt('Owner identity id') ?? '', reason };
+        : {
+            ownerIdentityId: window.prompt('Owner identity id') ?? '',
+            reason,
+            escalate: action === 'escalate',
+          };
+    const routeAction = action === 'notes' ? 'notes' : 'assign';
     try {
       const token = (await api.loadCsrfToken()).token;
       await api.mutate(
-        `/admin/v1/reconciliation/${encodeURIComponent(id)}/${action}`,
+        `/admin/v1/reconciliation/${encodeURIComponent(id)}/${routeAction}`,
         token,
         body,
       );
@@ -1337,6 +1460,7 @@ function WorkflowPage({
         </Typography>
       </Box>
       {error && <Alert severity="error">{error}</Alert>}
+      {message && <Alert severity="success">{message}</Alert>}
       <Paper sx={{ p: 2.5 }}>
         {loading ? (
           <CircularProgress />
@@ -1448,6 +1572,15 @@ function WorkflowPage({
                       }
                     >
                       Assign owner
+                    </Button>
+                    <Button
+                      size="small"
+                      color="warning"
+                      onClick={() =>
+                        reconciliationAction(String(row.id), 'escalate')
+                      }
+                    >
+                      Escalate
                     </Button>
                   </Stack>
                 )}

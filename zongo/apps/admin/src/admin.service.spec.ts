@@ -149,6 +149,46 @@ describe('AdminService', () => {
     });
   });
 
+  it('keeps reference search usable when optional blind-index keys are absent', async () => {
+    const transactionFindMany = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'tx_1', reference: 'ZNG-2026-0001', amountMinor: 100n },
+      ]);
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'support_1',
+          userId: 'support@example.test',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      senderProfile: { findMany: jest.fn().mockResolvedValue([]) },
+      transferTransaction: {
+        findMany: transactionFindMany,
+        count: jest.fn().mockResolvedValue(1),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).searchOperations('support_1', {
+        q: 'ZNG-2026-0001',
+      }),
+    ).resolves.toEqual({
+      items: [{ id: 'tx_1', reference: 'ZNG-2026-0001', amountMinor: '100' }],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+    });
+    expect(transactionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ OR: expect.any(Array) }),
+      }),
+    );
+  });
+
   it('preserves a support note and records its privileged audit context', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const create = jest

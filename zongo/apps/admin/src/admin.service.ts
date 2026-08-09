@@ -351,18 +351,15 @@ export class AdminService {
   ): Promise<unknown> {
     await this.requireActor(actorId, AdminRole.SUPPORT);
     const q = query.q?.trim();
-    const phoneBlindIndex =
-      q && this.protection
-        ? await this.protection.blindIndex(q, 'beneficiary-phone')
-        : undefined;
-    const emailBlindIndex =
-      q && this.protection
-        ? await this.protection.blindIndex(q, 'sender-email')
-        : undefined;
-    const beneficiaryPhoneBlindIndex =
-      q && this.protection
-        ? await this.protection.blindIndex(q, 'sender-phone')
-        : undefined;
+    const phoneBlindIndex = q
+      ? await this.optionalBlindIndex(q, 'beneficiary-phone')
+      : undefined;
+    const emailBlindIndex = q
+      ? await this.optionalBlindIndex(q, 'sender-email')
+      : undefined;
+    const beneficiaryPhoneBlindIndex = q
+      ? await this.optionalBlindIndex(q, 'sender-phone')
+      : undefined;
     const profiles = q
       ? await this.prisma.senderProfile.findMany({
           where: {
@@ -781,12 +778,31 @@ export class AdminService {
     query: { search?: string; corridorId?: string; userId?: string },
   ): Promise<unknown> {
     await this.requireActor(actorId, AdminRole.OPS);
-    const beneficiaries = this.beneficiaries
-      ? await this.beneficiaries.reviewForOps(query)
-      : await this.prisma.beneficiary.findMany({
-          where: { corridorId: query.corridorId, userId: query.userId },
-          orderBy: { createdAt: 'desc' },
-        });
+    const canUseEncryptedSearch =
+      !query.search || this.blindIndexConfigured('beneficiary-phone');
+    const beneficiaries =
+      this.beneficiaries && canUseEncryptedSearch
+        ? await this.beneficiaries.reviewForOps(query)
+        : await this.prisma.beneficiary.findMany({
+            where: {
+              corridorId: query.corridorId,
+              userId: query.userId,
+              ...(query.search
+                ? {
+                    OR: [
+                      {
+                        displayName: {
+                          contains: query.search,
+                          mode: 'insensitive' as const,
+                        },
+                      },
+                      { phoneNumber: { contains: query.search } },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: { createdAt: 'desc' },
+          });
     return this.maskAdminData(beneficiaries);
   }
 
@@ -1718,6 +1734,24 @@ export class AdminService {
         }
         return [[key, this.maskAdminData(entry)]];
       }),
+    );
+  }
+
+  private async optionalBlindIndex(
+    value: string,
+    purpose: string,
+  ): Promise<string | undefined> {
+    const protection = this.protection;
+    if (!protection || !this.blindIndexConfigured(purpose)) return undefined;
+    return protection.blindIndex(value, purpose);
+  }
+
+  private blindIndexConfigured(purpose: string): boolean {
+    return Boolean(
+      this.protection &&
+      process.env[
+        `ZONGO_BLIND_INDEX_KEY_${purpose.replace(/-/g, '_').toUpperCase()}`
+      ],
     );
   }
 

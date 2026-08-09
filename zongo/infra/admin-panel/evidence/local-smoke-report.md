@@ -23,5 +23,7 @@ Passed:
 - Fresh browser smoke confirmed policy/readiness timestamps are serialized as ISO strings rather than object placeholders.
 - Browser console was clean after the expected unauthenticated `/admin/v1/auth/session` probe during initial page load.
 - Entry-document caching is `no-cache`, while hashed panel assets return `immutable` long-lived caching.
+- Reference search remains functional in the local image without optional blind-index environment keys; encrypted-field search falls back to approved non-sensitive reference/name criteria.
+- Transaction investigation now renders ledger, worker, reconciliation, notes, audit, beneficiary, retry, masked sender, and controlled-action context.
 
 Not release-complete: this is local evidence only. The full three-role parity matrix, deployed preview/isolated Playwright evidence, rollback rehearsal, observation window, and operations-owner approvals remain required before AdminJS removal.

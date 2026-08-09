@@ -156,9 +156,15 @@ export async function loadOverview() {
   return request<Overview>('/admin/v1/overview');
 }
 
-export async function searchOperations(query: string, page = 1) {
+export async function searchOperations(
+  query: string,
+  page = 1,
+  status?: string,
+) {
+  const params = new URLSearchParams({ q: query, page: String(page) });
+  if (status) params.set('status', status);
   return request<Page<Record<string, unknown>>>(
-    `/admin/v1/operations/search?q=${encodeURIComponent(query)}&page=${page}`,
+    `/admin/v1/operations/search?${params.toString()}`,
   );
 }
 

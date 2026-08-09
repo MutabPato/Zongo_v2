@@ -34,7 +34,8 @@ Passed:
 - Repository HTTP E2E suites passed with the local database configuration (API root and existing Admin compatibility endpoint); these do not replace the required deployed panel parity journeys.
 - `verify-contract-smoke.sh` passed against the freshly rebuilt local panel with synthetic TOTP credentials: cookie-only login, `HttpOnly`/`SameSite=Lax`/`Path=/`, authenticated session and CSRF acquisition, CSRF-denied logout, invalid status-filter 400, and successful logout.
 - The contract smoke gate also rejects bearer-only requests to canonical `/admin/v1`; bearer compatibility remains confined to legacy `/admin/*` routes.
-- Fresh current-source rebuild `custom-admin-panel-20260809-1340-local` passed `verify-contract-smoke.sh` and `verify-preview.sh`; image digests and commit are recorded in `local-release-manifest.json`.
+- Fresh current-source rebuild `custom-admin-panel-20260809-1407-local` passed `verify-contract-smoke.sh` and `verify-preview.sh`; image digests and commit are recorded in `local-release-manifest.json`.
+- The typed panel loaders for beneficiary pages, admin controls, and Pilot readiness compile against the canonical `/admin/v1` boundary without changing wire routes.
 - The three-role Support/Ops/Admin matrix was rerun against that rebuilt stack with in-memory synthetic TOTP codes and passed all role, read, denial, CSRF, and logout assertions.
 - Real-browser local smoke captured authenticated Overview and Transactions journeys in `evidence/browser-report/`; the expected initial unauthenticated session probe was the only console error.
 - Real-browser Support and Ops journeys confirmed server-derived navigation visibility: Support omitted Alerts/Verification/Admin controls; Ops exposed Alerts/Verification but omitted Admin controls. Both sessions were logged out after capture.

@@ -1,4 +1,4 @@
-Release: custom-admin-panel-20260809-1340-local
+Release: custom-admin-panel-20260809-1407-local
 
 Verified locally:
 - pnpm lint: 0 errors, 28 pre-existing warnings
@@ -10,6 +10,7 @@ Verified locally:
 - Verification decision result masking test passed
 - Tier 1 cap mutation decimal-string response test passed
 - Beneficiary review pagination uses service-side skip/take/count before reveal and masking
+- Typed panel loaders cover beneficiary pages, admin controls, and Pilot readiness
 - Panel API errors preserve server correlation IDs in operator-safe messages
 - Rebuilt-image three-role Support/Ops/Admin HTTP matrix: passed
 - `pnpm test:e2e` with local environment: API suite 1/1 and legacy Admin compatibility suite 1/1 passed; these do not replace custom-panel browser parity.

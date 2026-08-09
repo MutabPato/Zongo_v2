@@ -1,3 +1,5 @@
+import { verifyPretiumRuntimeConfiguration } from './pretium-config';
+
 export interface PretiumClient {
   collect(input: {
     reference: string;
@@ -239,4 +241,21 @@ export class PretiumHttpClient implements PretiumClient {
       ? ('PENDING_COLLECTION' as const)
       : ('PENDING_PAYOUT' as const);
   }
+}
+
+/**
+ * Creates a live client only for an explicitly complete production
+ * configuration. Partial configuration must remain unavailable so a caller
+ * cannot accidentally send movement through an unapproved partner setup.
+ */
+export function createPretiumClient(
+  environment: NodeJS.ProcessEnv,
+): PretiumClient {
+  if (verifyPretiumRuntimeConfiguration(environment).status !== 'PASS')
+    return unavailablePretiumClient;
+  return new PretiumHttpClient(
+    environment.PRETIUM_BASE_URL!,
+    environment.PRETIUM_CONSUMER_KEY!,
+    environment.PRETIUM_WEBHOOK_URL,
+  );
 }

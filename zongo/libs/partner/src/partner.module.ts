@@ -1,11 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PARTNER_PORT } from '@app/domain';
-import { PretiumHttpClient, type PretiumClient } from './lib/pretium-adapter';
+import { createPretiumClient, type PretiumClient } from './lib/pretium-adapter';
 import { PretiumPartnerAdapter } from './lib/pretium-adapter.service';
-import {
-  PRETIUM_CLIENT,
-  unavailablePretiumClient,
-} from './lib/pretium-adapter';
+import { PRETIUM_CLIENT } from './lib/pretium-adapter';
 import {
   PretiumWebhookService,
   PretiumWebhookSignatureService,
@@ -22,16 +19,7 @@ import { SecurityModule } from '@app/security';
     PretiumWebhookSignatureService,
     {
       provide: PRETIUM_CLIENT,
-      useFactory: (): PretiumClient =>
-        process.env.PRETIUM_BASE_URL &&
-        process.env.PRETIUM_CONSUMER_KEY &&
-        process.env.PRETIUM_WEBHOOK_URL
-          ? new PretiumHttpClient(
-              process.env.PRETIUM_BASE_URL,
-              process.env.PRETIUM_CONSUMER_KEY,
-              process.env.PRETIUM_WEBHOOK_URL,
-            )
-          : unavailablePretiumClient,
+      useFactory: (): PretiumClient => createPretiumClient(process.env),
     },
     {
       provide: PARTNER_PORT,

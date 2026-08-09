@@ -1,8 +1,44 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { PretiumHttpClient } from './pretium-adapter';
+import { createPretiumClient, PretiumHttpClient } from './pretium-adapter';
 
 describe('PretiumHttpClient', () => {
   afterEach(() => jest.restoreAllMocks());
+
+  it('keeps the partner unavailable for partial runtime configuration', async () => {
+    await expect(
+      createPretiumClient({
+        PRETIUM_BASE_URL: 'https://api.example.test',
+        PRETIUM_CONSUMER_KEY: 'consumer-key',
+        PRETIUM_WEBHOOK_URL: 'https://example.test/webhooks/pretium',
+      }).collect({
+        reference: 'ZNG-0',
+        amountMinor: '100',
+        currency: 'CDF',
+        beneficiaryId: 'ben_0',
+        senderPhoneNumber: '+243800000000',
+      }),
+    ).rejects.toThrow('Pretium client is not configured');
+  });
+
+  it('creates the partner client only for complete production configuration', async () => {
+    await expect(
+      createPretiumClient({
+        PRETIUM_BASE_URL: 'https://api.example.test',
+        PRETIUM_CONSUMER_KEY: 'consumer-key',
+        PRETIUM_WEBHOOK_URL: 'https://example.test/webhooks/pretium',
+        PRETIUM_WEBHOOK_SECRET: 'webhook-secret',
+        PRETIUM_CDF_ENABLED: 'true',
+        PRETIUM_KES_ENABLED: 'true',
+        PRETIUM_ENVIRONMENT: 'production',
+        PRETIUM_NO_SANDBOX_CONFIRMED: 'true',
+      }).collect({
+        reference: 'ZNG-0',
+        amountMinor: '100',
+        currency: 'CDF',
+        beneficiaryId: 'ben_0',
+      }),
+    ).rejects.toThrow('Pretium collection phone is unavailable');
+  });
 
   it('calls the documented CDF collection route with the consumer key', async () => {
     const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue(

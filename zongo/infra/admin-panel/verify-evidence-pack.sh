@@ -54,6 +54,9 @@ if [ "$REQUIRE_COMPLETE" = '--require-complete' ]; then
       expected["pilot-readiness"] = 1
       expected["audit"] = 1
       expected["admin-controls"] = 1
+      required_roles["SUPPORT"] = 1
+      required_roles["OPS"] = 1
+      required_roles["ADMIN"] = 1
     }
     NR == 1 {
       if ($1 != "workflow" || $13 != "unit_evidence" || $14 != "api_evidence" || $15 != "browser_evidence" || $16 != "status")
@@ -66,13 +69,19 @@ if [ "$REQUIRE_COMPLETE" = '--require-complete' ]; then
     {
       workflows[$1] = 1
       roles[$3] = 1
+      pairs[$1 ":" $3] = 1
       status = tolower($16)
       if (status == "pass" || status == "passed" || status == "complete" || status == "verified")
-        passed[$1] = 1
+        passed[$1 ":" $3] = 1
     }
     END {
-      for (workflow in expected)
-        if (!workflows[workflow] || !passed[workflow]) missing = 1
+      for (workflow in expected) {
+        if (!workflows[workflow]) missing = 1
+        for (role in required_roles) {
+          pair = workflow ":" role
+          if (!pairs[pair] || !passed[pair]) missing = 1
+        }
+      }
       if (!roles["SUPPORT"] || !roles["OPS"] || !roles["ADMIN"]) missing = 1
       if (invalid || missing) exit 1
     }

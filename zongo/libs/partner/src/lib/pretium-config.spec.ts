@@ -29,4 +29,27 @@ describe('Pretium runtime configuration', () => {
 
     expect(result.status).toBe('PASS');
   });
+
+  it('rejects embedded credentials in provider and webhook URLs', () => {
+    const result = verifyPretiumRuntimeConfiguration({
+      PRETIUM_BASE_URL: 'https://user:password@api.pretium.africa',
+      PRETIUM_CONSUMER_KEY: 'configured-at-runtime',
+      PRETIUM_WEBHOOK_URL:
+        'https://user:password@example.test/webhooks/pretium',
+      PRETIUM_WEBHOOK_SECRET: 'configured-at-runtime',
+      PRETIUM_CDF_ENABLED: 'true',
+      PRETIUM_KES_ENABLED: 'true',
+      PRETIUM_ENVIRONMENT: 'production',
+      PRETIUM_NO_SANDBOX_CONFIRMED: 'true',
+    });
+
+    expect(result.status).toBe('INCOMPLETE');
+    expect(
+      result.checks.find((check) => check.name === 'base-url-is-https')?.status,
+    ).toBe('FAIL');
+    expect(
+      result.checks.find((check) => check.name === 'webhook-url-is-https')
+        ?.status,
+    ).toBe('FAIL');
+  });
 });

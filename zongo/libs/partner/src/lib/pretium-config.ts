@@ -14,7 +14,8 @@ function configured(value: string | undefined): boolean {
 function validHttpsUrl(value: string | undefined): boolean {
   if (!configured(value)) return false;
   try {
-    return new URL(value!).protocol === 'https:';
+    const url = new URL(value!);
+    return url.protocol === 'https:' && !url.username && !url.password;
   } catch {
     return false;
   }

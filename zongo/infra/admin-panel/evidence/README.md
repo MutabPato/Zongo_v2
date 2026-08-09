@@ -20,3 +20,5 @@ For local or preview contract checks, run `infra/admin-panel/verify-contract-smo
 For the required three-role HTTP matrix, run `infra/admin-panel/verify-role-matrix.sh <base-url>` with synthetic `ADMIN_SMOKE_SUPPORT_USER`/`ADMIN_SMOKE_SUPPORT_TOTP`, `ADMIN_SMOKE_OPS_USER`/`ADMIN_SMOKE_OPS_TOTP`, and `ADMIN_SMOKE_ADMIN_USER`/`ADMIN_SMOKE_ADMIN_TOTP` values. It verifies shared read access plus Support, Ops, and Admin denial/allowance boundaries without printing response bodies or credentials.
 
 For the reproducible Compose route-gate rehearsal, run `infra/admin-panel/verify-route-gate.sh [compose-file] [admin-hostname]`. It renders both `ADMIN_PANEL_ENABLED=true` and `false`, verifies panel priority 100 and the AdminJS fallback priority 10, and uses synthetic placeholder values only for config rendering.
+
+Before a cutover, run `infra/admin-panel/verify-evidence-pack.sh infra/admin-panel/evidence --require-complete`. The strict mode fails closed unless the parity matrix, browser report, live rollback evidence, and all required approvals are present and recorded.

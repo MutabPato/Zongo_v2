@@ -4,7 +4,7 @@ Date: 2026-08-09
 
 Environment: rebuilt local paired stack at `http://127.0.0.1:4173/backoffice/`.
 
-Current artifact: `custom-admin-panel-20260809-1423-local`.
+Current artifact: `custom-admin-panel-20260809-1426-local`.
 
 Fixture: synthetic Support, Ops, and Admin identities. No production credentials or customer data were used.
 

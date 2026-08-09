@@ -119,6 +119,10 @@ services:
       BREAK_GLASS_SECRET: ${BREAK_GLASS_SECRET:-local-break-glass-secret-not-for-remote-use}
       ADMINJS_COOKIE_SECRET: ${ADMINJS_COOKIE_SECRET:-local-cookie-secret-not-for-remote-use}
       ADMIN_JS_TMP_DIR: /tmp/adminjs
+      LOCAL_SUPPORT_EMAIL: ${LOCAL_SUPPORT_EMAIL:-}
+      LOCAL_SUPPORT_TOTP_SECRET: ${LOCAL_SUPPORT_TOTP_SECRET:-}
+      LOCAL_OPS_EMAIL: ${LOCAL_OPS_EMAIL:-}
+      LOCAL_OPS_TOTP_SECRET: ${LOCAL_OPS_TOTP_SECRET:-}
       ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:-http://localhost:3002}

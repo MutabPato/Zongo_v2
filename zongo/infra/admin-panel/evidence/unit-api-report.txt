@@ -8,6 +8,7 @@ Verified locally:
 - Verification reviewer independence: approval and rejection decision tests passed
 - Reconciliation owner-role and identity-secret projection tests passed
 - Verification decision result masking test passed
+- Tier 1 cap mutation decimal-string response test passed
 - pnpm typecheck: passed
 - pnpm --filter @zongo/admin-panel build: passed
 - verify-contract-smoke.sh: passed against current local containers

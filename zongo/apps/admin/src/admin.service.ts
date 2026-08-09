@@ -978,7 +978,12 @@ export class AdminService {
       },
       true,
     );
-    return policy;
+    return this.maskAdminData(policy) as {
+      id: string;
+      perTransferLimitMinor: string;
+      dailyLimitMinor: string;
+      [key: string]: unknown;
+    };
   }
 
   async setPilotControl(

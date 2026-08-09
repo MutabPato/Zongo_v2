@@ -459,7 +459,11 @@ describe('AdminService', () => {
   it('allows only an MFA-verified admin to change and audit Tier 1 caps', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const alerts = { sensitiveAction: jest.fn().mockResolvedValue(undefined) };
-    const setGlobalTierLimits = jest.fn().mockResolvedValue({ id: 'policy_1' });
+    const setGlobalTierLimits = jest.fn().mockResolvedValue({
+      id: 'policy_1',
+      perTransferLimitMinor: 500_000n,
+      dailyLimitMinor: 1_000_000n,
+    });
     const prisma = {
       platformIdentity: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
@@ -472,14 +476,20 @@ describe('AdminService', () => {
       },
     } as unknown as PrismaService;
 
-    await new AdminService(
-      prisma,
-      audit,
-      undefined,
-      undefined,
-      { setGlobalTierLimits } as never,
-      alerts,
-    ).setTier1TransferCaps('admin_1', 500_000n, 1_000_000n);
+    await expect(
+      new AdminService(
+        prisma,
+        audit,
+        undefined,
+        undefined,
+        { setGlobalTierLimits } as never,
+        alerts,
+      ).setTier1TransferCaps('admin_1', 500_000n, 1_000_000n),
+    ).resolves.toEqual({
+      id: 'policy_1',
+      perTransferLimitMinor: '500000',
+      dailyLimitMinor: '1000000',
+    });
 
     expect(setGlobalTierLimits).toHaveBeenCalledWith(
       'TIER_1',

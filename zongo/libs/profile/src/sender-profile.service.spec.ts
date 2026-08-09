@@ -236,6 +236,32 @@ describe('SenderProfileService', () => {
     );
   });
 
+  it('rejects non-independent rejection decisions', async () => {
+    const tx = {
+      senderVerification: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'verification_1',
+          status: VerificationStatus.HUMAN_REVIEW,
+          collectedByIdentityId: 'same_identity',
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn((callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+      ),
+    } as unknown as PrismaService;
+
+    await expect(
+      new SenderProfileService(prisma, audit, protection).resolveVerification({
+        verificationId: 'verification_1',
+        reviewerIdentityId: 'same_identity',
+        decision: VerificationStatus.REJECTED,
+        decisionReason: 'Not allowed',
+      }),
+    ).rejects.toMatchObject({ code: 'VERIFICATION_REVIEWER_NOT_INDEPENDENT' });
+  });
+
   it('expires an approved verification and revokes TIER_1 eligibility', async () => {
     const tx = {
       senderVerification: {

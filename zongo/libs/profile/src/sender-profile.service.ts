@@ -398,6 +398,15 @@ export class SenderProfileService {
           'VERIFICATION_NOT_REVIEWABLE',
           'Only a reviewable verification case can be resolved',
         );
+      if (
+        verification.collectedByIdentityId &&
+        verification.collectedByIdentityId === input.reviewerIdentityId
+      ) {
+        throw new DomainError(
+          'VERIFICATION_REVIEWER_NOT_INDEPENDENT',
+          'The verification reviewer must be independent of the collector',
+        );
+      }
       const resolved = await tx.senderVerification.update({
         where: { id: verification.id },
         data: {

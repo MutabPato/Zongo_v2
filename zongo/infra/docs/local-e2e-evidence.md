@@ -3,7 +3,7 @@
 Record the exact commit, configuration, database migration state, controlled
 partner behavior, and evidence links. Passing unit tests alone is insufficient.
 
-- Commit/image digest: `e0db8aafc15d221445bb81c63c755c4abab218ad`
+- Commit/image digest: `06bdb7a06e16ded91929485b3582b674726c3c33`
 - Environment and migration hash: local PostgreSQL/Redis; Prisma schema
   `32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1`
 - Partner stub/cassette: controlled in-process `PartnerPort`
@@ -37,9 +37,9 @@ credentials or send customer notifications externally.
 
 Most recent controlled run record:
 
-- Commit: `e0db8aafc15d221445bb81c63c755c4abab218ad`
+- Commit: `06bdb7a06e16ded91929485b3582b674726c3c33`
 - Prisma schema hash: `32c071861caaa3eb4a247bd33a4f211296b80cfa1834551d2ebcef814705abe1`
-- Executed at: `2026-08-08T23:41:08Z`
+- Executed at: `2026-08-09T00:10:50Z`
 - Command: `DATABASE_URL='<local-only PostgreSQL URL>' pnpm test:integration`
 - Worker state during test: stopped; PostgreSQL and Redis healthy
 - Result: `2` suites passed, `3` tests passed

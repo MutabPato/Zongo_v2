@@ -56,7 +56,13 @@ describe('admin v1 DTO validation', () => {
   });
 
   it('keeps exposure and publication money fields decimal-safe', () => {
-    expect(parseExposurePolicy({ globalDailySendMinor: '001000' })).toEqual({
+    expect(
+      parseExposurePolicy({
+        reason: 'tighten pilot exposure',
+        globalDailySendMinor: '001000',
+      }),
+    ).toEqual({
+      reason: 'tighten pilot exposure',
       allowlistRequired: undefined,
       maxPendingTransfers: undefined,
       maxAmbiguousTransfers: undefined,
@@ -64,6 +70,9 @@ describe('admin v1 DTO validation', () => {
       maxRecoveryCapacity: undefined,
       globalDailySendMinor: '001000',
     });
+    expect(() =>
+      parseExposurePolicy({ globalDailySendMinor: '001000' }),
+    ).toThrow(BadRequestException);
     expect(() => parseExposurePolicy({ globalDailySendMinor: 1000 })).toThrow(
       BadRequestException,
     );

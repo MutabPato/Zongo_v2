@@ -71,6 +71,7 @@ export type PilotPublishBody = {
   noWaiverConfirmed: boolean;
 };
 export type ExposurePolicyBody = {
+  reason?: string;
   allowlistRequired?: boolean;
   maxPendingTransfers?: number | null;
   maxAmbiguousTransfers?: number | null;
@@ -165,7 +166,9 @@ export const AdminV1OpenApiSchemas: Record<string, OpenApiSchema> = {
   },
   exposurePolicy: {
     type: 'object',
+    required: ['reason'],
     properties: {
+      reason: { type: 'string' },
       allowlistRequired: { type: 'boolean' },
       maxPendingTransfers: { type: 'integer', nullable: true },
       maxAmbiguousTransfers: { type: 'integer', nullable: true },
@@ -347,6 +350,7 @@ export function parseExposurePolicy(input: unknown): ExposurePolicyBody {
       ? (body[field] as string | null | undefined)
       : parseDecimal(body[field], field);
   return {
+    reason: requiredString(body.reason, 'reason'),
     ...(body.allowlistRequired === undefined
       ? {}
       : {

@@ -602,17 +602,22 @@ export class AdminV1Controller {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
     const input = parseExposurePolicy(body);
-    return this.adminService.setPilotExposurePolicy(actor.id, {
-      ...input,
-      maxPartnerSettlementMinor:
-        input.maxPartnerSettlementMinor == null
-          ? input.maxPartnerSettlementMinor
-          : BigInt(input.maxPartnerSettlementMinor),
-      globalDailySendMinor:
-        input.globalDailySendMinor == null
-          ? input.globalDailySendMinor
-          : BigInt(input.globalDailySendMinor),
-    });
+    const { reason, ...policyInput } = input;
+    return this.adminService.setPilotExposurePolicy(
+      actor.id,
+      {
+        ...policyInput,
+        maxPartnerSettlementMinor:
+          policyInput.maxPartnerSettlementMinor == null
+            ? policyInput.maxPartnerSettlementMinor
+            : BigInt(policyInput.maxPartnerSettlementMinor),
+        globalDailySendMinor:
+          policyInput.globalDailySendMinor == null
+            ? policyInput.globalDailySendMinor
+            : BigInt(policyInput.globalDailySendMinor),
+      },
+      reason,
+    );
   }
 
   @Post('pilot/readiness/approvals')

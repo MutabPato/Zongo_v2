@@ -1340,6 +1340,7 @@ export class AdminService {
       maxRecoveryCapacity?: number | null;
       globalDailySendMinor?: bigint | null;
     },
+    reason = 'Exposure policy update',
   ) {
     const actor = await this.requireActor(actorId, AdminRole.OPS);
     const policy = await this.prisma.pilotExposurePolicy.upsert({
@@ -1352,6 +1353,7 @@ export class AdminService {
       'admin.pilot-exposure-policy.updated',
       {
         target: 'pilot-exposure-policy:pilot',
+        reason,
         values: input,
       },
       true,

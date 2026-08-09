@@ -1165,6 +1165,24 @@ function PilotReadinessWorkspace() {
   const [approvalNote, setApprovalNote] = useState('');
   const [stage, setStage] = useState('FOUNDATION_COMPLETE');
   const [evidenceRefs, setEvidenceRefs] = useState('{}');
+  const [profileId, setProfileId] = useState('');
+  const [allowlistEnabled, setAllowlistEnabled] = useState('true');
+  const [allowlistReason, setAllowlistReason] = useState('');
+  const [allowlistRequired, setAllowlistRequired] = useState('true');
+  const [maxPendingTransfers, setMaxPendingTransfers] = useState('');
+  const [maxAmbiguousTransfers, setMaxAmbiguousTransfers] = useState('');
+  const [maxPartnerSettlementMinor, setMaxPartnerSettlementMinor] =
+    useState('');
+  const [maxRecoveryCapacity, setMaxRecoveryCapacity] = useState('');
+  const [globalDailySendMinor, setGlobalDailySendMinor] = useState('');
+  const [exposureReason, setExposureReason] = useState('');
+  const [isolationReason, setIsolationReason] = useState('');
+  const [approvedCohort, setApprovedCohort] = useState('{}');
+  const [numericLimits, setNumericLimits] = useState('{}');
+  const [releaseConfiguration, setReleaseConfiguration] = useState('{}');
+  const [rollbackPlan, setRollbackPlan] = useState('');
+  const [publicationEvidenceRefs, setPublicationEvidenceRefs] = useState('{}');
+  const [noWaiverConfirmed, setNoWaiverConfirmed] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
 
@@ -1229,6 +1247,76 @@ function PilotReadinessWorkspace() {
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Invalid readiness input',
+      );
+    }
+  }
+
+  async function updateAllowlist() {
+    if (!profileId.trim() || !allowlistReason.trim()) return;
+    await action(
+      `/admin/v1/pilot/allowlist/${encodeURIComponent(profileId.trim())}`,
+      {
+        enabled: allowlistEnabled === 'true',
+        reason: allowlistReason,
+      },
+      'Pilot allowlist updated',
+    );
+  }
+
+  function optionalInteger(value: string) {
+    return value.trim() ? Number(value) : undefined;
+  }
+
+  async function updateExposurePolicy() {
+    if (!exposureReason.trim()) return;
+    await action(
+      '/admin/v1/pilot/exposure-policy',
+      {
+        allowlistRequired: allowlistRequired === 'true',
+        maxPendingTransfers: optionalInteger(maxPendingTransfers),
+        maxAmbiguousTransfers: optionalInteger(maxAmbiguousTransfers),
+        maxPartnerSettlementMinor:
+          maxPartnerSettlementMinor.trim() || undefined,
+        maxRecoveryCapacity: optionalInteger(maxRecoveryCapacity),
+        globalDailySendMinor: globalDailySendMinor.trim() || undefined,
+        reason: exposureReason,
+      },
+      'Pilot exposure policy updated',
+    );
+  }
+
+  async function isolateEngineeringMovement() {
+    if (!isolationReason.trim()) return;
+    await action(
+      '/admin/v1/pilot/engineering-isolation',
+      { reason: isolationReason },
+      'Provider movement isolated and audited',
+    );
+  }
+
+  async function publishReadiness() {
+    try {
+      await action(
+        '/admin/v1/pilot/readiness/publish',
+        {
+          approvedCohort: parseJson(approvedCohort, 'Approved cohort'),
+          numericLimits: parseJson(numericLimits, 'Numeric limits'),
+          releaseConfiguration: parseJson(
+            releaseConfiguration,
+            'Release configuration',
+          ),
+          rollbackPlan,
+          evidenceRefs: parseJson(
+            publicationEvidenceRefs,
+            'Publication evidence references',
+          ),
+          noWaiverConfirmed,
+        },
+        'Pilot Ready publication submitted',
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Invalid publication input',
       );
     }
   }
@@ -1317,6 +1405,197 @@ function PilotReadinessWorkspace() {
           </Stack>
         </Paper>
       </Box>
+      <Box
+        display="grid"
+        gap={2}
+        gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}
+      >
+        <Paper sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Pilot allowlist
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <TextField
+              label="Sender profile id"
+              value={profileId}
+              onChange={(event) => setProfileId(event.target.value)}
+            />
+            <TextField
+              select
+              label="Enabled"
+              value={allowlistEnabled}
+              onChange={(event) => setAllowlistEnabled(event.target.value)}
+            >
+              <MenuItem value="true">Enabled</MenuItem>
+              <MenuItem value="false">Disabled</MenuItem>
+            </TextField>
+            <TextField
+              label="Reason"
+              value={allowlistReason}
+              onChange={(event) => setAllowlistReason(event.target.value)}
+            />
+            <Button
+              variant="contained"
+              disabled={!profileId.trim() || !allowlistReason.trim()}
+              onClick={() => void updateAllowlist()}
+            >
+              Update allowlist
+            </Button>
+          </Stack>
+        </Paper>
+        <Paper sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Exposure policy
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <TextField
+              select
+              label="Allowlist required"
+              value={allowlistRequired}
+              onChange={(event) => setAllowlistRequired(event.target.value)}
+            >
+              <MenuItem value="true">Required</MenuItem>
+              <MenuItem value="false">Not required</MenuItem>
+            </TextField>
+            <TextField
+              label="Max pending transfers"
+              value={maxPendingTransfers}
+              onChange={(event) => setMaxPendingTransfers(event.target.value)}
+              inputMode="numeric"
+            />
+            <TextField
+              label="Max ambiguous transfers"
+              value={maxAmbiguousTransfers}
+              onChange={(event) => setMaxAmbiguousTransfers(event.target.value)}
+              inputMode="numeric"
+            />
+            <TextField
+              label="Max partner settlement (minor units)"
+              value={maxPartnerSettlementMinor}
+              onChange={(event) =>
+                setMaxPartnerSettlementMinor(event.target.value)
+              }
+              inputMode="numeric"
+            />
+            <TextField
+              label="Global daily send (minor units)"
+              value={globalDailySendMinor}
+              onChange={(event) => setGlobalDailySendMinor(event.target.value)}
+              inputMode="numeric"
+            />
+            <TextField
+              label="Max recovery capacity"
+              value={maxRecoveryCapacity}
+              onChange={(event) => setMaxRecoveryCapacity(event.target.value)}
+              inputMode="numeric"
+            />
+            <TextField
+              label="Reason"
+              value={exposureReason}
+              onChange={(event) => setExposureReason(event.target.value)}
+            />
+            <Button
+              variant="contained"
+              disabled={!exposureReason.trim()}
+              onClick={() => void updateExposurePolicy()}
+            >
+              Update exposure policy
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Engineering isolation
+        </Typography>
+        <Typography color="text.secondary" sx={{ mt: 1 }}>
+          This pauses provider movement only when the configured engineering
+          authority confirms the action; it never grants resume or release
+          authority.
+        </Typography>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1.5}
+          sx={{ mt: 2 }}
+        >
+          <TextField
+            fullWidth
+            label="Isolation reason"
+            value={isolationReason}
+            onChange={(event) => setIsolationReason(event.target.value)}
+          />
+          <Button
+            color="warning"
+            variant="contained"
+            disabled={!isolationReason.trim()}
+            onClick={() => void isolateEngineeringMovement()}
+          >
+            Isolate provider movement
+          </Button>
+        </Stack>
+      </Paper>
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Publish Pilot Ready
+        </Typography>
+        <Typography color="text.secondary" sx={{ mt: 1 }}>
+          Publication requires the accountable pilot operator, all approvals,
+          both readiness stages, complete evidence, and an explicit no-waiver
+          confirmation. Money values inside JSON must remain decimal strings.
+        </Typography>
+        <Stack spacing={1.5} sx={{ mt: 2 }}>
+          <TextField
+            label="Approved cohort (JSON)"
+            value={approvedCohort}
+            onChange={(event) => setApprovedCohort(event.target.value)}
+            multiline
+            minRows={2}
+          />
+          <TextField
+            label="Numeric limits (JSON)"
+            value={numericLimits}
+            onChange={(event) => setNumericLimits(event.target.value)}
+            multiline
+            minRows={2}
+          />
+          <TextField
+            label="Release configuration (JSON)"
+            value={releaseConfiguration}
+            onChange={(event) => setReleaseConfiguration(event.target.value)}
+            multiline
+            minRows={2}
+          />
+          <TextField
+            label="Evidence references (JSON)"
+            value={publicationEvidenceRefs}
+            onChange={(event) => setPublicationEvidenceRefs(event.target.value)}
+            multiline
+            minRows={3}
+          />
+          <TextField
+            label="Rollback plan"
+            value={rollbackPlan}
+            onChange={(event) => setRollbackPlan(event.target.value)}
+            multiline
+            minRows={2}
+          />
+          <label>
+            <input
+              type="checkbox"
+              checked={noWaiverConfirmed}
+              onChange={(event) => setNoWaiverConfirmed(event.target.checked)}
+            />{' '}
+            I explicitly confirm no waiver is being used.
+          </label>
+          <Button
+            variant="contained"
+            disabled={!rollbackPlan.trim() || !noWaiverConfirmed}
+            onClick={() => void publishReadiness()}
+          >
+            Publish Pilot Ready
+          </Button>
+        </Stack>
+      </Paper>
     </Stack>
   );
 }

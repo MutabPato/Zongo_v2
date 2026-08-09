@@ -93,6 +93,27 @@ function credentialResponse(credential: PublicKeyCredential) {
   };
 }
 
+function registrationResponse(credential: PublicKeyCredential) {
+  const response = credential.response as AuthenticatorAttestationResponse;
+  const encode = (value: ArrayBuffer | null) =>
+    value
+      ? btoa(String.fromCharCode(...new Uint8Array(value)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '')
+      : null;
+  return {
+    id: credential.id,
+    rawId: encode(credential.rawId),
+    response: {
+      clientDataJSON: encode(response.clientDataJSON),
+      attestationObject: encode(response.attestationObject),
+      transports: response.getTransports?.() ?? [],
+    },
+    type: credential.type,
+  };
+}
+
 function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [userId, setUserId] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -706,6 +727,11 @@ function WorkflowPage({
       );
     }
   }
+  function displayValue(value: unknown) {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'object') return JSON.stringify(value, null, 2);
+    return String(value);
+  }
   return (
     <Stack spacing={3}>
       <Box>
@@ -737,7 +763,7 @@ function WorkflowPage({
                 )}
               </Typography>
               <Typography color="text.secondary" variant="body2">
-                {String(
+                {displayValue(
                   row.reason ??
                     row.severity ??
                     row.createdAt ??
@@ -745,6 +771,24 @@ function WorkflowPage({
                     '',
                 )}
               </Typography>
+              {Object.values(row).some(
+                (value) => typeof value === 'object',
+              ) && (
+                <Box
+                  component="pre"
+                  sx={{
+                    mt: 1,
+                    mb: 0,
+                    p: 1.5,
+                    overflowX: 'auto',
+                    bgcolor: '#f7f9fc',
+                    borderRadius: 1,
+                    fontSize: 12,
+                  }}
+                >
+                  {displayValue(row)}
+                </Box>
+              )}
               {endpoint === '/admin/v1/alerts' && role !== 'SUPPORT' && (
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                   <Button
@@ -847,6 +891,8 @@ function Shell({
   const location = useLocation();
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
+  const [registeringKey, setRegisteringKey] = useState(false);
+  const [registrationMessage, setRegistrationMessage] = useState<string>();
   const active = useMemo(
     () => navigation.find(([, path]) => path === location.pathname)?.[1] ?? '/',
     [location.pathname],
@@ -864,6 +910,46 @@ function Shell({
       onLoggedOut();
     } finally {
       setLoggingOut(false);
+    }
+  }
+  async function registerHardwareKey() {
+    setRegistrationMessage(undefined);
+    setRegisteringKey(true);
+    try {
+      if (!window.PublicKeyCredential)
+        throw new Error('This browser does not support WebAuthn');
+      const options = await api.webauthnRegistrationOptions();
+      const publicKey = {
+        ...options,
+        challenge: base64UrlBytes(String(options.challenge)),
+        user: {
+          ...(options.user as Record<string, unknown>),
+          id: base64UrlBytes(
+            String((options.user as Record<string, unknown>).id),
+          ),
+        },
+        excludeCredentials: Array.isArray(options.excludeCredentials)
+          ? options.excludeCredentials.map((entry) => ({
+              ...(entry as Record<string, unknown>),
+              id: base64UrlBytes(String((entry as Record<string, unknown>).id)),
+            }))
+          : undefined,
+      };
+      const credential = await navigator.credentials.create({
+        publicKey: publicKey as PublicKeyCredentialCreationOptions,
+      });
+      if (!credential || !(credential instanceof PublicKeyCredential))
+        throw new Error('No hardware key registration was received');
+      await api.webauthnRegistrationVerify(registrationResponse(credential));
+      setRegistrationMessage('Hardware key registered');
+    } catch (cause) {
+      setRegistrationMessage(
+        cause instanceof Error
+          ? cause.message
+          : 'Hardware-key registration failed',
+      );
+    } finally {
+      setRegisteringKey(false);
     }
   }
   return (
@@ -893,12 +979,25 @@ function Shell({
             <Button
               color="inherit"
               size="small"
+              onClick={registerHardwareKey}
+              disabled={registeringKey}
+            >
+              {registeringKey ? 'Registering…' : 'Register key'}
+            </Button>
+            <Button
+              color="inherit"
+              size="small"
               onClick={signOut}
               disabled={loggingOut}
             >
               {loggingOut ? 'Signing out…' : 'Sign out'}
             </Button>
           </Stack>
+          {registrationMessage && (
+            <Alert severity="info" sx={{ mt: 1 }}>
+              {registrationMessage}
+            </Alert>
+          )}
         </Toolbar>
       </AppBar>
       <Drawer

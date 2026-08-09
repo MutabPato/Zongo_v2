@@ -941,7 +941,7 @@ describe('AdminService', () => {
 
   it('records Ops alert acknowledgement and escalation evidence', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
-    const update = jest.fn().mockResolvedValue({ id: 'alert_1' });
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
     const prisma = {
       platformIdentity: {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
@@ -951,17 +951,17 @@ describe('AdminService', () => {
           blockedAt: null,
         }),
       },
-      adminAlertDelivery: { update },
+      adminAlertDelivery: { updateMany },
     } as unknown as PrismaService;
     const service = new AdminService(prisma, audit);
 
     await expect(
       service.acknowledgeAlert('ops_1', 'alert_1', 'Investigating'),
-    ).resolves.toEqual({ id: 'alert_1' });
+    ).resolves.toEqual({ id: 'alert_1', handling: 'ACCEPTED' });
     await expect(
       service.escalateAlert('ops_1', 'alert_1', 'Needs accountable operator'),
-    ).resolves.toEqual({ id: 'alert_1' });
-    expect(update).toHaveBeenNthCalledWith(
+    ).resolves.toEqual({ id: 'alert_1', handling: 'ACCEPTED' });
+    expect(updateMany).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
         data: expect.objectContaining({
@@ -970,7 +970,7 @@ describe('AdminService', () => {
         }),
       }),
     );
-    expect(update).toHaveBeenNthCalledWith(
+    expect(updateMany).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         data: expect.objectContaining({

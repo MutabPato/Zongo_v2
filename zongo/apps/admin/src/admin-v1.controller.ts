@@ -20,6 +20,7 @@ import {
   TransactionStatus,
 } from '@prisma/client';
 import { ApiTags } from '@nestjs/swagger';
+import { ApiBody } from '@nestjs/swagger';
 import { AdminV1ExceptionFilter } from './admin-v1-exception.filter';
 import * as AdminV1Dto from './admin-v1.dto';
 import {
@@ -28,6 +29,7 @@ import {
   parseLogin,
   parseNote,
   parseReason,
+  parseUserId,
 } from './admin-v1.dto';
 
 const SESSION_COOKIE = 'zongo_admin_session';
@@ -52,6 +54,7 @@ export class AdminV1Controller {
   ) {}
 
   @Post('auth/login')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.login })
   async login(
     @Body() input: AdminV1Dto.LoginBody,
     @Res({ passthrough: true }) response: BrowserResponse,
@@ -63,17 +66,32 @@ export class AdminV1Controller {
   }
 
   @Post('auth/webauthn/login/options')
-  hardwareKeyLoginOptions(@Body() body: AdminV1Dto.UserIdBody) {
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['userId'],
+      properties: { userId: { type: 'string' } },
+    },
+  })
+  hardwareKeyLoginOptions(@Body() input: AdminV1Dto.UserIdBody) {
+    const body = parseUserId(input);
     return this.webauthn.authenticationOptions(body.userId);
   }
 
   @Post('auth/webauthn/login/verify')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['userId', 'response'],
+      properties: {
+        userId: { type: 'string' },
+        response: { type: 'object', additionalProperties: true },
+      },
+    },
+  })
   async verifyHardwareKeyLogin(
     @Body()
-    body: {
-      userId: string;
-      response: Parameters<WebAuthnService['verifyAuthentication']>[1];
-    },
+    body: AdminV1Dto.WebAuthnLoginBody,
     @Res({ passthrough: true }) response: BrowserResponse,
   ) {
     const identityId = await this.webauthn.verifyAuthentication(
@@ -92,16 +110,24 @@ export class AdminV1Controller {
   }
 
   @Post('auth/webauthn/registration/verify')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['response'],
+      properties: { response: { type: 'object', additionalProperties: true } },
+    },
+  })
   async verifyHardwareKeyRegistration(
     @Req() request: Request,
     @Body()
-    body: { response: Parameters<WebAuthnService['verifyRegistration']>[1] },
+    body: AdminV1Dto.WebAuthnRegistrationBody,
   ) {
     const actor = await this.actor(request);
     return this.webauthn.verifyRegistration(actor.id, body.response);
   }
 
   @Post('auth/break-glass')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.breakGlass })
   async breakGlass(
     @Body() input: AdminV1Dto.BreakGlassBody,
     @Res({ passthrough: true }) response: BrowserResponse,
@@ -173,6 +199,7 @@ export class AdminV1Controller {
   }
 
   @Post('operations/transactions/:reference/notes')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.note })
   async addTransactionNote(
     @Req() request: Request,
     @Param('reference') reference: string,
@@ -198,6 +225,7 @@ export class AdminV1Controller {
   }
 
   @Post('operations/transactions/:reference/retry-payout')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.retryPayout })
   async retryPayout(
     @Req() request: Request,
     @Param('reference') reference: string,
@@ -245,6 +273,7 @@ export class AdminV1Controller {
   }
 
   @Post('reconciliation/:id/notes')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.note })
   async reconciliationNote(
     @Req() request: Request,
     @Param('id') id: string,
@@ -258,6 +287,9 @@ export class AdminV1Controller {
   }
 
   @Post('reconciliation/:id/assign')
+  @ApiBody({
+    schema: AdminV1Dto.AdminV1OpenApiSchemas.reconciliationAssignment,
+  })
   async assignReconciliation(
     @Req() request: Request,
     @Param('id') id: string,
@@ -288,6 +320,7 @@ export class AdminV1Controller {
   }
 
   @Post('verification/:id/review')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.verificationReview })
   async verificationReview(
     @Req() request: Request,
     @Param('id') id: string,
@@ -316,6 +349,7 @@ export class AdminV1Controller {
   }
 
   @Post('alerts/:id/acknowledge')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.reason })
   async acknowledgeAlert(
     @Req() request: Request,
     @Param('id') id: string,
@@ -329,6 +363,7 @@ export class AdminV1Controller {
   }
 
   @Post('alerts/:id/escalate')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.reason })
   async escalateAlert(
     @Req() request: Request,
     @Param('id') id: string,
@@ -373,6 +408,7 @@ export class AdminV1Controller {
   }
 
   @Post('admin-controls/pilot')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotControl })
   async pilotControl(
     @Req() request: Request,
     @Body() body: AdminV1Dto.PilotControlBody,
@@ -398,6 +434,7 @@ export class AdminV1Controller {
   }
 
   @Post('admin-controls/users/block')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.userBlock })
   async blockUser(
     @Req() request: Request,
     @Body() body: AdminV1Dto.UserBlockBody,
@@ -416,6 +453,7 @@ export class AdminV1Controller {
   }
 
   @Post('admin-controls/tier-1-caps')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.tierCaps })
   async tierOneCaps(
     @Req() request: Request,
     @Body() body: AdminV1Dto.TierOneCapsBody,
@@ -431,6 +469,7 @@ export class AdminV1Controller {
   }
 
   @Post('admin-controls/pilot/allowlist')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotAllowlist })
   async pilotAllowlist(
     @Req() request: Request,
     @Body() body: AdminV1Dto.PilotAllowlistBody,
@@ -455,6 +494,7 @@ export class AdminV1Controller {
   }
 
   @Post('admin-controls/pilot/exposure-policy')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.exposurePolicy })
   async pilotExposurePolicy(
     @Req() request: Request,
     @Body() body: AdminV1Dto.ExposurePolicyBody,
@@ -476,6 +516,7 @@ export class AdminV1Controller {
   }
 
   @Post('pilot/readiness/approvals')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotApproval })
   async pilotApproval(
     @Req() request: Request,
     @Body() body: AdminV1Dto.PilotApprovalBody,
@@ -491,6 +532,7 @@ export class AdminV1Controller {
   }
 
   @Post('pilot/readiness/stages')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotStage })
   async pilotStage(
     @Req() request: Request,
     @Body()
@@ -507,6 +549,7 @@ export class AdminV1Controller {
   }
 
   @Post('pilot/readiness/publish')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotPublish })
   async publishPilot(
     @Req() request: Request,
     @Body() body: AdminV1Dto.PilotPublishBody,

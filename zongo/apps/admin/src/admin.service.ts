@@ -483,10 +483,13 @@ export class AdminService {
 
   async adminControls(actorId: string) {
     await this.requireActor(actorId, AdminRole.SUPPORT);
-    const controls = await this.prisma.pilotControl.findMany({
-      orderBy: { key: 'asc' },
-    });
-    return this.maskAdminData(controls);
+    const [controls, tier1, exposure, allowlistCount] = await Promise.all([
+      this.prisma.pilotControl.findMany({ orderBy: { key: 'asc' } }),
+      this.prisma.tierLimitPolicy.findUnique({ where: { tier: 'TIER_1' } }),
+      this.prisma.pilotExposurePolicy.findUnique({ where: { id: 'pilot' } }),
+      this.prisma.pilotAllowlist.count({ where: { enabled: true } }),
+    ]);
+    return this.maskAdminData({ controls, tier1, exposure, allowlistCount });
   }
 
   async investigateTransfer(
@@ -568,40 +571,44 @@ export class AdminService {
       throw new ForbiddenException(
         'An alert acknowledgement reason is required',
       );
-    const alert = await this.prisma.adminAlertDelivery.update({
-      where: { id: alertId },
+    const result = await this.prisma.adminAlertDelivery.updateMany({
+      where: { id: alertId, acknowledgedAt: null },
       data: {
         acknowledgedAt: new Date(),
         acknowledgedByIdentityId: actor.id,
       },
     });
+    if (result.count === 0)
+      return { id: alertId, handling: 'ALREADY_HANDLED' as const };
     await this.record(
       actor,
       'admin.alert.acknowledged',
       { target: `alert:${alertId}`, reason },
       true,
     );
-    return alert;
+    return { id: alertId, handling: 'ACCEPTED' as const };
   }
 
   async escalateAlert(actorId: string, alertId: string, reason: string) {
     const actor = await this.requireActor(actorId, AdminRole.OPS);
     if (!reason.trim())
       throw new ForbiddenException('An alert escalation reason is required');
-    const alert = await this.prisma.adminAlertDelivery.update({
-      where: { id: alertId },
+    const result = await this.prisma.adminAlertDelivery.updateMany({
+      where: { id: alertId, escalatedAt: null },
       data: {
         escalatedAt: new Date(),
         escalatedByIdentityId: actor.id,
       },
     });
+    if (result.count === 0)
+      return { id: alertId, handling: 'ALREADY_HANDLED' as const };
     await this.record(
       actor,
       'admin.alert.escalated',
       { target: `alert:${alertId}`, reason },
       true,
     );
-    return alert;
+    return { id: alertId, handling: 'ACCEPTED' as const };
   }
 
   async assignReconciliation(

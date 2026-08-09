@@ -99,6 +99,22 @@ export async function webauthnLoginVerify(
   );
 }
 
+export async function webauthnRegistrationOptions() {
+  return request<Record<string, unknown>>(
+    '/admin/v1/auth/webauthn/registration/options',
+    { method: 'POST', body: JSON.stringify({}) },
+  );
+}
+
+export async function webauthnRegistrationVerify(
+  response: Record<string, unknown>,
+) {
+  return request<Record<string, unknown>>(
+    '/admin/v1/auth/webauthn/registration/verify',
+    { method: 'POST', body: JSON.stringify({ response }) },
+  );
+}
+
 export async function breakGlass(
   userId: string,
   emergencySecret: string,

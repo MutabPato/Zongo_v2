@@ -117,6 +117,30 @@ export const AdminV1OpenApiSchemas: Record<string, OpenApiSchema> = {
       totpCode: { type: 'string', pattern: '^\\d{6}$' },
     },
   },
+  userId: {
+    type: 'object',
+    required: ['userId'],
+    properties: { userId: { type: 'string' } },
+  },
+  webauthnLogin: {
+    type: 'object',
+    required: ['userId', 'response'],
+    properties: {
+      userId: { type: 'string' },
+      response: { type: 'object', additionalProperties: true },
+    },
+  },
+  webauthnRegistration: {
+    type: 'object',
+    required: ['response'],
+    properties: {
+      response: { type: 'object', additionalProperties: true },
+    },
+  },
+  webauthnRegistrationOptions: {
+    type: 'object',
+    additionalProperties: false,
+  },
   breakGlass: {
     type: 'object',
     required: ['userId', 'emergencySecret', 'reason'],

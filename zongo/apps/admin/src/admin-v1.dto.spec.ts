@@ -9,6 +9,7 @@ import {
   parseTierOneCaps,
   parseWebAuthnLogin,
   parseWebAuthnRegistration,
+  AdminV1OpenApiSchemas,
 } from './admin-v1.dto';
 
 describe('admin v1 DTO validation', () => {
@@ -40,6 +41,21 @@ describe('admin v1 DTO validation', () => {
     );
     expect(() => parseWebAuthnRegistration({ response: 'credential' })).toThrow(
       BadRequestException,
+    );
+  });
+
+  it('keeps WebAuthn request shapes in the shared OpenAPI contract', () => {
+    expect(AdminV1OpenApiSchemas.userId).toEqual(
+      expect.objectContaining({ required: ['userId'] }),
+    );
+    expect(AdminV1OpenApiSchemas.webauthnLogin).toEqual(
+      expect.objectContaining({ required: ['userId', 'response'] }),
+    );
+    expect(AdminV1OpenApiSchemas.webauthnRegistration).toEqual(
+      expect.objectContaining({ required: ['response'] }),
+    );
+    expect(AdminV1OpenApiSchemas.webauthnRegistrationOptions).toEqual(
+      expect.objectContaining({ additionalProperties: false }),
     );
   });
 

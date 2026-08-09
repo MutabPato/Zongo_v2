@@ -78,29 +78,14 @@ export class AdminV1Controller {
   }
 
   @Post('auth/webauthn/login/options')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['userId'],
-      properties: { userId: { type: 'string' } },
-    },
-  })
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.userId })
   hardwareKeyLoginOptions(@Body() input: AdminV1Dto.UserIdBody) {
     const body = parseUserId(input);
     return this.webauthn.authenticationOptions(body.userId);
   }
 
   @Post('auth/webauthn/login/verify')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['userId', 'response'],
-      properties: {
-        userId: { type: 'string' },
-        response: { type: 'object', additionalProperties: true },
-      },
-    },
-  })
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.webauthnLogin })
   async verifyHardwareKeyLogin(
     @Body() input: AdminV1Dto.WebAuthnLoginBody,
     @Res({ passthrough: true }) response: BrowserResponse,
@@ -116,6 +101,9 @@ export class AdminV1Controller {
   }
 
   @Post('auth/webauthn/registration/options')
+  @ApiBody({
+    schema: AdminV1Dto.AdminV1OpenApiSchemas.webauthnRegistrationOptions,
+  })
   async hardwareKeyRegistrationOptions(
     @Req() request: Request,
     @Headers('x-csrf-token') csrfToken?: string,
@@ -126,13 +114,7 @@ export class AdminV1Controller {
   }
 
   @Post('auth/webauthn/registration/verify')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      required: ['response'],
-      properties: { response: { type: 'object', additionalProperties: true } },
-    },
-  })
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.webauthnRegistration })
   async verifyHardwareKeyRegistration(
     @Req() request: Request,
     @Body() input: AdminV1Dto.WebAuthnRegistrationBody,

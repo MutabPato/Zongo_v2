@@ -1,0 +1,46 @@
+import { AdminV1Controller } from './admin-v1.controller';
+
+describe('AdminV1Controller', () => {
+  it('establishes an HttpOnly browser session without returning a bearer token', async () => {
+    const admin = {
+      login: jest.fn().mockResolvedValue({
+        accessToken: 'raw-token-never-returned',
+        expiresAt: new Date('2026-08-09T10:00:00.000Z'),
+      }),
+    };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+    const cookie = jest.fn();
+
+    const result = await controller.login(
+      { userId: 'ops@example.test', totpCode: '123456' },
+      { cookie } as never,
+    );
+
+    expect(result).toEqual({ expiresAt: new Date('2026-08-09T10:00:00.000Z') });
+    expect(JSON.stringify(result)).not.toContain('raw-token-never-returned');
+    expect(cookie).toHaveBeenCalledWith(
+      'zongo_admin_session',
+      'raw-token-never-returned',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+      }),
+    );
+  });
+
+  it('returns a session-bound CSRF token for an authenticated cookie session', async () => {
+    const admin = {
+      actorFromSession: jest.fn().mockResolvedValue({ id: 'ops_1' }),
+      csrfToken: jest.fn().mockReturnValue('csrf-token'),
+    };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+
+    await expect(
+      controller.csrf({
+        headers: { cookie: 'zongo_admin_session=session-token' },
+      } as never),
+    ).resolves.toEqual({ token: 'csrf-token' });
+    expect(admin.actorFromSession).toHaveBeenCalledWith('session-token');
+  });
+});

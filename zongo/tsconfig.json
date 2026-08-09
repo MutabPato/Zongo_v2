@@ -48,5 +48,6 @@
       "@app/observability": ["libs/observability/src"],
       "@app/observability/*": ["libs/observability/src/*"]
     }
-  }
+  },
+  "exclude": ["apps/admin-panel"]
 }

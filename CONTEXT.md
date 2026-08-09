@@ -102,10 +102,25 @@
 - Admin panel implementation preference: use a secure open-source tool if it can cleanly cover the required ops workflows.
 - Admin panel customization strategy: build a thin custom layer around the chosen open-source tool.
 - Admin panel foundation: use an internal admin tool / back-office platform.
+- Custom admin panel: the operator-facing React/TypeScript control plane that replaces the AdminJS presentation layer while preserving the Nest admin service as the backend boundary.
+- Admin workflow parity: every user-facing AdminJS workflow and custom action required by the MVP operations surface is available in the custom admin panel; unused generic CRUD/resource screens are not part of parity.
+- Admin panel cutover: a controlled migration from AdminJS to the custom admin panel after workflow, authorization, audit, sensitive-data, E2E, deployment, and rollback verification.
+- Admin workflow read model: an explicit API response shaped for an operator workflow or domain workspace, rather than a generic persistence-resource representation.
+- Admin action: a server-owned operation initiated from the admin panel that validates role and input, performs or queues a domain change, records audit evidence, and returns a safe result.
+- Admin API compatibility layer: the temporary legacy `/admin` contract retained for named non-browser clients while `/admin/v1` becomes the custom panel contract.
+- Admin release manifest: the immutable association of a frontend artifact, Nest backend artifact, database migration compatibility state, and deployment version used for a control-plane release.
+- Admin cutover window: the reversible period in which the new panel receives admin traffic while the previous AdminJS target remains available for immediate route rollback.
+- Admin observation window: the evidence-based period after route switch during which auth, authorization, sensitive-data, audit, API, frontend, and operational signals are reviewed before AdminJS removal.
+- Admin parity gate: the release gate requiring every in-scope admin workflow to pass its role, API, behavior, security, audit, data-handling, and browser-journey checks before cutover approval.
+- Admin release evidence pack: the versioned record of parity results, test reports, security/data/audit assertions, deployment and rollback rehearsal, defect exceptions, and approvals for an admin release.
 - Admin panel deployment: fully self-hosted.
 - Admin authentication: self-hosted identity with strong role-based access control.
 - Admin authentication includes MFA from day one.
 - Admin MFA: TOTP as the minimum, with hardware keys for privileged roles where practical.
+- Browser admin session: the same-site authenticated session used by the custom admin panel; it is established by the admin service after MFA and is not exposed to the browser application as a bearer credential.
+- Admin authentication journey: a normal TOTP or WebAuthn login/registration flow that establishes or strengthens an admin browser session.
+- Break-glass journey: a visibly separate emergency access flow requiring explicit justification and prominent audit evidence; it is not a normal login shortcut.
+- Session revocation: the explicit invalidation of an admin session after logout, expiry handling, or suspected compromise; revoked sessions cannot be reused.
 - Admin ledger/reconciliation view shows transaction state, ledger entries, audit trail, and reconciliation status side by side.
 - Admin reconciliation view: manual notes only in MVP; no reconciliation state mutations from the UI.
 - Admin actions in MVP: manual retry, status recheck, user block/unblock, beneficiary review, and note taking on transactions and reconciliation items.

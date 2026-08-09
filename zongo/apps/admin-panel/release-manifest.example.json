@@ -1,0 +1,16 @@
+{
+  "releaseId": "custom-admin-panel-YYYYMMDD-HHMM",
+  "frontendArtifact": "zongo-production-admin-panel:<git-sha>",
+  "backendArtifact": "zongo-production-admin:<git-sha>",
+  "gitSha": "<immutable-commit-sha>",
+  "apiContract": "/admin/v1",
+  "route": "/backoffice",
+  "previewHost": "admin-preview.example.internal",
+  "evidencePack": "artifacts/admin-panel/<releaseId>/",
+  "rollbackTarget": "adminjs",
+  "approvals": {
+    "engineering": false,
+    "operationsOwner": false,
+    "security": false
+  }
+}

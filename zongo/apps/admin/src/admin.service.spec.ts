@@ -9,6 +9,39 @@ import { AdminService } from './admin.service';
 import { PilotControlKey, PilotControlState } from '@prisma/client';
 
 describe('AdminService', () => {
+  it('rejects a revoked admin session', async () => {
+    const prisma = {
+      adminSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'session_1',
+          revokedAt: new Date(),
+          expiresAt: new Date(Date.now() + 60_000),
+          identity: { id: 'admin_1' },
+        }),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).actorFromSession('token'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('revokes an active session with an auditable reason', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = {
+      adminSession: { updateMany },
+    } as unknown as PrismaService;
+
+    await new AdminService(prisma).revokeSession('token', 'manual logout');
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ revokedAt: null }),
+        data: expect.objectContaining({ revocationReason: 'manual logout' }),
+      }),
+    );
+  });
+
   it('does not create an admin session without a valid MFA factor', async () => {
     const findUniqueOrThrow = jest.fn().mockResolvedValue({
       id: 'admin_1',

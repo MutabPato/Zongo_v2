@@ -6,6 +6,7 @@ import { ProfileModule } from '@app/profile';
 import { SecurityModule } from '@app/security';
 import { WorkerJobsModule } from '../../worker/src/worker-jobs.module';
 import { AdminController } from './admin.controller';
+import { AdminV1Controller } from './admin-v1.controller';
 import { ADMIN_ALERTS, AdminService } from './admin.service';
 import { AdminAlertService } from './admin-alert.service';
 import { HealthController } from './health.controller';
@@ -20,7 +21,7 @@ import { WebAuthnService } from './webauthn.service';
     WorkerJobsModule,
     SecurityModule,
   ],
-  controllers: [AdminController, HealthController],
+  controllers: [AdminController, AdminV1Controller, HealthController],
   providers: [
     AdminService,
     {

@@ -1,0 +1,11 @@
+:root {
+  color-scheme: light;
+}
+body {
+  margin: 0;
+  background: #f4f6fa;
+}
+.auth-background {
+  background:
+    radial-gradient(circle at 10% 20%, #dbe8ff 0, transparent 35%), #f4f6fa;
+}

@@ -404,11 +404,15 @@ model AdminSession {
   identityId String
   tokenHash String @unique
   expiresAt DateTime
+  revokedAt DateTime?
+  revocationReason String?
+  lastUsedAt DateTime?
+  source String @default("TOTP")
   createdAt DateTime @default(now())
 
   identity PlatformIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
 
-  @@index([identityId, expiresAt])
+  @@index([identityId, expiresAt, revokedAt])
 }
 
 /// Notes are append-only investigation context. The linked AuditEvent is the immutable accountability record.

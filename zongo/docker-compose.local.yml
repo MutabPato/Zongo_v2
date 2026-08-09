@@ -125,6 +125,15 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  admin-panel:
+    build:
+      context: .
+      dockerfile: apps/admin-panel/Dockerfile
+    image: zongo:local-admin-panel
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:4173:8080'
+
 volumes:
   postgres-local-data:
   redis-local-data:

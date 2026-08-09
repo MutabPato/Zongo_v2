@@ -102,28 +102,15 @@ export class AdminService {
     if (!identity.totpSecret || !this.verifyTotp(identity.totpSecret, totpCode))
       throw new UnauthorizedException('A valid TOTP code is required');
 
-    const token = randomBytes(32).toString('base64url');
-    const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.platformIdentity.update({
-        where: { id: identity.id },
-        data: { mfaVerifiedAt: now },
-      }),
-      this.prisma.adminSession.create({
-        data: {
-          identityId: identity.id,
-          tokenHash: this.hashToken(token),
-          expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000),
-        },
-      }),
-    ]);
+    const session = await this.createSession(
+      identity.id,
+      'TOTP',
+      8 * 60 * 60 * 1000,
+    );
     await this.record(identity, 'admin.login.mfa-verified', {
       target: `identity:${identity.id}`,
     });
-    return {
-      accessToken: token,
-      expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000),
-    };
+    return session;
   }
 
   /** Establishes the same short-lived session after a verified WebAuthn ceremony. */
@@ -132,28 +119,15 @@ export class AdminService {
       where: { id: identityId },
     });
     if (identity.blockedAt) throw new ForbiddenException('Identity is blocked');
-    const token = randomBytes(32).toString('base64url');
-    const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.platformIdentity.update({
-        where: { id: identity.id },
-        data: { mfaVerifiedAt: now },
-      }),
-      this.prisma.adminSession.create({
-        data: {
-          identityId: identity.id,
-          tokenHash: this.hashToken(token),
-          expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000),
-        },
-      }),
-    ]);
+    const session = await this.createSession(
+      identity.id,
+      'WEBAUTHN',
+      8 * 60 * 60 * 1000,
+    );
     await this.record(identity, 'admin.login.hardware-key-verified', {
       target: `identity:${identity.id}`,
     });
-    return {
-      accessToken: token,
-      expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000),
-    };
+    return session;
   }
 
   async actorFromSession(accessToken: string): Promise<AdminActor> {
@@ -161,9 +135,61 @@ export class AdminService {
       where: { tokenHash: this.hashToken(accessToken) },
       include: { identity: true },
     });
-    if (!session || session.expiresAt <= new Date())
+    if (!session || session.revokedAt || session.expiresAt <= new Date())
       throw new UnauthorizedException('Admin session is invalid or expired');
+    await this.prisma.adminSession.update({
+      where: { id: session.id },
+      data: { lastUsedAt: new Date() },
+    });
     return this.requireActor(session.identity.id, AdminRole.SUPPORT);
+  }
+
+  async revokeSession(accessToken: string, reason = 'logout'): Promise<void> {
+    await this.prisma.adminSession.updateMany({
+      where: { tokenHash: this.hashToken(accessToken), revokedAt: null },
+      data: { revokedAt: new Date(), revocationReason: reason },
+    });
+  }
+
+  csrfToken(accessToken: string): string {
+    return createHmac(
+      'sha256',
+      process.env.ADMIN_CSRF_SECRET ?? 'change-me-in-production',
+    )
+      .update(`admin-csrf:${accessToken}`)
+      .digest('base64url');
+  }
+
+  assertCsrfToken(accessToken: string, token: string | undefined): void {
+    const expected = Buffer.from(this.csrfToken(accessToken));
+    const actual = token ? Buffer.from(token) : Buffer.alloc(0);
+    if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
+      throw new ForbiddenException('A valid CSRF token is required');
+  }
+
+  private async createSession(
+    identityId: string,
+    source: string,
+    lifetimeMs: number,
+  ) {
+    const token = randomBytes(32).toString('base64url');
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + lifetimeMs);
+    await this.prisma.$transaction([
+      this.prisma.platformIdentity.update({
+        where: { id: identityId },
+        data: { mfaVerifiedAt: now },
+      }),
+      this.prisma.adminSession.create({
+        data: {
+          identityId,
+          tokenHash: this.hashToken(token),
+          expiresAt,
+          source,
+        },
+      }),
+    ]);
+    return { accessToken: token, expiresAt };
   }
 
   async searchTransaction(
@@ -333,41 +359,85 @@ export class AdminService {
         })
       : [];
     const page = Math.max(query.page ?? 1, 1);
-    const transactions = await this.prisma.transferTransaction.findMany({
-      where: {
-        status: query.status,
-        OR: q
-          ? [
-              { reference: { contains: q, mode: 'insensitive' } },
-              {
-                senderUserId: { in: profiles.map((profile) => profile.userId) },
-              },
-              {
-                beneficiary: {
-                  is: {
-                    OR: [
-                      { displayName: { contains: q, mode: 'insensitive' } },
-                      { phoneNumber: { contains: q } },
-                      ...(beneficiaryPhoneBlindIndex
-                        ? [
-                            {
-                              phoneNumberBlindIndex: beneficiaryPhoneBlindIndex,
-                            },
-                          ]
-                        : []),
-                    ],
-                  },
+    const where = {
+      status: query.status,
+      OR: q
+        ? [
+            { reference: { contains: q, mode: 'insensitive' as const } },
+            { senderUserId: { in: profiles.map((profile) => profile.userId) } },
+            {
+              beneficiary: {
+                is: {
+                  OR: [
+                    {
+                      displayName: {
+                        contains: q,
+                        mode: 'insensitive' as const,
+                      },
+                    },
+                    { phoneNumber: { contains: q } },
+                    ...(beneficiaryPhoneBlindIndex
+                      ? [{ phoneNumberBlindIndex: beneficiaryPhoneBlindIndex }]
+                      : []),
+                  ],
                 },
               },
-            ]
-          : undefined,
-      },
-      include: { beneficiary: true },
-      orderBy: { updatedAt: 'desc' },
-      skip: (page - 1) * 25,
-      take: 25,
+            },
+          ]
+        : undefined,
+    };
+    const [transactions, total] = await Promise.all([
+      this.prisma.transferTransaction.findMany({
+        where,
+        include: { beneficiary: true },
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * 25,
+        take: 25,
+      }),
+      this.prisma.transferTransaction.count({ where }),
+    ]);
+    return {
+      items: this.maskAdminData(transactions),
+      page,
+      pageSize: 25,
+      total,
+    };
+  }
+
+  async listReconciliations(actorId: string) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    const rows = await this.prisma.transactionReconciliation.findMany({
+      orderBy: { checkedAt: 'desc' },
+      take: 100,
+      include: { transaction: true },
     });
-    return this.maskAdminData(transactions);
+    return this.maskAdminData(rows);
+  }
+
+  async listAlerts(actorId: string) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    const rows = await this.prisma.adminAlertDelivery.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+    });
+    return this.maskAdminData(rows);
+  }
+
+  async auditTrail(actorId: string) {
+    await this.requireActor(actorId, AdminRole.SUPPORT);
+    const rows = await this.prisma.auditEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return this.maskAdminData(rows);
+  }
+
+  async adminControls(actorId: string) {
+    await this.requireActor(actorId, AdminRole.SUPPORT);
+    const controls = await this.prisma.pilotControl.findMany({
+      orderBy: { key: 'asc' },
+    });
+    return this.maskAdminData(controls);
   }
 
   async investigateTransfer(
@@ -889,13 +959,14 @@ export class AdminService {
 
   async getPilotReadiness(actorId: string) {
     await this.requireActor(actorId, AdminRole.SUPPORT);
-    return this.prisma.pilotReleaseRecord.findUnique({
+    const record = await this.prisma.pilotReleaseRecord.findUnique({
       where: { id: 'pilot' },
       include: {
         approvals: { orderBy: { approvedAt: 'asc' } },
         stageRecords: { orderBy: { recordedAt: 'asc' } },
       },
     });
+    return this.maskAdminData(record);
   }
 
   async publishPilotReadiness(
@@ -1118,7 +1189,7 @@ export class AdminService {
       },
       true,
     );
-    return policy;
+    return this.maskAdminData(policy);
   }
 
   async listVerificationCases(actorId: string) {
@@ -1216,7 +1287,11 @@ export class AdminService {
   }
 
   /** Emergency-only recovery path. It is intentionally separate from normal MFA login. */
-  async useBreakGlass(userId: string, emergencySecret: string) {
+  async useBreakGlass(
+    userId: string,
+    emergencySecret: string,
+    reason = 'Emergency access',
+  ) {
     const configuredSecret = process.env.BREAK_GLASS_SECRET;
     if (!configuredSecret || !this.safeEqual(configuredSecret, emergencySecret))
       throw new UnauthorizedException('Invalid break-glass credentials');
@@ -1232,27 +1307,22 @@ export class AdminService {
       where: { id: identity.id },
       data: { breakGlassUsedAt: now, mfaVerifiedAt: now },
     });
-    const token = randomBytes(32).toString('base64url');
-    await this.prisma.adminSession.create({
-      data: {
-        identityId: identity.id,
-        tokenHash: this.hashToken(token),
-        expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
-      },
-    });
+    const session = await this.createSession(
+      identity.id,
+      'BREAK_GLASS',
+      30 * 60 * 1000,
+    );
     await this.record(
       identity,
       'admin.break-glass.used',
       {
         target: `identity:${identity.id}`,
         visible: true,
+        reason,
       },
       true,
     );
-    return {
-      accessToken: token,
-      expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
-    };
+    return session;
   }
 
   private async requireActor(
@@ -1387,6 +1457,7 @@ export class AdminService {
   private maskAdminData(value: unknown): unknown {
     if (Array.isArray(value))
       return value.map((entry) => this.maskAdminData(entry));
+    if (typeof value === 'bigint') return value.toString();
     if (value === null || typeof value !== 'object') return value;
     return Object.fromEntries(
       Object.entries(value).flatMap(([key, entry]) => {

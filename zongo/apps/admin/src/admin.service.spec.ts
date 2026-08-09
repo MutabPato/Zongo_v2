@@ -42,6 +42,38 @@ describe('AdminService', () => {
     );
   });
 
+  it('audits browser logout while revoking the durable session', async () => {
+    const updateMany = jest.fn().mockResolvedValue({ count: 1 });
+    const audit = { append: jest.fn().mockResolvedValue(undefined) };
+    const prisma = {
+      adminSession: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'session_1',
+          source: 'TOTP',
+          identity: {
+            id: 'admin_1',
+            userId: 'admin@example.test',
+            role: 'ADMIN',
+            mfaVerifiedAt: new Date(),
+            blockedAt: null,
+          },
+        }),
+        updateMany,
+      },
+    } as unknown as PrismaService;
+
+    await new AdminService(prisma, audit).logoutSession('token');
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ revocationReason: 'logout' }),
+      }),
+    );
+    expect(audit.append).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'admin.logout' }),
+    );
+  });
+
   it('does not create an admin session without a valid MFA factor', async () => {
     const findUniqueOrThrow = jest.fn().mockResolvedValue({
       id: 'admin_1',
@@ -187,6 +219,50 @@ describe('AdminService', () => {
         where: expect.objectContaining({ OR: expect.any(Array) }),
       }),
     );
+  });
+
+  it('keeps Support beneficiary review and reconciliation reads available', async () => {
+    const identity = {
+      id: 'support_1',
+      role: 'SUPPORT',
+      mfaVerifiedAt: new Date(),
+      blockedAt: null,
+    };
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue(identity),
+      },
+      beneficiary: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'beneficiary_1',
+            displayName: 'Masked beneficiary',
+            phoneNumber: '+254700000001',
+          },
+        ]),
+      },
+      transactionReconciliation: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'reconciliation_1' }]),
+        count: jest.fn().mockResolvedValue(1),
+      },
+    } as unknown as PrismaService;
+    const service = new AdminService(prisma);
+
+    await expect(service.reviewBeneficiaries('support_1', {})).resolves.toEqual(
+      [
+        {
+          id: 'beneficiary_1',
+          displayName: 'Masked beneficiary',
+          phoneNumber: '[MASKED]',
+        },
+      ],
+    );
+    await expect(service.listReconciliations('support_1')).resolves.toEqual({
+      items: [{ id: 'reconciliation_1' }],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+    });
   });
 
   it('preserves a support note and records its privileged audit context', async () => {
@@ -1043,5 +1119,33 @@ describe('AdminService', () => {
     expect(audit.append).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'admin.alert.escalated' }),
     );
+  });
+
+  it('returns a masked alert detail only to Ops and above', async () => {
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'ops_1',
+          role: 'OPS',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      adminAlertDelivery: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'alert_1',
+          webhookSecret: 'secret-value',
+          status: 'FAILED',
+        }),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).alertDetail('ops_1', 'alert_1'),
+    ).resolves.toEqual({
+      id: 'alert_1',
+      webhookSecret: '[REDACTED]',
+      status: 'FAILED',
+    });
   });
 });

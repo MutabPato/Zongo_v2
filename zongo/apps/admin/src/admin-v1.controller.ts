@@ -176,7 +176,7 @@ export class AdminV1Controller {
     @Res({ passthrough: true }) response: BrowserResponse,
   ) {
     const accessToken = this.sessionToken(request, false);
-    if (accessToken) await this.adminService.revokeSession(accessToken);
+    if (accessToken) await this.adminService.logoutSession(accessToken);
     response.clearCookie(SESSION_COOKIE, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -398,6 +398,12 @@ export class AdminV1Controller {
   async alerts(@Req() request: Request) {
     const actor = await this.actor(request);
     return this.adminService.listAlerts(actor.id, this.pagination(request));
+  }
+
+  @Get('alerts/:id')
+  async alertDetail(@Req() request: Request, @Param('id') id: string) {
+    const actor = await this.actor(request);
+    return this.adminService.alertDetail(actor.id, id);
   }
 
   @Post('alerts/:id/acknowledge')

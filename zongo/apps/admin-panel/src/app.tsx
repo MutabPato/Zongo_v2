@@ -1324,25 +1324,51 @@ function WorkflowPage({
   title,
   endpoint,
   role,
+  detailEndpoint,
 }: {
   title: string;
   endpoint: string;
   role: api.AdminRole;
+  detailEndpoint?: string;
 }) {
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [page, setPage] = useState<api.Page<Record<string, unknown>>>({
+    items: [],
+    page: 1,
+    pageSize: 25,
+    total: 0,
+  });
+  const [detail, setDetail] = useState<Record<string, unknown>>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [message, setMessage] = useState<string>();
-  async function load() {
+  async function load(nextPage = 1) {
     setLoading(true);
     try {
-      const value = await api.loadCollection(endpoint);
+      const value = await api.loadCollection(
+        endpoint.includes('/pilot/')
+          ? endpoint
+          : `${endpoint}?page=${nextPage}&pageSize=25`,
+      );
       const list = Array.isArray(value)
         ? value
         : ((value as { items?: Record<string, unknown>[] }).items ?? [
             value as Record<string, unknown>,
           ]);
       setRows(list as Record<string, unknown>[]);
+      if (
+        !Array.isArray(value) &&
+        Array.isArray((value as api.Page<unknown>).items)
+      )
+        setPage(value as api.Page<Record<string, unknown>>);
+      else
+        setPage({
+          items: list as Record<string, unknown>[],
+          page: 1,
+          pageSize: list.length || 25,
+          total: list.length,
+        });
+      setDetail(undefined);
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Unable to load workflow',
@@ -1354,6 +1380,21 @@ function WorkflowPage({
   useEffect(() => {
     void load();
   }, [endpoint]);
+  async function loadDetail(id: string) {
+    if (!detailEndpoint) return;
+    setError(undefined);
+    try {
+      setDetail(
+        (await api.loadCollection(
+          `${detailEndpoint}/${encodeURIComponent(id)}`,
+        )) as Record<string, unknown>,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Unable to load record detail',
+      );
+    }
+  }
   async function alertAction(id: string, action: 'acknowledge' | 'escalate') {
     const reason = window.prompt('Reason for this audited action');
     if (!reason?.trim()) return;
@@ -1489,6 +1530,15 @@ function WorkflowPage({
                     '',
                 )}
               </Typography>
+              {detailEndpoint && row.id !== undefined && row.id !== null && (
+                <Button
+                  size="small"
+                  sx={{ mt: 1 }}
+                  onClick={() => void loadDetail(String(row.id))}
+                >
+                  View details
+                </Button>
+              )}
               {Object.values(row).some(
                 (value) => typeof value === 'object',
               ) && (
@@ -1554,36 +1604,39 @@ function WorkflowPage({
                   </Button>
                 </Stack>
               )}
-              {endpoint === '/admin/v1/reconciliation' &&
-                role !== 'SUPPORT' && (
-                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    <Button
-                      size="small"
-                      onClick={() =>
-                        reconciliationAction(String(row.id), 'notes')
-                      }
-                    >
-                      Add note
-                    </Button>
-                    <Button
-                      size="small"
-                      onClick={() =>
-                        reconciliationAction(String(row.id), 'assign')
-                      }
-                    >
-                      Assign owner
-                    </Button>
-                    <Button
-                      size="small"
-                      color="warning"
-                      onClick={() =>
-                        reconciliationAction(String(row.id), 'escalate')
-                      }
-                    >
-                      Escalate
-                    </Button>
-                  </Stack>
-                )}
+              {endpoint === '/admin/v1/reconciliation' && (
+                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                  <Button
+                    size="small"
+                    onClick={() =>
+                      reconciliationAction(String(row.id), 'notes')
+                    }
+                  >
+                    Add note
+                  </Button>
+                  {role !== 'SUPPORT' && (
+                    <>
+                      <Button
+                        size="small"
+                        onClick={() =>
+                          reconciliationAction(String(row.id), 'assign')
+                        }
+                      >
+                        Assign owner
+                      </Button>
+                      <Button
+                        size="small"
+                        color="warning"
+                        onClick={() =>
+                          reconciliationAction(String(row.id), 'escalate')
+                        }
+                      >
+                        Escalate
+                      </Button>
+                    </>
+                  )}
+                </Stack>
+              )}
               {endpoint === '/admin/v1/admin-controls' &&
                 role === 'ADMIN' &&
                 Boolean(row.key) && (
@@ -1602,6 +1655,42 @@ function WorkflowPage({
           <Typography color="text.secondary">
             No records require attention.
           </Typography>
+        )}
+        {detail && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" fontWeight={800}>
+              Record detail
+            </Typography>
+            <Box
+              component="pre"
+              sx={{
+                mt: 1,
+                p: 1.5,
+                overflowX: 'auto',
+                bgcolor: '#f7f9fc',
+                borderRadius: 1,
+                fontSize: 12,
+              }}
+            >
+              {JSON.stringify(detail, null, 2)}
+            </Box>
+          </Box>
+        )}
+        {page.total > page.pageSize && (
+          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+            <Button
+              disabled={page.page <= 1 || loading}
+              onClick={() => void load(page.page - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              disabled={page.page * page.pageSize >= page.total || loading}
+              onClick={() => void load(page.page + 1)}
+            >
+              Next
+            </Button>
+          </Stack>
         )}
       </Paper>
     </Stack>
@@ -1627,7 +1716,14 @@ function Shell({
   const visibleNavigation = navigation.filter(([, path]) => {
     if (session.role === 'ADMIN') return true;
     if (session.role === 'SUPPORT')
-      return ['/', '/transactions', '/audit'].includes(path);
+      return [
+        '/',
+        '/transactions',
+        '/reconciliation',
+        '/beneficiaries',
+        '/pilot',
+        '/audit',
+      ].includes(path);
     return path !== '/admin-controls';
   });
   async function signOut() {
@@ -1813,6 +1909,17 @@ function Shell({
                           : path === '/audit'
                             ? '/admin/v1/audit'
                             : '/admin/v1/pilot/readiness'
+                  }
+                  detailEndpoint={
+                    path === '/reconciliation'
+                      ? '/admin/v1/reconciliations'
+                      : path === '/verification'
+                        ? '/admin/v1/verification'
+                        : path === '/alerts'
+                          ? '/admin/v1/alerts'
+                          : path === '/audit'
+                            ? '/admin/v1/audit'
+                            : undefined
                   }
                 />
               }

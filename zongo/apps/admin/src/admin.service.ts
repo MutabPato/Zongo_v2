@@ -174,6 +174,22 @@ export class AdminService {
     });
   }
 
+  async logoutSession(accessToken: string): Promise<void> {
+    const session = await this.prisma.adminSession.findUnique({
+      where: { tokenHash: this.hashToken(accessToken) },
+      include: { identity: true },
+    });
+    const result = await this.prisma.adminSession.updateMany({
+      where: { tokenHash: this.hashToken(accessToken), revokedAt: null },
+      data: { revokedAt: new Date(), revocationReason: 'logout' },
+    });
+    if (result.count && session)
+      await this.record(session.identity, 'admin.logout', {
+        target: `session:${session.id}`,
+        source: session.source,
+      });
+  }
+
   csrfToken(accessToken: string): string {
     return createHmac(
       'sha256',
@@ -428,7 +444,7 @@ export class AdminService {
     actorId: string,
     pagination: { page?: number; pageSize?: number } = {},
   ) {
-    await this.requireActor(actorId, AdminRole.OPS);
+    await this.requireActor(actorId, AdminRole.SUPPORT);
     const page = Math.max(pagination.page ?? 1, 1);
     const pageSize = Math.min(Math.max(pagination.pageSize ?? 25, 1), 100);
     const [rows, total] = await Promise.all([
@@ -475,6 +491,15 @@ export class AdminService {
       this.prisma.adminAlertDelivery.count(),
     ]);
     return { items: this.maskAdminData(rows), page, pageSize, total };
+  }
+
+  async alertDetail(actorId: string, id: string) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    const row = await this.prisma.adminAlertDelivery.findUnique({
+      where: { id },
+    });
+    if (!row) throw new NotFoundException('Alert was not found');
+    return this.maskAdminData(row);
   }
 
   async auditTrail(
@@ -777,7 +802,7 @@ export class AdminService {
     actorId: string,
     query: { search?: string; corridorId?: string; userId?: string },
   ): Promise<unknown> {
-    await this.requireActor(actorId, AdminRole.OPS);
+    await this.requireActor(actorId, AdminRole.SUPPORT);
     const canUseEncryptedSearch =
       !query.search || this.blindIndexConfigured('beneficiary-phone');
     const beneficiaries =
@@ -828,7 +853,7 @@ export class AdminService {
   }
 
   async reviewBeneficiary(actorId: string, id: string) {
-    await this.requireActor(actorId, AdminRole.OPS);
+    await this.requireActor(actorId, AdminRole.SUPPORT);
     const beneficiary = this.beneficiaries
       ? await this.prisma.beneficiary.findUnique({
           where: { id },
@@ -1714,7 +1739,7 @@ export class AdminService {
     return Object.fromEntries(
       Object.entries(value).flatMap(([key, entry]) => {
         if (
-          /ciphertext|payoutAccount|evidenceCiphertext|totpSecret|emergencySecret|tokenHash|accessToken|password|privateKey|publicKey|credentialId/i.test(
+          /ciphertext|payoutAccount|evidenceCiphertext|totpSecret|emergencySecret|webhookSecret|tokenHash|accessToken|password|privateKey|publicKey|credentialId/i.test(
             key,
           )
         )

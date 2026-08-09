@@ -813,15 +813,8 @@ function BeneficiaryWorkspace() {
     setLoading(true);
     setError(undefined);
     try {
-      const query = new URLSearchParams({
-        page: String(nextPage),
-        pageSize: '25',
-      });
-      if (search.trim()) query.set('search', search.trim());
-      const result = await api.loadCollection(
-        `/admin/v1/beneficiaries?${query.toString()}`,
-      );
-      setPage(result as api.Page<Record<string, unknown>>);
+      const result = await api.loadBeneficiaries(search, nextPage);
+      setPage(result);
       setSelected(undefined);
     } catch (cause) {
       setError(
@@ -986,12 +979,7 @@ function AdminControlsWorkspace({
   async function load() {
     setLoading(true);
     try {
-      setSnapshot(
-        (await api.loadCollection('/admin/v1/admin-controls')) as Record<
-          string,
-          unknown
-        >,
-      );
+      setSnapshot(await api.loadAdminControls());
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -1224,12 +1212,7 @@ function PilotReadinessWorkspace() {
 
   async function load() {
     try {
-      setRecord(
-        (await api.loadCollection('/admin/v1/pilot/readiness')) as Record<
-          string,
-          unknown
-        > | null,
-      );
+      setRecord(await api.loadPilotReadiness());
     } catch (cause) {
       setError(
         cause instanceof Error

@@ -9,6 +9,54 @@ import { AdminService } from './admin.service';
 import { PilotControlKey, PilotControlState } from '@prisma/client';
 
 describe('AdminService', () => {
+  it.each([
+    ['SUPPORT', false, false],
+    ['OPS', true, false],
+    ['ADMIN', true, true],
+  ])(
+    'derives server capabilities for %s sessions',
+    async (role, canViewAlerts, canManageAdminControls) => {
+      const expiresAt = new Date(Date.now() + 60_000);
+      const prisma = {
+        adminSession: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'session_1',
+            revokedAt: null,
+            expiresAt,
+            identity: { id: 'identity_1' },
+          }),
+          update: jest.fn().mockResolvedValue(undefined),
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            expiresAt,
+            lastUsedAt: expiresAt,
+            source: 'TOTP',
+          }),
+        },
+        platformIdentity: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            id: 'identity_1',
+            userId: `${String(role).toLowerCase()}@example.test`,
+            role,
+            mfaVerifiedAt: new Date(),
+            blockedAt: null,
+          }),
+        },
+      } as unknown as PrismaService;
+
+      await expect(
+        new AdminService(prisma).sessionDetails('token'),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          role,
+          capabilities: expect.objectContaining({
+            viewAlerts: canViewAlerts,
+            manageAdminControls: canManageAdminControls,
+          }),
+        }),
+      );
+    },
+  );
+
   it('rejects a revoked admin session', async () => {
     const prisma = {
       adminSession: {

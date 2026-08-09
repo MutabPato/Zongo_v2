@@ -133,6 +133,22 @@ describe('AdminService', () => {
     expect(JSON.stringify(result)).not.toContain('+254700000001');
   });
 
+  it('does not expose identity secrets or operational stack traces in read models', () => {
+    const service = new AdminService({} as PrismaService);
+    const masked = (
+      service as unknown as { maskAdminData: (value: unknown) => unknown }
+    ).maskAdminData({
+      actor: { totpSecret: 'totp', userId: 'ops@example.test' },
+      lastError: 'Error: database password leaked',
+      createdAt: new Date('2026-08-09T08:00:00.000Z'),
+    }) as Record<string, unknown>;
+    expect(masked).toEqual({
+      actor: { totpSecret: '[REDACTED]', userId: 'ops@example.test' },
+      lastError: '[REDACTED]',
+      createdAt: '2026-08-09T08:00:00.000Z',
+    });
+  });
+
   it('preserves a support note and records its privileged audit context', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const create = jest

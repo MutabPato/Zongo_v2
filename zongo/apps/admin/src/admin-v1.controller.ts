@@ -289,6 +289,17 @@ export class AdminV1Controller {
     );
   }
 
+  @Get('reconciliations')
+  async reconciliations(@Req() request: Request) {
+    return this.reconciliation(request);
+  }
+
+  @Get('reconciliations/:id')
+  async reconciliationDetail(@Req() request: Request, @Param('id') id: string) {
+    const actor = await this.actor(request);
+    return this.adminService.getReconciliation(actor.id, id);
+  }
+
   @Post('reconciliation/:id/notes')
   @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.note })
   async reconciliationNote(
@@ -326,6 +337,30 @@ export class AdminV1Controller {
     );
   }
 
+  @Post('reconciliations/:id/notes')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.note })
+  async canonicalReconciliationNote(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() input: AdminV1Dto.NoteBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.reconciliationNote(request, id, input, csrfToken);
+  }
+
+  @Post('reconciliations/:id/ownership')
+  @ApiBody({
+    schema: AdminV1Dto.AdminV1OpenApiSchemas.reconciliationAssignment,
+  })
+  async canonicalReconciliationOwnership(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: AdminV1Dto.ReconciliationAssignmentBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.assignReconciliation(request, id, body, csrfToken);
+  }
+
   @Get('verification')
   async verification(@Req() request: Request) {
     const actor = await this.actor(request);
@@ -333,6 +368,12 @@ export class AdminV1Controller {
       actor.id,
       this.pagination(request),
     );
+  }
+
+  @Get('verification/:id')
+  async verificationDetail(@Req() request: Request, @Param('id') id: string) {
+    const actor = await this.actor(request);
+    return this.adminService.verificationCase(actor.id, id);
   }
 
   @Post('verification/:id/review')
@@ -400,10 +441,39 @@ export class AdminV1Controller {
     });
   }
 
+  @Get('beneficiaries/:id')
+  async beneficiaryDetail(@Req() request: Request, @Param('id') id: string) {
+    const actor = await this.actor(request);
+    return this.adminService.reviewBeneficiary(actor.id, id);
+  }
+
   @Get('audit')
   async audit(@Req() request: Request) {
     const actor = await this.actor(request);
     return this.adminService.auditTrail(actor.id, this.pagination(request));
+  }
+
+  @Get('audit/:id')
+  async auditDetail(@Req() request: Request, @Param('id') id: string) {
+    const actor = await this.actor(request);
+    return this.adminService.auditEvent(actor.id, id);
+  }
+
+  @Get('users')
+  async users(@Req() request: Request) {
+    const actor = await this.actor(request);
+    const url = new URL(request.url, 'http://admin.local');
+    return this.adminService.listAdminUsers(
+      actor.id,
+      this.pagination(request),
+      url.searchParams.get('search') ?? undefined,
+    );
+  }
+
+  @Get('users/:id')
+  async userDetail(@Req() request: Request, @Param('id') id: string) {
+    const actor = await this.actor(request);
+    return this.adminService.adminUser(actor.id, id);
   }
 
   @Get('admin-controls')
@@ -412,10 +482,24 @@ export class AdminV1Controller {
     return this.adminService.adminControls(actor.id);
   }
 
+  @Get('policies/tier-1-transfer-caps')
+  async tierOneCapsPolicy(@Req() request: Request) {
+    const actor = await this.actor(request);
+    const snapshot = (await this.adminService.adminControls(actor.id)) as {
+      tier1?: unknown;
+    };
+    return snapshot.tier1 ?? null;
+  }
+
   @Get('pilot/readiness')
   async pilotReadiness(@Req() request: Request) {
     const actor = await this.actor(request);
     return this.adminService.getPilotReadiness(actor.id);
+  }
+
+  @Get('pilot/release')
+  async pilotRelease(@Req() request: Request) {
+    return this.pilotReadiness(request);
   }
 
   @Post('admin-controls/pilot')
@@ -567,6 +651,127 @@ export class AdminV1Controller {
       actor.id,
       parsePilotPublish(body),
     );
+  }
+
+  @Post('users/:id/block')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.userBlock })
+  async canonicalUserBlock(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: AdminV1Dto.UserBlockBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.blockUser(
+      request,
+      { ...body, userId: id, blocked: true },
+      csrfToken,
+    );
+  }
+
+  @Post('users/:id/unblock')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.userBlock })
+  async canonicalUserUnblock(
+    @Req() request: Request,
+    @Param('id') id: string,
+    @Body() body: AdminV1Dto.UserBlockBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.blockUser(
+      request,
+      { ...body, userId: id, blocked: false },
+      csrfToken,
+    );
+  }
+
+  @Post('policies/tier-1-transfer-caps')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.tierCaps })
+  async canonicalTierOneCaps(
+    @Req() request: Request,
+    @Body() body: AdminV1Dto.TierOneCapsBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.tierOneCaps(request, body, csrfToken);
+  }
+
+  @Post('pilot/controls')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotControl })
+  async canonicalPilotControls(
+    @Req() request: Request,
+    @Body() body: AdminV1Dto.PilotControlBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.pilotControl(request, body, csrfToken);
+  }
+
+  @Post('pilot/allowlist/:profileId')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotAllowlist })
+  async canonicalPilotAllowlist(
+    @Req() request: Request,
+    @Param('profileId') profileId: string,
+    @Body() body: AdminV1Dto.PilotAllowlistBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.pilotAllowlist(
+      request,
+      { ...body, senderProfileId: profileId },
+      csrfToken,
+    );
+  }
+
+  @Post('pilot/exposure-policy')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.exposurePolicy })
+  async canonicalPilotExposurePolicy(
+    @Req() request: Request,
+    @Body() body: AdminV1Dto.ExposurePolicyBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.pilotExposurePolicy(request, body, csrfToken);
+  }
+
+  @Post('pilot/engineering-isolation')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.reason })
+  async canonicalEngineeringIsolation(
+    @Req() request: Request,
+    @Body() input: AdminV1Dto.AlertReasonBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    const accessToken = this.mutationToken(request, csrfToken);
+    const actor = await this.adminService.actorFromSession(accessToken);
+    return this.adminService.isolateProviderMovement(
+      actor.id,
+      parseReason(input).reason,
+    );
+  }
+
+  @Post('pilot/release/approvals')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotApproval })
+  async canonicalPilotApprovals(
+    @Req() request: Request,
+    @Body() body: AdminV1Dto.PilotApprovalBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.pilotApproval(request, body, csrfToken);
+  }
+
+  @Post('pilot/release/stages/:stage')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotStage })
+  async canonicalPilotStages(
+    @Req() request: Request,
+    @Param('stage') stage: string,
+    @Body() body: AdminV1Dto.PilotStageBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.pilotStage(request, { ...body, stage }, csrfToken);
+  }
+
+  @Post('pilot/release/publish')
+  @ApiBody({ schema: AdminV1Dto.AdminV1OpenApiSchemas.pilotPublish })
+  async canonicalPilotPublication(
+    @Req() request: Request,
+    @Body() body: AdminV1Dto.PilotPublishBody,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    return this.publishPilot(request, body, csrfToken);
   }
 
   private async actor(request: Request) {

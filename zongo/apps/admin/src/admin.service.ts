@@ -2,6 +2,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -445,6 +446,22 @@ export class AdminService {
     return { items: this.maskAdminData(rows), page, pageSize, total };
   }
 
+  async getReconciliation(actorId: string, id: string) {
+    await this.requireActor(actorId, AdminRole.SUPPORT);
+    const row = await this.prisma.transactionReconciliation.findUnique({
+      where: { id },
+      include: {
+        transaction: true,
+        adminNotes: {
+          include: { author: true },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+    if (!row) throw new NotFoundException('Reconciliation was not found');
+    return this.maskAdminData(row);
+  }
+
   async listAlerts(
     actorId: string,
     pagination: { page?: number; pageSize?: number } = {},
@@ -479,6 +496,13 @@ export class AdminService {
       this.prisma.auditEvent.count(),
     ]);
     return { items: this.maskAdminData(rows), page, pageSize, total };
+  }
+
+  async auditEvent(actorId: string, id: string) {
+    await this.requireActor(actorId, AdminRole.SUPPORT);
+    const row = await this.prisma.auditEvent.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Audit event was not found');
+    return this.maskAdminData(row);
   }
 
   async adminControls(actorId: string) {
@@ -785,6 +809,27 @@ export class AdminService {
       pageSize,
       total: all.length,
     };
+  }
+
+  async reviewBeneficiary(actorId: string, id: string) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    const beneficiary = this.beneficiaries
+      ? await this.prisma.beneficiary.findUnique({
+          where: { id },
+          include: {
+            supersedes: true,
+            revisions: true,
+            transactions: {
+              select: { id: true, reference: true, status: true },
+            },
+            retryTransactions: {
+              select: { id: true, reference: true, status: true },
+            },
+          },
+        })
+      : null;
+    if (!beneficiary) throw new NotFoundException('Beneficiary was not found');
+    return this.maskAdminData(beneficiary);
   }
 
   async setUserBlocked(
@@ -1326,6 +1371,83 @@ export class AdminService {
     return { items: this.maskAdminData(verifications), page, pageSize, total };
   }
 
+  async verificationCase(actorId: string, id: string) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    const verification = await this.prisma.senderVerification.findUnique({
+      where: { id },
+      include: {
+        senderProfile: {
+          select: { id: true, legalName: true, tier: true, verifiedAt: true },
+        },
+      },
+    });
+    if (!verification)
+      throw new NotFoundException('Verification case was not found');
+    return this.maskAdminData(verification);
+  }
+
+  async listAdminUsers(
+    actorId: string,
+    pagination: { page?: number; pageSize?: number } = {},
+    search?: string,
+  ) {
+    await this.requireActor(actorId, AdminRole.ADMIN);
+    const page = Math.max(pagination.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? 25, 1), 100);
+    const where = search?.trim()
+      ? {
+          OR: [
+            {
+              userId: { contains: search.trim(), mode: 'insensitive' as const },
+            },
+            {
+              displayName: {
+                contains: search.trim(),
+                mode: 'insensitive' as const,
+              },
+            },
+          ],
+        }
+      : {};
+    const [rows, total] = await Promise.all([
+      this.prisma.platformIdentity.findMany({
+        where,
+        select: {
+          id: true,
+          userId: true,
+          displayName: true,
+          role: true,
+          blockedAt: true,
+          blockedReason: true,
+          mfaVerifiedAt: true,
+        },
+        orderBy: { userId: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.platformIdentity.count({ where }),
+    ]);
+    return { items: this.maskAdminData(rows), page, pageSize, total };
+  }
+
+  async adminUser(actorId: string, id: string) {
+    await this.requireActor(actorId, AdminRole.ADMIN);
+    const row = await this.prisma.platformIdentity.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        userId: true,
+        displayName: true,
+        role: true,
+        blockedAt: true,
+        blockedReason: true,
+        mfaVerifiedAt: true,
+      },
+    });
+    if (!row) throw new NotFoundException('Identity was not found');
+    return this.maskAdminData(row);
+  }
+
   /** Engineering may isolate provider movement, but has no resume or release authority. */
   async isolateProviderMovement(actorId: string, reason: string) {
     if (!reason.trim())
@@ -1575,8 +1697,13 @@ export class AdminService {
     if (value === null || typeof value !== 'object') return value;
     return Object.fromEntries(
       Object.entries(value).flatMap(([key, entry]) => {
-        if (/ciphertext|payoutAccount|evidenceCiphertext/i.test(key))
+        if (
+          /ciphertext|payoutAccount|evidenceCiphertext|totpSecret|emergencySecret|tokenHash|accessToken|password|privateKey|publicKey|credentialId/i.test(
+            key,
+          )
+        )
           return [[key, '[REDACTED]']];
+        if (/lastError|stackTrace/i.test(key)) return [[key, '[REDACTED]']];
         if (
           /email|phone|legalName|providerReference|partnerReference/i.test(key)
         ) {

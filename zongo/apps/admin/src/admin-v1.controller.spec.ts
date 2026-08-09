@@ -139,6 +139,18 @@ describe('AdminV1Controller', () => {
     expect(admin.searchOperations).not.toHaveBeenCalled();
   });
 
+  it('keeps bearer compatibility out of the canonical browser contract', async () => {
+    const admin = { actorFromSession: jest.fn() };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+
+    await expect(
+      controller.session({
+        headers: { authorization: 'Bearer legacy-token' },
+      } as never),
+    ).rejects.toThrow('Admin browser session is required');
+    expect(admin.actorFromSession).not.toHaveBeenCalled();
+  });
+
   it('rejects malformed WebAuthn login envelopes before verification', async () => {
     const admin = { loginWithHardwareKey: jest.fn() };
     const webauthn = { verifyAuthentication: jest.fn() };

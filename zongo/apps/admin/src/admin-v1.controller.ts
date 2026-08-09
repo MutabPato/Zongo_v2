@@ -829,11 +829,9 @@ export class AdminV1Controller {
   private sessionToken(request: Request, required = true): string | undefined {
     const cookies = this.cookies(request.headers.cookie);
     const cookieToken = cookies[SESSION_COOKIE];
-    const [scheme, bearer] = request.headers.authorization?.split(' ') ?? [];
-    const token = cookieToken ?? (scheme === 'Bearer' ? bearer : undefined);
-    if (!token && required)
+    if (!cookieToken && required)
       throw new UnauthorizedException('Admin browser session is required');
-    return token;
+    return cookieToken;
   }
 
   private cookies(header: string | undefined): Record<string, string> {

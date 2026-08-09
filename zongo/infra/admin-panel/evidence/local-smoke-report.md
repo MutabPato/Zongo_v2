@@ -28,5 +28,6 @@ Passed:
 - Browser logout now revokes the durable session and records an `admin.logout` audit event.
 - Rebuilt-image in-container checks returned 200 for `/backoffice/`, SPA fallback, and `/admin/v1/openapi-json`; the entry document was `no-cache` and the hashed asset was `immutable`.
 - Production Compose route-gate dry runs rendered `ADMIN_PANEL_ENABLED=true` for the panel state and `false` for the AdminJS rollback state, with the Nest fallback at priority 10. No live Traefik route switch was performed locally.
+- Static panel-client boundary scan found no `localStorage`, `sessionStorage`, `Authorization`, or raw `accessToken` usage; browser authentication remains cookie/session based.
 
 Not release-complete: this is local evidence only. The full three-role parity matrix, deployed preview/isolated Playwright evidence, rollback rehearsal, observation window, and operations-owner approvals remain required before AdminJS removal.

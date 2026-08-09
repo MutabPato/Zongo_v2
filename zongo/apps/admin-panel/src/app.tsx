@@ -455,11 +455,12 @@ function Operations({ title }: { title: string }) {
           <MenuItem value="">All statuses</MenuItem>
           {[
             'INITIATED',
-            'COLLECTION_PENDING',
+            'PENDING_COLLECTION',
+            'COLLECTION_SUCCESS',
             'COLLECTION_FAILED',
-            'PAYOUT_PENDING',
+            'PENDING_PAYOUT',
+            'PAYOUT_SUCCESS',
             'PAYOUT_FAILED',
-            'COMPLETED',
           ].map((value) => (
             <MenuItem key={value} value={value}>
               {value}

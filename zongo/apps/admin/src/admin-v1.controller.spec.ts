@@ -94,4 +94,20 @@ describe('AdminV1Controller', () => {
       expect.objectContaining({ httpOnly: true, sameSite: 'lax', path: '/' }),
     );
   });
+
+  it('rejects an invalid operation status filter before the service query', async () => {
+    const admin = {
+      actorFromSession: jest.fn().mockResolvedValue({ id: 'support_1' }),
+      searchOperations: jest.fn(),
+    };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+
+    await expect(
+      controller.searchOperations({
+        headers: { cookie: 'zongo_admin_session=session-token' },
+        url: '/admin/v1/operations/search?status=COMPLETED',
+      } as never),
+    ).rejects.toThrow('Invalid transaction status filter');
+    expect(admin.searchOperations).not.toHaveBeenCalled();
+  });
 });

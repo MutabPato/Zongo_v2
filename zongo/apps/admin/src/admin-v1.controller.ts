@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   ForbiddenException,
   Get,
@@ -201,10 +202,11 @@ export class AdminV1Controller {
     const actor = await this.actor(request);
     const url = new URL(request.url, 'http://admin.local');
     const rawPage = Number(url.searchParams.get('page') ?? '1');
-    const status = url.searchParams.get('status') as TransactionStatus | null;
+    const rawStatus = url.searchParams.get('status');
+    const status = rawStatus ? this.transactionStatus(rawStatus) : undefined;
     return this.adminService.searchOperations(actor.id, {
       q: url.searchParams.get('q') ?? undefined,
-      status: status ?? undefined,
+      status,
       page: Number.isFinite(rawPage) ? rawPage : 1,
     });
   }
@@ -845,6 +847,12 @@ export class AdminV1Controller {
       page: Number.isFinite(page) ? page : 1,
       pageSize: Number.isFinite(pageSize) ? pageSize : 25,
     };
+  }
+
+  private transactionStatus(value: string): TransactionStatus {
+    if (!Object.values(TransactionStatus).includes(value as TransactionStatus))
+      throw new BadRequestException('Invalid transaction status filter');
+    return value as TransactionStatus;
   }
 
   private setSessionCookie(response: BrowserResponse, token: string): void {

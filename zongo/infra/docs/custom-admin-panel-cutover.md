@@ -14,6 +14,8 @@ This runbook is the operational gate for replacing AdminJS. The React artifact a
 
 The operations owner approves the route switch only when the evidence pack has no open critical/high security, authorization, sensitive-data, audit, money-value, or rollback defect. Switch `/backoffice` to the approved panel artifact for a short observation window. Keep the AdminJS target available as the reversible rollback target, but do not expose both products as long-term public choices.
 
+The deployment switch is the `ADMIN_PANEL_ENABLED` Traefik label gate. Set it to `true` for the custom panel route; set it to `false` and redeploy the routing configuration to return `/backoffice` to the AdminJS service. This rollback changes routing only and does not reverse database migrations. Rehearse both settings against the same paired release before cutover and record the result in the evidence pack.
+
 Observe authentication failures, role denials, sensitive reveals and matching audit events, frontend/API error rates, latency, routing health, and workflow smoke/E2E results. A rollback returns the route to the AdminJS target without reversing data migrations.
 
 ## Removal gate

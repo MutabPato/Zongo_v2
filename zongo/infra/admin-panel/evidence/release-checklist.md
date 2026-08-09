@@ -8,6 +8,7 @@
 - [ ] Money and bigint values remain exact decimal strings in API payloads and UI rendering.
 - [ ] Consequential actions have idempotency and queued-versus-completed evidence.
 - [ ] Rollback to AdminJS is rehearsed without reversing migrations.
+- [ ] `ADMIN_PANEL_ENABLED=true` and `ADMIN_PANEL_ENABLED=false` route-switch states are rehearsed and recorded.
 - [ ] Observation window passes auth, authorization, sensitive-data, audit, latency, error, routing, and smoke checks.
 - [ ] Operations owner approves route switch.
 - [ ] AdminJS removal has a separate approval and named legacy-client decision.

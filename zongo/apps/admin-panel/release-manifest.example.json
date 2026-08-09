@@ -6,6 +6,7 @@
   "apiContract": "/admin/v1",
   "route": "/backoffice",
   "previewHost": "admin-preview.example.internal",
+  "panelRouteGate": "ADMIN_PANEL_ENABLED",
   "evidencePack": "artifacts/admin-panel/<releaseId>/",
   "rollbackTarget": "adminjs",
   "approvals": {

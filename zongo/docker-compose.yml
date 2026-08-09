@@ -127,7 +127,7 @@ services:
     expose:
       - '8080'
     labels:
-      - 'traefik.enable=true'
+      - 'traefik.enable=${ADMIN_PANEL_ENABLED:-true}'
       - 'traefik.docker.network=coolify'
       - 'traefik.http.routers.zongo-admin-panel.rule=Host(`${ADMIN_HOSTNAME}`) && PathPrefix(`/backoffice`)'
       - 'traefik.http.routers.zongo-admin-panel.entrypoints=https'

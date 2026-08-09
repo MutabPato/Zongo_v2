@@ -91,6 +91,10 @@ services:
       ADMIN_ALERT_WEBHOOK_URL: ${ADMIN_ALERT_WEBHOOK_URL:-}
       WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:?WEBAUTHN_RP_ID is required}
       WEBAUTHN_ORIGIN: ${WEBAUTHN_ORIGIN:?WEBAUTHN_ORIGIN is required}
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:?ADMIN_ORIGIN is required}
+      ADMIN_COOKIE_SECURE: ${ADMIN_COOKIE_SECURE:-true}
+      ADMIN_CSRF_SECRET: ${ADMIN_CSRF_SECRET:?ADMIN_CSRF_SECRET is required}
+      ADMIN_LEGACY_REMOVAL_REVIEW_DATE: ${ADMIN_LEGACY_REMOVAL_REVIEW_DATE:-2026-12-31}
       # AdminJS defaults to a relative .adminjs directory; use a writable,
       # absolute container path because Coolify does not guarantee the CWD.
       ADMIN_JS_TMP_DIR: /tmp/adminjs

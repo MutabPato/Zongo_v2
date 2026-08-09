@@ -47,9 +47,12 @@ describe('AdminController (e2e)', () => {
       .get('/admin/v1/openapi-json')
       .expect(200)
       .expect((response) => {
-        expect(response.body.paths['/admin/v1/auth/login']).toBeDefined();
+        const body = response.body as unknown as {
+          paths: Record<string, unknown>;
+        };
+        expect(body.paths['/admin/v1/auth/login']).toBeDefined();
         expect(
-          response.body.paths['/admin/v1/auth/webauthn/login/verify'],
+          body.paths['/admin/v1/auth/webauthn/login/verify'],
         ).toBeDefined();
       });
 

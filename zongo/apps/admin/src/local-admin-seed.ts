@@ -37,43 +37,53 @@ export async function upsertLocalAdmin(
   });
 }
 
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]?.trim();
+function requiredEnvironment(
+  name: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  const value = environment[name]?.trim();
   if (!value) throw new Error(`${name} is required`);
   return value;
 }
 
-function optionalEnvironment(name: string): string | undefined {
-  const value = process.env[name]?.trim();
+function optionalEnvironment(
+  name: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const value = environment[name]?.trim();
   return value || undefined;
+}
+
+export function localAdminConfigsFromEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+): LocalAdminConfig[] {
+  const identities: LocalAdminConfig[] = [
+    {
+      email: requiredEnvironment('LOCAL_ADMIN_EMAIL', environment),
+      totpSecret: requiredEnvironment('LOCAL_ADMIN_TOTP_SECRET', environment),
+      role: AdminRole.ADMIN,
+    },
+  ];
+  const optionalRoles: Array<[AdminRole, string, string]> = [
+    [AdminRole.SUPPORT, 'LOCAL_SUPPORT_EMAIL', 'LOCAL_SUPPORT_TOTP_SECRET'],
+    [AdminRole.OPS, 'LOCAL_OPS_EMAIL', 'LOCAL_OPS_TOTP_SECRET'],
+  ];
+  for (const [role, emailName, secretName] of optionalRoles) {
+    const email = optionalEnvironment(emailName, environment);
+    const totpSecret = optionalEnvironment(secretName, environment);
+    if (email && totpSecret) identities.push({ email, totpSecret, role });
+  }
+  return identities;
 }
 
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production')
     throw new Error('Local admin seeding is disabled in production');
 
-  const email = requiredEnvironment('LOCAL_ADMIN_EMAIL');
-  const totpSecret = requiredEnvironment('LOCAL_ADMIN_TOTP_SECRET');
   const prisma = new PrismaService();
   await prisma.$connect();
   try {
-    const identities: LocalAdminConfig[] = [
-      { email, totpSecret, role: AdminRole.ADMIN },
-    ];
-    const optionalRoles: Array<[AdminRole, string, string]> = [
-      [AdminRole.SUPPORT, 'LOCAL_SUPPORT_EMAIL', 'LOCAL_SUPPORT_TOTP_SECRET'],
-      [AdminRole.OPS, 'LOCAL_OPS_EMAIL', 'LOCAL_OPS_TOTP_SECRET'],
-    ];
-    for (const [role, emailName, secretName] of optionalRoles) {
-      const optionalEmail = optionalEnvironment(emailName);
-      const optionalSecret = optionalEnvironment(secretName);
-      if (optionalEmail && optionalSecret)
-        identities.push({
-          email: optionalEmail,
-          totpSecret: optionalSecret,
-          role,
-        });
-    }
+    const identities = localAdminConfigsFromEnvironment();
     for (const identity of identities) await upsertLocalAdmin(prisma, identity);
     console.log(
       `Local control-plane identities are ready: ${identities

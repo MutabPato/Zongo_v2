@@ -2,7 +2,7 @@ Release: custom-admin-panel-20260809-1407-local
 
 Verified locally:
 - pnpm lint: 0 errors, 28 pre-existing warnings
-- pnpm test: 53 passed suites, 232 passed tests, 3 skipped tests
+- pnpm test: 53 passed suites, 233 passed tests, 3 skipped tests
 - WebAuthn envelope validation: 4 focused DTO/controller assertions passed
 - Role-aware Overview read model: Support queue visibility regression passed
 - Verification reviewer independence: approval and rejection decision tests passed

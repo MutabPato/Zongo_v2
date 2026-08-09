@@ -400,6 +400,51 @@ describe('AdminService', () => {
     expect(count).not.toHaveBeenCalled();
   });
 
+  it('paginates and masks the beneficiary fallback when the domain service is unavailable', async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      {
+        id: 'beneficiary_3',
+        displayName: 'Fallback beneficiary',
+        phoneNumberCiphertext: { ciphertext: 'secret' },
+      },
+    ]);
+    const count = jest.fn().mockResolvedValue(12);
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'support_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      beneficiary: { findMany, count },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).reviewBeneficiariesPage('support_1', {
+        search: 'fallback',
+        page: 3,
+        pageSize: 4,
+      }),
+    ).resolves.toEqual({
+      items: [
+        {
+          id: 'beneficiary_3',
+          displayName: 'Fallback beneficiary',
+          phoneNumberCiphertext: '[REDACTED]',
+        },
+      ],
+      page: 3,
+      pageSize: 4,
+      total: 12,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 8, take: 4 }),
+    );
+    expect(count).toHaveBeenCalledWith(expect.any(Object));
+  });
+
   it('preserves a support note and records its privileged audit context', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const create = jest

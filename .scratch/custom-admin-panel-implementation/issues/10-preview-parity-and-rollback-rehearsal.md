@@ -6,7 +6,7 @@
 
 **Status:** in-progress
 
-**Implementation note:** Paired Docker artifacts, same-host routing, release manifest template, and cutover runbook are in place; execution evidence remains environment-dependent.
+**Implementation note:** Paired Docker artifacts, same-host routing, release manifest template, cutover runbook, and local paired-stack smoke evidence are in place; deployed preview parity and rollback evidence remain.
 
 - [ ] Frontend and backend artifacts are immutable, version-paired, and represented in a release manifest.
 - [ ] Preview/isolated routing serves `/backoffice` to the SPA and `/admin/*`/health routes to Nest under the same security boundary.

@@ -1,9 +1,11 @@
 import { PrismaService } from '@app/db';
+import { verifyPretiumRuntimeConfiguration } from '@app/partner';
 import {
   hashPilotReleasePublication,
   isUsableEvidenceReference,
   verifyPilotReleasePublicationSignature,
 } from '@app/observability';
+import { verifyKeyLifecycle } from '@app/security';
 
 const REQUIRED_APPROVALS = [
   'ENGINEERING',
@@ -209,6 +211,22 @@ async function main(): Promise<void> {
         publicationHashMatches,
         publicationSignatureValid,
       },
+    });
+
+    const providerConfigurationReady =
+      verifyPretiumRuntimeConfiguration(process.env).status === 'PASS';
+    checks.push({
+      name: 'pretium-runtime-configuration',
+      status: providerConfigurationReady ? 'PASS' : 'FAIL',
+      details: { configured: providerConfigurationReady },
+    });
+
+    const keyLifecycleReady =
+      verifyKeyLifecycle(process.env, undefined, true).status === 'PASS';
+    checks.push({
+      name: 'key-lifecycle-and-release-signing-configuration',
+      status: keyLifecycleReady ? 'PASS' : 'FAIL',
+      details: { configured: keyLifecycleReady },
     });
 
     const passed = checks.every((check) => check.status === 'PASS');

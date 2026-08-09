@@ -48,6 +48,7 @@ ALLOW_PILOT_READINESS_VERIFICATION=true pnpm verify:pilot-readiness
 ```
 
 The command reports missing stage snapshots, named approvals, evidence
-references, release facts, explicit control rows, or a valid publication
-fingerprint/signature. It never starts, resumes, or approves real-money
-movement.
+references, release facts, explicit control rows, a valid publication
+fingerprint/signature, exact Pretium runtime configuration, or key-lifecycle
+and release-signing configuration. It never starts, resumes, or approves
+real-money movement.

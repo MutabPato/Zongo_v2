@@ -9,3 +9,5 @@ The legacy `/admin/*` bearer surface is temporary and is not a browser contract.
 | Other callers | No unregistered callers permitted | — | — | No |
 
 The compatibility interceptor emits `admin.legacy-route.used` telemetry with the route, method, owner, and review date while never logging bearer values, request bodies, or query values. A cleanup release may remove aliases only after named callers are migrated or explicitly approved for non-browser retention.
+
+See [`custom-admin-legacy-route-map.md`](./custom-admin-legacy-route-map.md) for the complete route-by-route mapping to `/admin/v1`.

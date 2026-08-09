@@ -36,6 +36,7 @@ Passed:
 - The contract smoke gate also rejects bearer-only requests to canonical `/admin/v1`; bearer compatibility remains confined to legacy `/admin/*` routes.
 - Fresh current-source rebuild `custom-admin-panel-20260809-1340-local` passed `verify-contract-smoke.sh` and `verify-preview.sh`; image digests and commit are recorded in `local-release-manifest.json`.
 - The three-role Support/Ops/Admin matrix was rerun against that rebuilt stack with in-memory synthetic TOTP codes and passed all role, read, denial, CSRF, and logout assertions.
+- Real-browser local smoke captured authenticated Overview and Transactions journeys in `evidence/browser-report/`; the expected initial unauthenticated session probe was the only console error.
 - The paired admin services were recreated from the current release source, and the authenticated contract smoke plus `verify-preview.sh` passed again against the current containers.
 - The three-role matrix runner is available at `infra/admin-panel/verify-role-matrix.sh`; it uses named synthetic Support, Ops, and Admin credentials when enabled in the local environment.
 - With opt-in local Support/Ops fixtures enabled, `verify-role-matrix.sh` passed for Support, Ops, and Admin, including session-role assertions, read visibility, role-appropriate mutation denial, CSRF, and logout.

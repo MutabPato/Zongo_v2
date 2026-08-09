@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import type { PrismaService } from '@app/db';
+import type { BeneficiaryService } from '@app/beneficiary';
 import {
   hashPilotReleasePublication,
   signPilotReleasePublication,
@@ -350,6 +351,53 @@ describe('AdminService', () => {
       pageSize: 25,
       total: 1,
     });
+  });
+
+  it('paginates beneficiary review before revealing and masking records', async () => {
+    const findMany = jest
+      .fn()
+      .mockResolvedValue([
+        { id: 'beneficiary_2', displayName: 'Second beneficiary' },
+      ]);
+    const count = jest.fn().mockResolvedValue(41);
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'support_1',
+          role: 'SUPPORT',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      beneficiary: { findMany, count },
+    } as unknown as PrismaService;
+    const reviewForOpsPage = jest.fn().mockResolvedValue({
+      items: [{ id: 'beneficiary_2', displayName: 'Second beneficiary' }],
+      total: 41,
+    });
+    const beneficiaries = {
+      reviewForOpsPage,
+    } as unknown as BeneficiaryService;
+
+    await expect(
+      new AdminService(
+        prisma,
+        undefined,
+        undefined,
+        beneficiaries,
+      ).reviewBeneficiariesPage('support_1', { page: 2, pageSize: 10 }),
+    ).resolves.toEqual({
+      items: [{ id: 'beneficiary_2', displayName: 'Second beneficiary' }],
+      page: 2,
+      pageSize: 10,
+      total: 41,
+    });
+    expect(reviewForOpsPage).toHaveBeenCalledWith(
+      { search: undefined, corridorId: undefined, userId: undefined },
+      { skip: 10, take: 10 },
+    );
+    expect(findMany).not.toHaveBeenCalled();
+    expect(count).not.toHaveBeenCalled();
   });
 
   it('preserves a support note and records its privileged audit context', async () => {

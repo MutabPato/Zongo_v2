@@ -207,6 +207,60 @@ export class BeneficiaryService {
     );
   }
 
+  async reviewForOpsPage(
+    query: {
+      search?: string;
+      corridorId?: string;
+      userId?: string;
+    },
+    pagination: { skip: number; take: number },
+  ) {
+    const phoneBlindIndex = query.search
+      ? await this.protection.blindIndex(query.search, 'beneficiary-phone')
+      : undefined;
+    const where = {
+      corridorId: query.corridorId,
+      userId: query.userId,
+      OR: query.search
+        ? [
+            {
+              displayName: {
+                contains: query.search,
+                mode: 'insensitive' as const,
+              },
+            },
+            { phoneNumber: { contains: query.search } },
+            ...(phoneBlindIndex
+              ? [{ phoneNumberBlindIndex: phoneBlindIndex }]
+              : []),
+          ]
+        : undefined,
+    };
+    const [beneficiaries, total] = await Promise.all([
+      this.prisma.beneficiary.findMany({
+        where,
+        include: {
+          supersedes: true,
+          revisions: true,
+          transactions: { select: { id: true, reference: true, status: true } },
+          retryTransactions: {
+            select: { id: true, reference: true, status: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: pagination.skip,
+        take: pagination.take,
+      }),
+      this.prisma.beneficiary.count({ where }),
+    ]);
+    return {
+      items: await Promise.all(
+        beneficiaries.map((beneficiary) => this.revealPhone(beneficiary)),
+      ),
+      total,
+    };
+  }
+
   private async revealPhone<
     T extends {
       phoneNumber: string | null;

@@ -877,14 +877,59 @@ export class AdminService {
       pageSize?: number;
     },
   ) {
-    const all = (await this.reviewBeneficiaries(actorId, query)) as unknown[];
+    await this.requireActor(actorId, AdminRole.SUPPORT);
     const page = Math.max(query.page ?? 1, 1);
     const pageSize = Math.min(Math.max(query.pageSize ?? 25, 1), 100);
+    const serviceQuery = {
+      search: query.search,
+      corridorId: query.corridorId,
+      userId: query.userId,
+    };
+    const canUseEncryptedSearch =
+      !query.search || this.blindIndexConfigured('beneficiary-phone');
+    if (this.beneficiaries && canUseEncryptedSearch) {
+      const result = await this.beneficiaries.reviewForOpsPage(serviceQuery, {
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      });
+      return {
+        items: this.maskAdminData(result.items),
+        page,
+        pageSize,
+        total: result.total,
+      };
+    }
+    const where = {
+      corridorId: query.corridorId,
+      userId: query.userId,
+      ...(query.search
+        ? {
+            OR: [
+              {
+                displayName: {
+                  contains: query.search,
+                  mode: 'insensitive' as const,
+                },
+              },
+              { phoneNumber: { contains: query.search } },
+            ],
+          }
+        : {}),
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.beneficiary.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.beneficiary.count({ where }),
+    ]);
     return {
-      items: all.slice((page - 1) * pageSize, page * pageSize),
+      items: this.maskAdminData(items),
       page,
       pageSize,
-      total: all.length,
+      total,
     };
   }
 

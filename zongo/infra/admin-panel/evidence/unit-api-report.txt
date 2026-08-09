@@ -9,6 +9,7 @@ Verified locally:
 - Reconciliation owner-role and identity-secret projection tests passed
 - Verification decision result masking test passed
 - Tier 1 cap mutation decimal-string response test passed
+- Panel API errors preserve server correlation IDs in operator-safe messages
 - pnpm typecheck: passed
 - pnpm --filter @zongo/admin-panel build: passed
 - verify-contract-smoke.sh: passed against current local containers

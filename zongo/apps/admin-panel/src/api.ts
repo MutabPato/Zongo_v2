@@ -63,7 +63,11 @@ export class AdminApiError extends Error {
   readonly details: ApiError;
 
   constructor(status: number, details: ApiError) {
-    super(details.message);
+    super(
+      details.correlationId
+        ? `${details.message} (correlation: ${details.correlationId})`
+        : details.message,
+    );
     this.name = 'AdminApiError';
     this.status = status;
     this.details = details;

@@ -6,6 +6,9 @@ export type AdminSession = {
   role: AdminRole;
   mfaVerifiedAt: string | null;
   blockedAt: string | null;
+  expiresAt?: string;
+  lastUsedAt?: string | null;
+  source?: string;
 };
 
 export type Overview = {
@@ -71,6 +74,43 @@ export async function login(userId: string, totpCode: string) {
     method: 'POST',
     body: JSON.stringify({ userId, totpCode }),
   });
+}
+
+export async function webauthnLoginOptions(userId: string) {
+  return request<Record<string, unknown>>(
+    '/admin/v1/auth/webauthn/login/options',
+    {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    },
+  );
+}
+
+export async function webauthnLoginVerify(
+  userId: string,
+  response: Record<string, unknown>,
+) {
+  return request<{ expiresAt: string }>(
+    '/admin/v1/auth/webauthn/login/verify',
+    {
+      method: 'POST',
+      body: JSON.stringify({ userId, response }),
+    },
+  );
+}
+
+export async function breakGlass(
+  userId: string,
+  emergencySecret: string,
+  reason: string,
+) {
+  return request<{ expiresAt: string; emergency: true }>(
+    '/admin/v1/auth/break-glass',
+    {
+      method: 'POST',
+      body: JSON.stringify({ userId, emergencySecret, reason }),
+    },
+  );
 }
 
 export async function loadSession() {
@@ -146,7 +186,10 @@ export async function mutate<T>(
 ): Promise<T> {
   return request<T>(path, {
     method: 'POST',
-    headers: { 'X-CSRF-Token': csrfToken },
+    headers: {
+      'X-CSRF-Token': csrfToken,
+      'Idempotency-Key': crypto.randomUUID(),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }

@@ -144,6 +144,28 @@ export class AdminService {
     return this.requireActor(session.identity.id, AdminRole.SUPPORT);
   }
 
+  async sessionDetails(accessToken: string) {
+    const actor = await this.actorFromSession(accessToken);
+    const session = await this.prisma.adminSession.findUniqueOrThrow({
+      where: { tokenHash: this.hashToken(accessToken) },
+      select: {
+        expiresAt: true,
+        lastUsedAt: true,
+        source: true,
+      },
+    });
+    return {
+      id: actor.id,
+      userId: actor.userId,
+      role: actor.role,
+      mfaVerifiedAt: actor.mfaVerifiedAt,
+      blockedAt: actor.blockedAt,
+      expiresAt: session.expiresAt,
+      lastUsedAt: session.lastUsedAt,
+      source: session.source,
+    };
+  }
+
   async revokeSession(accessToken: string, reason = 'logout'): Promise<void> {
     await this.prisma.adminSession.updateMany({
       where: { tokenHash: this.hashToken(accessToken), revokedAt: null },
@@ -404,32 +426,59 @@ export class AdminService {
     };
   }
 
-  async listReconciliations(actorId: string) {
+  async listReconciliations(
+    actorId: string,
+    pagination: { page?: number; pageSize?: number } = {},
+  ) {
     await this.requireActor(actorId, AdminRole.OPS);
-    const rows = await this.prisma.transactionReconciliation.findMany({
-      orderBy: { checkedAt: 'desc' },
-      take: 100,
-      include: { transaction: true },
-    });
-    return this.maskAdminData(rows);
+    const page = Math.max(pagination.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? 25, 1), 100);
+    const [rows, total] = await Promise.all([
+      this.prisma.transactionReconciliation.findMany({
+        orderBy: { checkedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { transaction: true },
+      }),
+      this.prisma.transactionReconciliation.count(),
+    ]);
+    return { items: this.maskAdminData(rows), page, pageSize, total };
   }
 
-  async listAlerts(actorId: string) {
+  async listAlerts(
+    actorId: string,
+    pagination: { page?: number; pageSize?: number } = {},
+  ) {
     await this.requireActor(actorId, AdminRole.OPS);
-    const rows = await this.prisma.adminAlertDelivery.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-    });
-    return this.maskAdminData(rows);
+    const page = Math.max(pagination.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? 25, 1), 100);
+    const [rows, total] = await Promise.all([
+      this.prisma.adminAlertDelivery.findMany({
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.adminAlertDelivery.count(),
+    ]);
+    return { items: this.maskAdminData(rows), page, pageSize, total };
   }
 
-  async auditTrail(actorId: string) {
+  async auditTrail(
+    actorId: string,
+    pagination: { page?: number; pageSize?: number } = {},
+  ) {
     await this.requireActor(actorId, AdminRole.SUPPORT);
-    const rows = await this.prisma.auditEvent.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    return this.maskAdminData(rows);
+    const page = Math.max(pagination.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? 25, 1), 100);
+    const [rows, total] = await Promise.all([
+      this.prisma.auditEvent.findMany({
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.auditEvent.count(),
+    ]);
+    return { items: this.maskAdminData(rows), page, pageSize, total };
   }
 
   async adminControls(actorId: string) {
@@ -598,7 +647,11 @@ export class AdminService {
   }
 
   /** Queues a durable partner status recheck and exposes that result immediately to operations. */
-  async recheckStatus(actorId: string, reference: string): Promise<unknown> {
+  async recheckStatus(
+    actorId: string,
+    reference: string,
+    idempotencyKey?: string,
+  ): Promise<unknown> {
     const actor = await this.requireActor(actorId, AdminRole.OPS);
     const transaction = await this.prisma.transferTransaction.findUniqueOrThrow(
       {
@@ -609,7 +662,7 @@ export class AdminService {
     const result = 'QUEUED';
     const job = await this.prisma.workerJob.create({
       data: {
-        dedupKey: `status-recheck:${transaction.id}:${now.getTime()}`,
+        dedupKey: `status-recheck:${transaction.id}:${idempotencyKey ?? now.getTime()}`,
         transactionReference: reference,
         transactionId: transaction.id,
         jobType: JobType.STATUS_RECHECK,
@@ -704,6 +757,27 @@ export class AdminService {
           orderBy: { createdAt: 'desc' },
         });
     return this.maskAdminData(beneficiaries);
+  }
+
+  async reviewBeneficiariesPage(
+    actorId: string,
+    query: {
+      search?: string;
+      corridorId?: string;
+      userId?: string;
+      page?: number;
+      pageSize?: number;
+    },
+  ) {
+    const all = (await this.reviewBeneficiaries(actorId, query)) as unknown[];
+    const page = Math.max(query.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(query.pageSize ?? 25, 1), 100);
+    return {
+      items: all.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      total: all.length,
+    };
   }
 
   async setUserBlocked(
@@ -1211,6 +1285,38 @@ export class AdminService {
       orderBy: { createdAt: 'asc' },
     });
     return this.maskAdminData(verifications);
+  }
+
+  async listVerificationCasesPage(
+    actorId: string,
+    pagination: { page?: number; pageSize?: number } = {},
+  ) {
+    await this.requireActor(actorId, AdminRole.OPS);
+    const page = Math.max(pagination.page ?? 1, 1);
+    const pageSize = Math.min(Math.max(pagination.pageSize ?? 25, 1), 100);
+    const where = {
+      status: {
+        in: [
+          VerificationStatus.TECHNICAL_REVIEW,
+          VerificationStatus.HUMAN_REVIEW,
+        ],
+      },
+    };
+    const [verifications, total] = await Promise.all([
+      this.prisma.senderVerification.findMany({
+        where,
+        include: {
+          senderProfile: {
+            select: { id: true, legalName: true, tier: true, verifiedAt: true },
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.senderVerification.count({ where }),
+    ]);
+    return { items: this.maskAdminData(verifications), page, pageSize, total };
   }
 
   /** Engineering may isolate provider movement, but has no resume or release authority. */

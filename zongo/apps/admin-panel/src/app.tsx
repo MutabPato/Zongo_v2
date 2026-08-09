@@ -63,21 +63,100 @@ const navigation = [
   ['Admin controls', '/admin-controls', AdminPanelSettingsOutlined],
 ] as const;
 
+function base64UrlBytes(value: string): ArrayBuffer {
+  const padded =
+    value.replace(/-/g, '+').replace(/_/g, '/') +
+    '==='.slice((value.length + 3) % 4);
+  const binary = window.atob(padded);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0)).buffer;
+}
+
+function credentialResponse(credential: PublicKeyCredential) {
+  const response = credential.response as AuthenticatorAssertionResponse;
+  const encode = (value: ArrayBuffer | null) =>
+    value
+      ? btoa(String.fromCharCode(...new Uint8Array(value)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '')
+      : null;
+  return {
+    id: credential.id,
+    rawId: encode(credential.rawId),
+    response: {
+      clientDataJSON: encode(response.clientDataJSON),
+      authenticatorData: encode(response.authenticatorData),
+      signature: encode(response.signature),
+      userHandle: encode(response.userHandle),
+    },
+    type: credential.type,
+  };
+}
+
 function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   const [userId, setUserId] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
+  const [mode, setMode] = useState<'totp' | 'break-glass'>('totp');
+  const [emergencySecret, setEmergencySecret] = useState('');
+  const [reason, setReason] = useState('');
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError(undefined);
     setLoading(true);
     try {
-      await api.login(userId.trim(), totpCode.trim());
+      if (mode === 'break-glass') {
+        if (
+          !window.confirm(
+            'Enter isolated break-glass mode? This creates prominent audit evidence and a 30-minute emergency session.',
+          )
+        )
+          return;
+        await api.breakGlass(userId.trim(), emergencySecret, reason);
+      } else {
+        await api.login(userId.trim(), totpCode.trim());
+      }
       onLoggedIn();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to sign in');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function hardwareKeyLogin() {
+    setError(undefined);
+    setLoading(true);
+    try {
+      if (!window.PublicKeyCredential)
+        throw new Error('This browser does not support WebAuthn');
+      const options = await api.webauthnLoginOptions(userId.trim());
+      const publicKey = {
+        ...options,
+        challenge: base64UrlBytes(String(options.challenge)),
+        allowCredentials: Array.isArray(options.allowCredentials)
+          ? options.allowCredentials.map((entry) => ({
+              ...(entry as Record<string, unknown>),
+              id: base64UrlBytes(String((entry as Record<string, unknown>).id)),
+            }))
+          : undefined,
+      };
+      const credential = await navigator.credentials.get({
+        publicKey: publicKey as PublicKeyCredentialRequestOptions,
+      });
+      if (!credential || !(credential instanceof PublicKeyCredential))
+        throw new Error('No hardware key response was received');
+      await api.webauthnLoginVerify(
+        userId.trim(),
+        credentialResponse(credential),
+      );
+      onLoggedIn();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Hardware-key login failed',
+      );
     } finally {
       setLoading(false);
     }
@@ -122,14 +201,38 @@ function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
             autoComplete="username"
             required
           />
-          <TextField
-            label="TOTP code"
-            value={totpCode}
-            onChange={(event) => setTotpCode(event.target.value)}
-            autoComplete="one-time-code"
-            inputMode="numeric"
-            required
-          />
+          {mode === 'totp' ? (
+            <TextField
+              label="TOTP code"
+              value={totpCode}
+              onChange={(event) => setTotpCode(event.target.value)}
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              required
+            />
+          ) : (
+            <>
+              <Alert severity="warning">
+                Emergency access is isolated, short-lived, and prominently
+                audited.
+              </Alert>
+              <TextField
+                label="Emergency secret"
+                type="password"
+                value={emergencySecret}
+                onChange={(event) => setEmergencySecret(event.target.value)}
+                required
+              />
+              <TextField
+                label="Explicit reason"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                multiline
+                minRows={2}
+                required
+              />
+            </>
+          )}
           <Button
             type="submit"
             variant="contained"
@@ -138,10 +241,30 @@ function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
           >
             {loading ? (
               <CircularProgress size={22} color="inherit" />
-            ) : (
+            ) : mode === 'totp' ? (
               'Continue with TOTP'
+            ) : (
+              'Enter break-glass mode'
             )}
           </Button>
+          <Button
+            type="button"
+            onClick={() => setMode(mode === 'totp' ? 'break-glass' : 'totp')}
+          >
+            {mode === 'totp'
+              ? 'Use isolated break-glass access'
+              : 'Return to standard MFA'}
+          </Button>
+          {mode === 'totp' && (
+            <Button
+              type="button"
+              variant="outlined"
+              onClick={hardwareKeyLogin}
+              disabled={loading}
+            >
+              Continue with hardware key
+            </Button>
+          )}
         </Stack>
       </Paper>
     </Box>
@@ -335,7 +458,7 @@ function Operations({ title }: { title: string }) {
   );
 }
 
-function TransactionInvestigation() {
+function TransactionInvestigation({ role }: { role: api.AdminRole }) {
   const { reference = '' } = useParams();
   const [data, setData] = useState<api.TransactionInvestigation>();
   const [csrf, setCsrf] = useState<string>();
@@ -409,40 +532,44 @@ function TransactionInvestigation() {
           spacing={1.5}
           sx={{ mt: 2 }}
         >
-          <Button
-            variant="outlined"
-            onClick={() =>
-              action(
-                (token) => api.recheckStatus(reference, token),
-                'Status recheck queued',
-              )
-            }
-          >
-            Recheck status
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() =>
-              action(
-                (token) => api.queueReconciliation(reference, token),
-                'Reconciliation queued',
-              )
-            }
-          >
-            Queue reconciliation
-          </Button>
-          <Button
-            variant="outlined"
-            color="warning"
-            onClick={() =>
-              action(
-                (token) => api.retryPayout(reference, token),
-                'Payout retry prepared',
-              )
-            }
-          >
-            Prepare payout retry
-          </Button>
+          {role !== 'SUPPORT' && (
+            <>
+              <Button
+                variant="outlined"
+                onClick={() =>
+                  action(
+                    (token) => api.recheckStatus(reference, token),
+                    'Status recheck queued',
+                  )
+                }
+              >
+                Recheck status
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() =>
+                  action(
+                    (token) => api.queueReconciliation(reference, token),
+                    'Reconciliation queued',
+                  )
+                }
+              >
+                Queue reconciliation
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={() =>
+                  action(
+                    (token) => api.retryPayout(reference, token),
+                    'Payout retry prepared',
+                  )
+                }
+              >
+                Prepare payout retry
+              </Button>
+            </>
+          )}
         </Stack>
         <Divider sx={{ my: 2 }} />
         <Stack direction="row" spacing={1.5}>
@@ -474,9 +601,11 @@ function TransactionInvestigation() {
 function WorkflowPage({
   title,
   endpoint,
+  role,
 }: {
   title: string;
   endpoint: string;
+  role: api.AdminRole;
 }) {
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -487,7 +616,9 @@ function WorkflowPage({
       const value = await api.loadCollection(endpoint);
       const list = Array.isArray(value)
         ? value
-        : ((value as { items?: Record<string, unknown>[] }).items ?? []);
+        : ((value as { items?: Record<string, unknown>[] }).items ?? [
+            value as Record<string, unknown>,
+          ]);
       setRows(list as Record<string, unknown>[]);
     } catch (cause) {
       setError(
@@ -533,6 +664,48 @@ function WorkflowPage({
       setError(cause instanceof Error ? cause.message : 'Review failed');
     }
   }
+  async function reconciliationAction(id: string, action: 'notes' | 'assign') {
+    const reason = window.prompt(
+      action === 'notes'
+        ? 'Append-only reconciliation note'
+        : 'Reason for ownership assignment',
+    );
+    if (!reason?.trim()) return;
+    const body =
+      action === 'notes'
+        ? { body: reason }
+        : { ownerIdentityId: window.prompt('Owner identity id') ?? '', reason };
+    try {
+      const token = (await api.loadCsrfToken()).token;
+      await api.mutate(
+        `/admin/v1/reconciliation/${encodeURIComponent(id)}/${action}`,
+        token,
+        body,
+      );
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Reconciliation action failed',
+      );
+    }
+  }
+  async function pilotAction(key: string) {
+    const reason = window.prompt('Reason for pilot control change');
+    if (!reason?.trim()) return;
+    try {
+      const token = (await api.loadCsrfToken()).token;
+      await api.mutate('/admin/v1/admin-controls/pilot', token, {
+        key,
+        state: 'PAUSED',
+        reason,
+      });
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Pilot control action failed',
+      );
+    }
+  }
   return (
     <Stack spacing={3}>
       <Box>
@@ -572,7 +745,7 @@ function WorkflowPage({
                     '',
                 )}
               </Typography>
-              {endpoint === '/admin/v1/alerts' && (
+              {endpoint === '/admin/v1/alerts' && role !== 'SUPPORT' && (
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                   <Button
                     size="small"
@@ -589,7 +762,7 @@ function WorkflowPage({
                   </Button>
                 </Stack>
               )}
-              {endpoint === '/admin/v1/verification' && (
+              {endpoint === '/admin/v1/verification' && role !== 'SUPPORT' && (
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                   <Button
                     size="small"
@@ -619,6 +792,39 @@ function WorkflowPage({
                   </Button>
                 </Stack>
               )}
+              {endpoint === '/admin/v1/reconciliation' &&
+                role !== 'SUPPORT' && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        reconciliationAction(String(row.id), 'notes')
+                      }
+                    >
+                      Add note
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        reconciliationAction(String(row.id), 'assign')
+                      }
+                    >
+                      Assign owner
+                    </Button>
+                  </Stack>
+                )}
+              {endpoint === '/admin/v1/admin-controls' &&
+                role === 'ADMIN' &&
+                Boolean(row.key) && (
+                  <Button
+                    size="small"
+                    color="warning"
+                    sx={{ mt: 1 }}
+                    onClick={() => pilotAction(String(row.key))}
+                  >
+                    Pause control
+                  </Button>
+                )}
             </Box>
           ))
         ) : (
@@ -645,6 +851,12 @@ function Shell({
     () => navigation.find(([, path]) => path === location.pathname)?.[1] ?? '/',
     [location.pathname],
   );
+  const visibleNavigation = navigation.filter(([, path]) => {
+    if (session.role === 'ADMIN') return true;
+    if (session.role === 'SUPPORT')
+      return ['/', '/transactions', '/audit'].includes(path);
+    return path !== '/admin-controls';
+  });
   async function signOut() {
     setLoggingOut(true);
     try {
@@ -709,7 +921,7 @@ function Shell({
             DOMAIN WORKSPACE
           </Typography>
           <List>
-            {navigation.map(([label, path, Icon]) => (
+            {visibleNavigation.map(([label, path, Icon]) => (
               <ListItemButton
                 key={path}
                 selected={active === path}
@@ -745,7 +957,7 @@ function Shell({
           />
           <Route
             path="/transactions/:reference"
-            element={<TransactionInvestigation />}
+            element={<TransactionInvestigation role={session.role} />}
           />
           {navigation.slice(2).map(([label, path]) => (
             <Route
@@ -754,6 +966,7 @@ function Shell({
               element={
                 <WorkflowPage
                   title={label}
+                  role={session.role}
                   endpoint={
                     path === '/reconciliation'
                       ? '/admin/v1/reconciliation'

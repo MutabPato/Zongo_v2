@@ -7,13 +7,16 @@ import {
   Post,
   Query,
   UnauthorizedException,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { WebAuthnService } from './webauthn.service';
 import { TransactionStatus } from '@prisma/client';
 import { PilotControlKey, PilotControlState } from '@prisma/client';
+import { LegacyAdminCompatibilityInterceptor } from './legacy-admin-compatibility.interceptor';
 
 @Controller('admin')
+@UseInterceptors(LegacyAdminCompatibilityInterceptor)
 export class AdminController {
   constructor(
     private readonly adminService: AdminService,

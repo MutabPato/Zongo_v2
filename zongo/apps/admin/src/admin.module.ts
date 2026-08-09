@@ -11,6 +11,7 @@ import { ADMIN_ALERTS, AdminService } from './admin.service';
 import { AdminAlertService } from './admin-alert.service';
 import { HealthController } from './health.controller';
 import { WebAuthnService } from './webauthn.service';
+import { LegacyAdminCompatibilityInterceptor } from './legacy-admin-compatibility.interceptor';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { WebAuthnService } from './webauthn.service';
     },
     AdminAlertService,
     WebAuthnService,
+    LegacyAdminCompatibilityInterceptor,
   ],
 })
 export class AdminModule {}

@@ -4,7 +4,9 @@
 
 **Blocked by:** 10 — Preview deployment, parity evidence, and rollback rehearsal.
 
-**Status:** ready-for-agent
+**Status:** in-progress
+
+**Implementation note:** Removal remains deliberately gated. The route-switch runbook, release evidence pack, legacy-client inventory, and compatibility telemetry are implemented; preview observation and operations-owner approval are still required before AdminJS cleanup.
 
 - [ ] Route switch to the custom panel is reversible and requires the completed evidence pack plus operations-owner approval.
 - [ ] Heightened observation verifies auth, role access, sensitive reveal/audit behavior, frontend/API errors and latency, routing, and smoke/E2E outcomes.

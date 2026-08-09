@@ -113,6 +113,9 @@ services:
       # localhost DATABASE_URL. Containers must use the Docker service name.
       DATABASE_URL: ''
       PORT: '3002'
+      ADMIN_ORIGIN: ${ADMIN_ORIGIN:-http://localhost:4173}
+      ADMIN_COOKIE_SECURE: ${ADMIN_COOKIE_SECURE:-false}
+      ADMIN_CSRF_SECRET: ${ADMIN_CSRF_SECRET:-local-csrf-secret-not-for-remote-use}
       BREAK_GLASS_SECRET: ${BREAK_GLASS_SECRET:-local-break-glass-secret-not-for-remote-use}
       ADMINJS_COOKIE_SECRET: ${ADMINJS_COOKIE_SECRET:-local-cookie-secret-not-for-remote-use}
       ADMIN_JS_TMP_DIR: /tmp/adminjs

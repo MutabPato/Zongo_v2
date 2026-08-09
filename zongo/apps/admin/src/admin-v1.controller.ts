@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   Res,
+  UseFilters,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -18,6 +19,16 @@ import {
   PilotControlState,
   TransactionStatus,
 } from '@prisma/client';
+import { ApiTags } from '@nestjs/swagger';
+import { AdminV1ExceptionFilter } from './admin-v1-exception.filter';
+import * as AdminV1Dto from './admin-v1.dto';
+import {
+  parseBreakGlass,
+  parseDecimal,
+  parseLogin,
+  parseNote,
+  parseReason,
+} from './admin-v1.dto';
 
 const SESSION_COOKIE = 'zongo_admin_session';
 
@@ -32,6 +43,8 @@ type BrowserResponse = Response & {
 
 /** Canonical browser-facing control-plane contract. Legacy bearer routes stay in AdminController. */
 @Controller('admin/v1')
+@ApiTags('admin-v1')
+@UseFilters(AdminV1ExceptionFilter)
 export class AdminV1Controller {
   constructor(
     private readonly adminService: AdminService,
@@ -40,16 +53,17 @@ export class AdminV1Controller {
 
   @Post('auth/login')
   async login(
-    @Body() body: { userId: string; totpCode: string },
+    @Body() input: AdminV1Dto.LoginBody,
     @Res({ passthrough: true }) response: BrowserResponse,
   ) {
+    const body = parseLogin(input);
     const session = await this.adminService.login(body.userId, body.totpCode);
     this.setSessionCookie(response, session.accessToken);
     return { expiresAt: session.expiresAt };
   }
 
   @Post('auth/webauthn/login/options')
-  hardwareKeyLoginOptions(@Body() body: { userId: string }) {
+  hardwareKeyLoginOptions(@Body() body: AdminV1Dto.UserIdBody) {
     return this.webauthn.authenticationOptions(body.userId);
   }
 
@@ -89,11 +103,10 @@ export class AdminV1Controller {
 
   @Post('auth/break-glass')
   async breakGlass(
-    @Body() body: { userId: string; emergencySecret: string; reason: string },
+    @Body() input: AdminV1Dto.BreakGlassBody,
     @Res({ passthrough: true }) response: BrowserResponse,
   ) {
-    if (!body.reason?.trim())
-      throw new UnauthorizedException('A reason is required');
+    const body = parseBreakGlass(input);
     const session = await this.adminService.useBreakGlass(
       body.userId,
       body.emergencySecret,
@@ -112,14 +125,7 @@ export class AdminV1Controller {
 
   @Get('auth/session')
   async session(@Req() request: Request) {
-    const actor = await this.actor(request);
-    return {
-      id: actor.id,
-      userId: actor.userId,
-      role: actor.role,
-      mfaVerifiedAt: actor.mfaVerifiedAt,
-      blockedAt: actor.blockedAt,
-    };
+    return this.adminService.sessionDetails(this.sessionToken(request));
   }
 
   @Post('auth/logout')
@@ -170,11 +176,12 @@ export class AdminV1Controller {
   async addTransactionNote(
     @Req() request: Request,
     @Param('reference') reference: string,
-    @Body() body: { body: string },
+    @Body() input: AdminV1Dto.NoteBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
+    const body = parseNote(input);
     return this.adminService.addTransactionNote(actor.id, reference, body.body);
   }
 
@@ -183,17 +190,18 @@ export class AdminV1Controller {
     @Req() request: Request,
     @Param('reference') reference: string,
     @Headers('x-csrf-token') csrfToken?: string,
+    @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    return this.adminService.recheckStatus(actor.id, reference);
+    return this.adminService.recheckStatus(actor.id, reference, idempotencyKey);
   }
 
   @Post('operations/transactions/:reference/retry-payout')
   async retryPayout(
     @Req() request: Request,
     @Param('reference') reference: string,
-    @Body() body: { correctedBeneficiaryId?: string },
+    @Body() body: AdminV1Dto.RetryPayoutBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -230,24 +238,23 @@ export class AdminV1Controller {
   @Get('reconciliation')
   async reconciliation(@Req() request: Request) {
     const actor = await this.actor(request);
-    return this.adminService.listReconciliations(actor.id);
+    return this.adminService.listReconciliations(
+      actor.id,
+      this.pagination(request),
+    );
   }
 
   @Post('reconciliation/:id/notes')
   async reconciliationNote(
     @Req() request: Request,
     @Param('id') id: string,
-    @Body() body: { body: string },
+    @Body() input: AdminV1Dto.NoteBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (!body.body?.trim()) throw new ForbiddenException('A note is required');
-    return this.adminService.addReconciliationNote(
-      actor.id,
-      id,
-      body.body.trim(),
-    );
+    const body = parseNote(input);
+    return this.adminService.addReconciliationNote(actor.id, id, body.body);
   }
 
   @Post('reconciliation/:id/assign')
@@ -255,7 +262,7 @@ export class AdminV1Controller {
     @Req() request: Request,
     @Param('id') id: string,
     @Body()
-    body: { ownerIdentityId: string; reason: string; escalate?: boolean },
+    body: AdminV1Dto.ReconciliationAssignmentBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -274,7 +281,10 @@ export class AdminV1Controller {
   @Get('verification')
   async verification(@Req() request: Request) {
     const actor = await this.actor(request);
-    return this.adminService.listVerificationCases(actor.id);
+    return this.adminService.listVerificationCasesPage(
+      actor.id,
+      this.pagination(request),
+    );
   }
 
   @Post('verification/:id/review')
@@ -282,10 +292,7 @@ export class AdminV1Controller {
     @Req() request: Request,
     @Param('id') id: string,
     @Body()
-    body: {
-      decision: 'APPROVED' | 'REJECTED' | 'ESCALATED';
-      decisionReason: string;
-    },
+    body: AdminV1Dto.VerificationReviewBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -305,48 +312,52 @@ export class AdminV1Controller {
   @Get('alerts')
   async alerts(@Req() request: Request) {
     const actor = await this.actor(request);
-    return this.adminService.listAlerts(actor.id);
+    return this.adminService.listAlerts(actor.id, this.pagination(request));
   }
 
   @Post('alerts/:id/acknowledge')
   async acknowledgeAlert(
     @Req() request: Request,
     @Param('id') id: string,
-    @Body() body: { reason: string },
+    @Body() input: AdminV1Dto.AlertReasonBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    return this.adminService.acknowledgeAlert(actor.id, id, body.reason ?? '');
+    const body = parseReason(input);
+    return this.adminService.acknowledgeAlert(actor.id, id, body.reason);
   }
 
   @Post('alerts/:id/escalate')
   async escalateAlert(
     @Req() request: Request,
     @Param('id') id: string,
-    @Body() body: { reason: string },
+    @Body() input: AdminV1Dto.AlertReasonBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    return this.adminService.escalateAlert(actor.id, id, body.reason ?? '');
+    const body = parseReason(input);
+    return this.adminService.escalateAlert(actor.id, id, body.reason);
   }
 
   @Get('beneficiaries')
   async beneficiaries(@Req() request: Request) {
     const actor = await this.actor(request);
     const url = new URL(request.url, 'http://admin.local');
-    return this.adminService.reviewBeneficiaries(actor.id, {
+    const pagination = this.pagination(request);
+    return this.adminService.reviewBeneficiariesPage(actor.id, {
       search: url.searchParams.get('search') ?? undefined,
       corridorId: url.searchParams.get('corridorId') ?? undefined,
       userId: url.searchParams.get('userId') ?? undefined,
+      ...pagination,
     });
   }
 
   @Get('audit')
   async audit(@Req() request: Request) {
     const actor = await this.actor(request);
-    return this.adminService.auditTrail(actor.id);
+    return this.adminService.auditTrail(actor.id, this.pagination(request));
   }
 
   @Get('admin-controls')
@@ -364,7 +375,7 @@ export class AdminV1Controller {
   @Post('admin-controls/pilot')
   async pilotControl(
     @Req() request: Request,
-    @Body() body: { key: string; state: string; reason: string },
+    @Body() body: AdminV1Dto.PilotControlBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -389,7 +400,7 @@ export class AdminV1Controller {
   @Post('admin-controls/users/block')
   async blockUser(
     @Req() request: Request,
-    @Body() body: { userId: string; blocked: boolean; reason?: string },
+    @Body() body: AdminV1Dto.UserBlockBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -407,27 +418,22 @@ export class AdminV1Controller {
   @Post('admin-controls/tier-1-caps')
   async tierOneCaps(
     @Req() request: Request,
-    @Body() body: { perTransferLimitMinor: string; dailyLimitMinor: string },
+    @Body() body: AdminV1Dto.TierOneCapsBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (
-      !/^\d+$/.test(body.perTransferLimitMinor) ||
-      !/^\d+$/.test(body.dailyLimitMinor)
-    )
-      throw new ForbiddenException('Money limits must be decimal strings');
     return this.adminService.setTier1TransferCaps(
       actor.id,
-      BigInt(body.perTransferLimitMinor),
-      BigInt(body.dailyLimitMinor),
+      BigInt(parseDecimal(body.perTransferLimitMinor, 'perTransferLimitMinor')),
+      BigInt(parseDecimal(body.dailyLimitMinor, 'dailyLimitMinor')),
     );
   }
 
   @Post('admin-controls/pilot/allowlist')
   async pilotAllowlist(
     @Req() request: Request,
-    @Body() body: { senderProfileId: string; enabled: boolean; reason: string },
+    @Body() body: AdminV1Dto.PilotAllowlistBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -451,7 +457,7 @@ export class AdminV1Controller {
   @Post('admin-controls/pilot/exposure-policy')
   async pilotExposurePolicy(
     @Req() request: Request,
-    @Body() body: Parameters<AdminService['setPilotExposurePolicy']>[1],
+    @Body() body: AdminV1Dto.ExposurePolicyBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -472,7 +478,7 @@ export class AdminV1Controller {
   @Post('pilot/readiness/approvals')
   async pilotApproval(
     @Req() request: Request,
-    @Body() body: { role: string; note: string },
+    @Body() body: AdminV1Dto.PilotApprovalBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -488,9 +494,7 @@ export class AdminV1Controller {
   async pilotStage(
     @Req() request: Request,
     @Body()
-    body: Parameters<AdminService['recordPilotReadinessStage']>[2] & {
-      stage: string;
-    },
+    body: AdminV1Dto.PilotStageBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -505,7 +509,7 @@ export class AdminV1Controller {
   @Post('pilot/readiness/publish')
   async publishPilot(
     @Req() request: Request,
-    @Body() body: Parameters<AdminService['publishPilotReadiness']>[1],
+    @Body() body: AdminV1Dto.PilotPublishBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
@@ -529,10 +533,18 @@ export class AdminV1Controller {
   }
 
   private assertSameOrigin(request: Request): void {
-    const origin = request.headers.origin;
+    const origin = request.headers.origin ?? request.headers.referer;
     if (!origin) return;
     const expected = process.env.ADMIN_ORIGIN ?? process.env.WEBAUTHN_ORIGIN;
-    if (expected && origin !== expected)
+    if (!expected)
+      throw new ForbiddenException('Admin origin is not configured');
+    let actualOrigin: string;
+    try {
+      actualOrigin = new URL(origin).origin;
+    } catch {
+      throw new ForbiddenException('Invalid admin origin');
+    }
+    if (actualOrigin !== new URL(expected).origin)
       throw new ForbiddenException('Cross-origin admin mutation rejected');
   }
 
@@ -558,10 +570,20 @@ export class AdminV1Controller {
     );
   }
 
+  private pagination(request: Request): { page: number; pageSize: number } {
+    const url = new URL(request.url, 'http://admin.local');
+    const page = Number(url.searchParams.get('page') ?? '1');
+    const pageSize = Number(url.searchParams.get('pageSize') ?? '25');
+    return {
+      page: Number.isFinite(page) ? page : 1,
+      pageSize: Number.isFinite(pageSize) ? pageSize : 25,
+    };
+  }
+
   private setSessionCookie(response: BrowserResponse, token: string): void {
     response.cookie(SESSION_COOKIE, token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: process.env.ADMIN_COOKIE_SECURE !== 'false',
       sameSite: 'lax',
       path: '/',
       maxAge: 8 * 60 * 60 * 1000,

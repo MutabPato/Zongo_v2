@@ -1,0 +1,12 @@
+workflow,route,role,capability,api_contract,success,validation,denial,queued_or_completed,audit_reference,sensitive_data,money_serialization,unit_evidence,api_evidence,browser_evidence,status
+overview,/backoffice/,SUPPORT,read,/admin/v1/overview,,,,,,masked,decimal-string,,,,pending
+operations-search,/backoffice/transactions,SUPPORT,search,/admin/v1/operations/search,,,,,,masked,decimal-string,,,,pending
+transaction-investigation,/backoffice/transactions/:reference,SUPPORT,investigate,/admin/v1/operations/transactions/:reference,,,,,,masked,decimal-string,,,,pending
+transaction-recovery,/backoffice/transactions/:reference,OPS,recovery,/admin/v1/operations/transactions/:reference/*,,,,queued,audit-required,explicit-reveal-only,decimal-string,,,,pending
+reconciliation,/backoffice/reconciliation,OPS,assign-escalate,/admin/v1/reconciliation/*,,,,queued,audit-required,masked,decimal-string,,,,pending
+verification,/backoffice/verification,OPS,review,/admin/v1/verification/*,,,,completed,audit-required,masked,decimal-string,,,,pending
+beneficiaries,/backoffice/beneficiaries,OPS,review,/admin/v1/beneficiaries,,,,,,masked,decimal-string,,,,pending
+alerts,/backoffice/alerts,OPS,acknowledge-escalate,/admin/v1/alerts/*,,,,completed,audit-required,masked,decimal-string,,,,pending
+pilot-readiness,/backoffice/pilot,ADMIN,publish,/admin/v1/pilot/readiness/*,,,,completed,audit-required,masked,decimal-string,,,,pending
+audit,/backoffice/audit,SUPPORT,read,/admin/v1/audit,,,,,,masked,decimal-string,,,,pending
+admin-controls,/backoffice/admin-controls,ADMIN,operate,/admin/v1/admin-controls/*,,,,completed,audit-required,masked,decimal-string,,,,pending

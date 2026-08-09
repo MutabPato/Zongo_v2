@@ -7,6 +7,7 @@ Release: `custom-admin-panel-20260809-1231-local`
 - Frontend and Nest artifacts were rebuilt as a paired release and recorded in `local-release-manifest.json`.
 - `/backoffice/`, SPA fallback, `/admin/v1/openapi-json`, and security/cache headers passed `verify-preview.sh`.
 - `ADMIN_PANEL_ENABLED=true` and `ADMIN_PANEL_ENABLED=false` Compose route-gate configurations render successfully; the AdminJS fallback remains priority 10.
+- `infra/admin-panel/verify-route-gate.sh docker-compose.yml admin.preview.test` reproduces and verifies both route-gate states.
 - The current local containers passed cookie/CSRF contract smoke and the three-role Support/Ops/Admin matrix.
 
 ## Not yet rehearsed

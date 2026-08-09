@@ -219,6 +219,12 @@ export async function revealSender(profileId: string, csrfToken: string) {
   );
 }
 
+export async function loadBeneficiaryDetail(id: string) {
+  return request<Record<string, unknown>>(
+    `/admin/v1/beneficiaries/${encodeURIComponent(id)}`,
+  );
+}
+
 export async function mutate<T>(
   path: string,
   csrfToken: string,

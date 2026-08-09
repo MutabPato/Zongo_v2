@@ -793,6 +793,7 @@ function BeneficiaryWorkspace() {
     total: 0,
   });
   const [selected, setSelected] = useState<Record<string, unknown>>();
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -825,6 +826,24 @@ function BeneficiaryWorkspace() {
         ([key]) => !/ciphertext|blindindex|payoutaccount/i.test(key),
       ),
     );
+  }
+
+  async function loadDetail(row: Record<string, unknown>) {
+    const id = row.id;
+    if (id === undefined || id === null) return;
+    setDetailLoading(true);
+    setError(undefined);
+    try {
+      setSelected(await api.loadBeneficiaryDetail(String(id)));
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Unable to load beneficiary detail',
+      );
+    } finally {
+      setDetailLoading(false);
+    }
   }
 
   return (
@@ -876,7 +895,7 @@ function BeneficiaryWorkspace() {
                   justifyContent: 'flex-start',
                   textTransform: 'none',
                 }}
-                onClick={() => setSelected(row)}
+                onClick={() => void loadDetail(row)}
               >
                 <Typography fontWeight={700}>
                   {String(row.displayName ?? row.id ?? 'Beneficiary')}
@@ -894,7 +913,8 @@ function BeneficiaryWorkspace() {
             No beneficiaries found.
           </Typography>
         )}
-        {selected && (
+        {detailLoading && <CircularProgress sx={{ mt: 2 }} />}
+        {selected && !detailLoading && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6" fontWeight={800}>
               Selected beneficiary

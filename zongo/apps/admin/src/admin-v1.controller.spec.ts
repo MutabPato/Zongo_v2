@@ -44,6 +44,33 @@ describe('AdminV1Controller', () => {
     expect(admin.actorFromSession).toHaveBeenCalledWith('session-token');
   });
 
+  it('returns the server-derived capability contract for a browser session', async () => {
+    const admin = {
+      sessionDetails: jest.fn().mockResolvedValue({
+        role: 'OPS',
+        capabilities: {
+          viewAlerts: true,
+          manageAdminControls: false,
+        },
+      }),
+    };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+
+    await expect(
+      controller.session({
+        headers: { cookie: 'zongo_admin_session=session-token' },
+      } as never),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        role: 'OPS',
+        capabilities: expect.objectContaining({
+          viewAlerts: true,
+          manageAdminControls: false,
+        }),
+      }),
+    );
+  });
+
   it('requires the session-bound CSRF token for WebAuthn registration verification', async () => {
     const admin = {
       csrfToken: jest.fn().mockReturnValue('csrf-token'),

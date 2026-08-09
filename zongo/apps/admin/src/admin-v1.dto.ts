@@ -81,6 +81,34 @@ export type ExposurePolicyBody = {
 };
 
 export const AdminV1OpenApiSchemas: Record<string, OpenApiSchema> = {
+  session: {
+    type: 'object',
+    required: [
+      'id',
+      'userId',
+      'role',
+      'mfaVerifiedAt',
+      'blockedAt',
+      'expiresAt',
+      'lastUsedAt',
+      'source',
+      'capabilities',
+    ],
+    properties: {
+      id: { type: 'string' },
+      userId: { type: 'string' },
+      role: { type: 'string', enum: ['SUPPORT', 'OPS', 'ADMIN'] },
+      mfaVerifiedAt: { type: 'string', format: 'date-time' },
+      blockedAt: { type: 'string', format: 'date-time', nullable: true },
+      expiresAt: { type: 'string', format: 'date-time' },
+      lastUsedAt: { type: 'string', format: 'date-time', nullable: true },
+      source: { type: 'string' },
+      capabilities: {
+        type: 'object',
+        additionalProperties: { type: 'boolean' },
+      },
+    },
+  },
   login: {
     type: 'object',
     required: ['userId', 'totpCode'],

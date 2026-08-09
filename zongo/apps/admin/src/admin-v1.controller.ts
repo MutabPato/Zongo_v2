@@ -20,8 +20,7 @@ import {
   PilotControlState,
   TransactionStatus,
 } from '@prisma/client';
-import { ApiTags } from '@nestjs/swagger';
-import { ApiBody } from '@nestjs/swagger';
+import { ApiBody, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AdminV1ExceptionFilter } from './admin-v1-exception.filter';
 import * as AdminV1Dto from './admin-v1.dto';
 import {
@@ -167,6 +166,7 @@ export class AdminV1Controller {
   }
 
   @Get('auth/session')
+  @ApiResponse({ schema: AdminV1Dto.AdminV1OpenApiSchemas.session })
   async session(@Req() request: Request) {
     return this.adminService.sessionDetails(this.sessionToken(request));
   }

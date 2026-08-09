@@ -1237,6 +1237,52 @@ describe('AdminService', () => {
     );
   });
 
+  it('masks sensitive fields in verification decision results', async () => {
+    const profiles = {
+      approveVerification: jest.fn().mockResolvedValue({
+        profile: {
+          id: 'profile_1',
+          emailCiphertext: 'encrypted-email',
+          senderPhoneNumber: '+254700000001',
+          amountMinor: 125n,
+        },
+        verification: { id: 'verification_1' },
+      }),
+    };
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'ops_1',
+          role: 'OPS',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(
+        prisma,
+        undefined,
+        undefined,
+        undefined,
+        profiles as never,
+      ).reviewVerification('ops_1', {
+        verificationId: 'verification_1',
+        decision: 'APPROVED',
+        decisionReason: 'Evidence reviewed',
+      }),
+    ).resolves.toEqual({
+      profile: {
+        id: 'profile_1',
+        emailCiphertext: '[REDACTED]',
+        senderPhoneNumber: '[MASKED]',
+        amountMinor: '125',
+      },
+      verification: { id: 'verification_1' },
+    });
+  });
+
   it('records Ops alert acknowledgement and escalation evidence', async () => {
     const audit = { append: jest.fn().mockResolvedValue(undefined) };
     const updateMany = jest.fn().mockResolvedValue({ count: 1 });

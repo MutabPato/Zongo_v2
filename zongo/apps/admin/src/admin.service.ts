@@ -1607,7 +1607,7 @@ export class AdminService {
       },
       true,
     );
-    return result;
+    return this.maskAdminData(result);
   }
 
   /** Emergency-only recovery path. It is intentionally separate from normal MFA login. */

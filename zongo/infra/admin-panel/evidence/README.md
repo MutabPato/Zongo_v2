@@ -14,3 +14,5 @@ Required files:
 - `approvals.md` — engineering, security, and operations-owner approvals.
 
 The evidence pack is incomplete until all parity rows pass, no blocking defect remains, and the operations owner signs the route-switch gate. AdminJS removal requires a separate post-observation approval and a fresh evidence reference.
+
+For local or preview contract checks, run `infra/admin-panel/verify-contract-smoke.sh <base-url>`. Without credentials it verifies routing, SPA fallback, OpenAPI availability, and unauthenticated denial. Set `ADMIN_SMOKE_USER` and `ADMIN_SMOKE_TOTP` only with synthetic credentials to additionally verify cookie-only login, CSRF, logout, and invalid-filter behavior; the script never prints response bodies or credentials.

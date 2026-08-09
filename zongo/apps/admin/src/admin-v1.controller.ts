@@ -174,9 +174,13 @@ export class AdminV1Controller {
   async logout(
     @Req() request: Request,
     @Res({ passthrough: true }) response: BrowserResponse,
+    @Headers('x-csrf-token') csrfToken?: string,
   ) {
     const accessToken = this.sessionToken(request, false);
-    if (accessToken) await this.adminService.logoutSession(accessToken);
+    if (accessToken) {
+      const sessionToken = this.mutationToken(request, csrfToken);
+      await this.adminService.logoutSession(sessionToken);
+    }
     response.clearCookie(SESSION_COOKIE, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

@@ -147,8 +147,10 @@ export async function loadCsrfToken() {
 }
 
 export async function logout() {
+  const csrfToken = (await loadCsrfToken()).token;
   return request<{ loggedOut: boolean }>('/admin/v1/auth/logout', {
     method: 'POST',
+    headers: { 'X-CSRF-Token': csrfToken },
   });
 }
 

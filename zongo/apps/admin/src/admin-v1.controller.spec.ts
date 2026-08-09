@@ -64,4 +64,34 @@ describe('AdminV1Controller', () => {
     ).rejects.toThrow();
     expect(webauthn.verifyRegistration).not.toHaveBeenCalled();
   });
+
+  it('requires CSRF for browser logout and clears the session cookie', async () => {
+    const admin = {
+      csrfToken: jest.fn().mockReturnValue('csrf-token'),
+      assertCsrfToken: jest.fn(),
+      logoutSession: jest.fn().mockResolvedValue(undefined),
+    };
+    const controller = new AdminV1Controller(admin as never, {} as never);
+    const clearCookie = jest.fn();
+
+    await controller.logout(
+      {
+        headers: {
+          cookie: 'zongo_admin_session=session-token',
+        },
+      } as never,
+      { clearCookie } as never,
+      'csrf-token',
+    );
+
+    expect(admin.assertCsrfToken).toHaveBeenCalledWith(
+      'session-token',
+      'csrf-token',
+    );
+    expect(admin.logoutSession).toHaveBeenCalledWith('session-token');
+    expect(clearCookie).toHaveBeenCalledWith(
+      'zongo_admin_session',
+      expect.objectContaining({ httpOnly: true, sameSite: 'lax', path: '/' }),
+    );
+  });
 });

@@ -14,6 +14,10 @@ Passed:
 - Transaction investigation rendered a masked amount and controlled recovery controls.
 - CSRF-protected status recheck completed end to end and showed `Status recheck queued`.
 - Logout returned the browser to the MFA entry point.
+- Synthetic Support login showed only Overview, Transactions, and Audit navigation and hid privileged recovery controls.
+- Synthetic Ops login showed operational workspaces and recovery controls; synthetic Admin login showed the full workspace including Admin controls.
+- A server-side Support request to `/admin/v1/reconciliation` returned safe `403 ADMIN_403` with a correlation id.
+- A state-changing request without `X-CSRF-Token` returned safe `403 ADMIN_403` with a correlation id.
 - `infra/admin-panel/verify-preview.sh http://127.0.0.1:4173` passed.
 
 Not release-complete: this is local evidence only. The full three-role parity matrix, deployed preview/isolated Playwright evidence, rollback rehearsal, observation window, and operations-owner approvals remain required before AdminJS removal.

@@ -486,6 +486,8 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
   const [note, setNote] = useState('');
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  const [revealedSender, setRevealedSender] =
+    useState<Record<string, unknown>>();
 
   useEffect(() => {
     if (!reference) return;
@@ -518,6 +520,8 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!data) return <CircularProgress />;
   const transaction = data.transaction;
+  const sender = data.sender;
+  const senderProfileId = sender?.id ? String(sender.id) : undefined;
   return (
     <Stack spacing={3}>
       <Box>
@@ -543,6 +547,59 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
           Amount:{' '}
           {String(transaction.amountMinor ?? transaction.amount ?? 'Masked')}
         </Typography>
+      </Paper>
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Sender context
+        </Typography>
+        <Typography color="text.secondary" variant="body2" sx={{ mt: 1 }}>
+          Sensitive sender fields stay masked until an authorized operator
+          explicitly reveals them.
+        </Typography>
+        {sender && (
+          <Typography sx={{ mt: 1 }}>
+            Profile: {senderProfileId ?? 'Unavailable'} · Email:{' '}
+            {String(sender.email ?? '[MASKED]')}
+          </Typography>
+        )}
+        {role !== 'SUPPORT' && senderProfileId && !revealedSender && (
+          <Button
+            color="warning"
+            variant="outlined"
+            sx={{ mt: 1.5 }}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  'Reveal sensitive sender fields? This is restricted, no-store, and creates an audit alert.',
+                )
+              )
+                return;
+              void action(
+                (token) =>
+                  api
+                    .revealSender(senderProfileId, token)
+                    .then(setRevealedSender),
+                'Sensitive sender fields revealed and audited',
+              );
+            }}
+          >
+            Reveal sender fields
+          </Button>
+        )}
+        {revealedSender && (
+          <Box
+            component="pre"
+            sx={{
+              mt: 1.5,
+              p: 1.5,
+              bgcolor: '#fff8e1',
+              borderRadius: 1,
+              overflowX: 'auto',
+            }}
+          >
+            {JSON.stringify(revealedSender, null, 2)}
+          </Box>
+        )}
       </Paper>
       <Paper sx={{ p: 2.5 }}>
         <Typography variant="h6" fontWeight={800}>
@@ -615,6 +672,543 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
           </Button>
         </Stack>
       </Paper>
+    </Stack>
+  );
+}
+
+function BeneficiaryWorkspace() {
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState<api.Page<Record<string, unknown>>>({
+    items: [],
+    page: 1,
+    pageSize: 25,
+    total: 0,
+  });
+  const [selected, setSelected] = useState<Record<string, unknown>>();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
+
+  async function load(nextPage = 1) {
+    setLoading(true);
+    setError(undefined);
+    try {
+      const query = new URLSearchParams({
+        page: String(nextPage),
+        pageSize: '25',
+      });
+      if (search.trim()) query.set('search', search.trim());
+      const result = await api.loadCollection(
+        `/admin/v1/beneficiaries?${query.toString()}`,
+      );
+      setPage(result as api.Page<Record<string, unknown>>);
+      setSelected(undefined);
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Unable to load beneficiaries',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function safeDetail(row: Record<string, unknown>) {
+    return Object.fromEntries(
+      Object.entries(row).filter(
+        ([key]) => !/ciphertext|blindindex|payoutaccount/i.test(key),
+      ),
+    );
+  }
+
+  return (
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="h4" fontWeight={800}>
+          Beneficiary review
+        </Typography>
+        <Typography color="text.secondary">
+          Search masked beneficiary records. Payout-sensitive fields are
+          excluded from the review view.
+        </Typography>
+      </Box>
+      <Paper
+        component="form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void load(1);
+        }}
+        sx={{ p: 2.5, display: 'flex', gap: 1.5 }}
+      >
+        <TextField
+          fullWidth
+          size="small"
+          label="Name or approved search value"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <Button type="submit" variant="contained" disabled={loading}>
+          Search
+        </Button>
+      </Paper>
+      {error && <Alert severity="error">{error}</Alert>}
+      <Paper sx={{ p: 2.5 }}>
+        <Typography color="text.secondary" variant="body2">
+          {page.total} result(s) · page {page.page}
+        </Typography>
+        {loading ? (
+          <CircularProgress sx={{ mt: 2 }} />
+        ) : (
+          page.items.map((row, index) => (
+            <Box
+              key={String(row.id ?? index)}
+              sx={{ py: 1.5, borderBottom: '1px solid #edf0f5' }}
+            >
+              <Button
+                sx={{
+                  p: 0,
+                  justifyContent: 'flex-start',
+                  textTransform: 'none',
+                }}
+                onClick={() => setSelected(row)}
+              >
+                <Typography fontWeight={700}>
+                  {String(row.displayName ?? row.id ?? 'Beneficiary')}
+                </Typography>
+              </Button>
+              <Typography color="text.secondary" variant="body2">
+                Phone: {String(row.phoneNumber ?? '[MASKED]')} · Status:{' '}
+                {String(row.status ?? 'Unavailable')}
+              </Typography>
+            </Box>
+          ))
+        )}
+        {!loading && !page.items.length && (
+          <Typography color="text.secondary" sx={{ py: 3 }}>
+            No beneficiaries found.
+          </Typography>
+        )}
+        {selected && (
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h6" fontWeight={800}>
+              Selected beneficiary
+            </Typography>
+            <Box
+              component="pre"
+              sx={{
+                mt: 1,
+                p: 1.5,
+                bgcolor: '#f7f9fc',
+                borderRadius: 1,
+                overflowX: 'auto',
+              }}
+            >
+              {JSON.stringify(safeDetail(selected), null, 2)}
+            </Box>
+          </Box>
+        )}
+        {page.total > page.pageSize && (
+          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+            <Button
+              disabled={page.page <= 1 || loading}
+              onClick={() => void load(page.page - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              disabled={page.page * page.pageSize >= page.total || loading}
+              onClick={() => void load(page.page + 1)}
+            >
+              Next
+            </Button>
+          </Stack>
+        )}
+      </Paper>
+    </Stack>
+  );
+}
+
+function AdminControlsWorkspace({ role }: { role: api.AdminRole }) {
+  const [snapshot, setSnapshot] = useState<Record<string, unknown>>();
+  const [userId, setUserId] = useState('');
+  const [userReason, setUserReason] = useState('');
+  const [perTransfer, setPerTransfer] = useState('');
+  const [daily, setDaily] = useState('');
+  const [pilotKey, setPilotKey] = useState('GLOBAL');
+  const [pilotState, setPilotState] = useState('PAUSED');
+  const [pilotReason, setPilotReason] = useState('');
+  const [message, setMessage] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    setLoading(true);
+    try {
+      setSnapshot(
+        (await api.loadCollection('/admin/v1/admin-controls')) as Record<
+          string,
+          unknown
+        >,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Unable to load admin controls',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (role !== 'ADMIN')
+    return (
+      <Alert severity="error">Admin role is required for this workspace.</Alert>
+    );
+
+  async function submit(path: string, body: unknown, success: string) {
+    setError(undefined);
+    setMessage(undefined);
+    try {
+      const token = (await api.loadCsrfToken()).token;
+      await api.mutate(path, token, body);
+      setMessage(success);
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Administrative action failed',
+      );
+    }
+  }
+
+  return (
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="h4" fontWeight={800}>
+          Admin controls
+        </Typography>
+        <Typography color="text.secondary">
+          Identity, policy, and pilot controls. Every mutation is reasoned,
+          authorized, and audited server-side.
+        </Typography>
+      </Box>
+      {message && <Alert severity="success">{message}</Alert>}
+      {error && <Alert severity="error">{error}</Alert>}
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Current policy snapshot
+        </Typography>
+        {loading ? (
+          <CircularProgress sx={{ mt: 2 }} />
+        ) : (
+          <Box
+            component="pre"
+            sx={{
+              mt: 1.5,
+              p: 1.5,
+              bgcolor: '#f7f9fc',
+              borderRadius: 1,
+              overflowX: 'auto',
+            }}
+          >
+            {JSON.stringify(snapshot, null, 2)}
+          </Box>
+        )}
+      </Paper>
+      <Box
+        display="grid"
+        gap={2}
+        gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}
+      >
+        <Paper sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Block or unblock identity
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <TextField
+              label="Identity user id"
+              value={userId}
+              onChange={(event) => setUserId(event.target.value)}
+            />
+            <TextField
+              label="Reason"
+              value={userReason}
+              onChange={(event) => setUserReason(event.target.value)}
+              multiline
+              minRows={2}
+            />
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                color="warning"
+                disabled={!userId.trim() || !userReason.trim()}
+                onClick={() =>
+                  void submit(
+                    '/admin/v1/admin-controls/users/block',
+                    { userId, blocked: true, reason: userReason },
+                    'Identity blocked',
+                  )
+                }
+              >
+                Block
+              </Button>
+              <Button
+                variant="outlined"
+                disabled={!userId.trim()}
+                onClick={() =>
+                  void submit(
+                    '/admin/v1/admin-controls/users/block',
+                    { userId, blocked: false, reason: userReason || undefined },
+                    'Identity unblocked',
+                  )
+                }
+              >
+                Unblock
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+        <Paper sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Tier 1 transfer caps
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <TextField
+              label="Per-transfer limit (minor units)"
+              value={perTransfer}
+              onChange={(event) => setPerTransfer(event.target.value)}
+              inputMode="numeric"
+            />
+            <TextField
+              label="Daily limit (minor units)"
+              value={daily}
+              onChange={(event) => setDaily(event.target.value)}
+              inputMode="numeric"
+            />
+            <Button
+              variant="contained"
+              disabled={!/^\d+$/.test(perTransfer) || !/^\d+$/.test(daily)}
+              onClick={() =>
+                void submit(
+                  '/admin/v1/admin-controls/tier-1-caps',
+                  {
+                    perTransferLimitMinor: perTransfer,
+                    dailyLimitMinor: daily,
+                  },
+                  'Tier 1 caps updated',
+                )
+              }
+            >
+              Update caps
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Pilot control
+        </Typography>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1.5}
+          sx={{ mt: 2 }}
+        >
+          <TextField
+            label="Control key"
+            value={pilotKey}
+            onChange={(event) => setPilotKey(event.target.value)}
+          />
+          <TextField
+            label="State"
+            value={pilotState}
+            onChange={(event) => setPilotState(event.target.value)}
+          />
+          <TextField
+            fullWidth
+            label="Reason"
+            value={pilotReason}
+            onChange={(event) => setPilotReason(event.target.value)}
+          />
+          <Button
+            variant="contained"
+            disabled={
+              !pilotKey.trim() || !pilotState.trim() || !pilotReason.trim()
+            }
+            onClick={() =>
+              void submit(
+                '/admin/v1/admin-controls/pilot',
+                { key: pilotKey, state: pilotState, reason: pilotReason },
+                'Pilot control updated',
+              )
+            }
+          >
+            Apply
+          </Button>
+        </Stack>
+      </Paper>
+    </Stack>
+  );
+}
+
+function PilotReadinessWorkspace() {
+  const [record, setRecord] = useState<Record<string, unknown> | null>();
+  const [approvalRole, setApprovalRole] = useState('ENGINEERING');
+  const [approvalNote, setApprovalNote] = useState('');
+  const [stage, setStage] = useState('FOUNDATION_COMPLETE');
+  const [evidenceRefs, setEvidenceRefs] = useState('{}');
+  const [message, setMessage] = useState<string>();
+  const [error, setError] = useState<string>();
+
+  async function load() {
+    try {
+      setRecord(
+        (await api.loadCollection('/admin/v1/pilot/readiness')) as Record<
+          string,
+          unknown
+        > | null,
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Unable to load Pilot readiness',
+      );
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function action(path: string, body: unknown, success: string) {
+    setError(undefined);
+    setMessage(undefined);
+    try {
+      const token = (await api.loadCsrfToken()).token;
+      await api.mutate(path, token, body);
+      setMessage(success);
+      await load();
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Pilot readiness action failed',
+      );
+    }
+  }
+  function parseJson(value: string, field: string) {
+    try {
+      return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      throw new Error(`${field} must be valid JSON`);
+    }
+  }
+  async function recordApproval() {
+    if (!approvalNote.trim()) return;
+    await action(
+      '/admin/v1/pilot/readiness/approvals',
+      { role: approvalRole, note: approvalNote },
+      'Approval recorded',
+    );
+  }
+  async function recordStage() {
+    try {
+      await action(
+        '/admin/v1/pilot/readiness/stages',
+        { stage, evidenceRefs: parseJson(evidenceRefs, 'Evidence references') },
+        'Readiness stage recorded',
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Invalid readiness input',
+      );
+    }
+  }
+
+  return (
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="h4" fontWeight={800}>
+          Pilot readiness
+        </Typography>
+        <Typography color="text.secondary">
+          Release evidence, approvals, stages, and publication remain governed
+          by server-side authority rules.
+        </Typography>
+      </Box>
+      {message && <Alert severity="success">{message}</Alert>}
+      {error && <Alert severity="error">{error}</Alert>}
+      <Paper sx={{ p: 2.5 }}>
+        <Typography variant="h6" fontWeight={800}>
+          Current readiness record
+        </Typography>
+        <Box
+          component="pre"
+          sx={{
+            mt: 1.5,
+            p: 1.5,
+            bgcolor: '#f7f9fc',
+            borderRadius: 1,
+            overflowX: 'auto',
+          }}
+        >
+          {JSON.stringify(record ?? {}, null, 2)}
+        </Box>
+      </Paper>
+      <Box
+        display="grid"
+        gap={2}
+        gridTemplateColumns={{ xs: '1fr', md: '1fr 1fr' }}
+      >
+        <Paper sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Record approval
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <TextField
+              label="Approval role"
+              value={approvalRole}
+              onChange={(event) => setApprovalRole(event.target.value)}
+            />
+            <TextField
+              label="Approval note"
+              value={approvalNote}
+              onChange={(event) => setApprovalNote(event.target.value)}
+              multiline
+              minRows={2}
+            />
+            <Button
+              variant="contained"
+              disabled={!approvalRole.trim() || !approvalNote.trim()}
+              onClick={() => void recordApproval()}
+            >
+              Record approval
+            </Button>
+          </Stack>
+        </Paper>
+        <Paper sx={{ p: 2.5 }}>
+          <Typography variant="h6" fontWeight={800}>
+            Record evidence stage
+          </Typography>
+          <Stack spacing={1.5} sx={{ mt: 2 }}>
+            <TextField
+              label="Stage"
+              value={stage}
+              onChange={(event) => setStage(event.target.value)}
+            />
+            <TextField
+              label="Evidence references (JSON)"
+              value={evidenceRefs}
+              onChange={(event) => setEvidenceRefs(event.target.value)}
+              multiline
+              minRows={3}
+            />
+            <Button variant="contained" onClick={() => void recordStage()}>
+              Record stage
+            </Button>
+          </Stack>
+        </Paper>
+      </Box>
     </Stack>
   );
 }
@@ -918,7 +1512,8 @@ function Shell({
     try {
       if (!window.PublicKeyCredential)
         throw new Error('This browser does not support WebAuthn');
-      const options = await api.webauthnRegistrationOptions();
+      const csrfToken = (await api.loadCsrfToken()).token;
+      const options = await api.webauthnRegistrationOptions(csrfToken);
       const publicKey = {
         ...options,
         challenge: base64UrlBytes(String(options.challenge)),
@@ -940,7 +1535,10 @@ function Shell({
       });
       if (!credential || !(credential instanceof PublicKeyCredential))
         throw new Error('No hardware key registration was received');
-      await api.webauthnRegistrationVerify(registrationResponse(credential));
+      await api.webauthnRegistrationVerify(
+        registrationResponse(credential),
+        csrfToken,
+      );
       setRegistrationMessage('Hardware key registered');
     } catch (cause) {
       setRegistrationMessage(
@@ -1058,6 +1656,12 @@ function Shell({
             path="/transactions/:reference"
             element={<TransactionInvestigation role={session.role} />}
           />
+          <Route path="/beneficiaries" element={<BeneficiaryWorkspace />} />
+          <Route
+            path="/admin-controls"
+            element={<AdminControlsWorkspace role={session.role} />}
+          />
+          <Route path="/pilot" element={<PilotReadinessWorkspace />} />
           {navigation.slice(2).map(([label, path]) => (
             <Route
               key={path}
@@ -1071,15 +1675,11 @@ function Shell({
                       ? '/admin/v1/reconciliation'
                       : path === '/verification'
                         ? '/admin/v1/verification'
-                        : path === '/beneficiaries'
-                          ? '/admin/v1/beneficiaries'
-                          : path === '/alerts'
-                            ? '/admin/v1/alerts'
-                            : path === '/audit'
-                              ? '/admin/v1/audit'
-                              : path === '/admin-controls'
-                                ? '/admin/v1/admin-controls'
-                                : '/admin/v1/pilot/readiness'
+                        : path === '/alerts'
+                          ? '/admin/v1/alerts'
+                          : path === '/audit'
+                            ? '/admin/v1/audit'
+                            : '/admin/v1/pilot/readiness'
                   }
                 />
               }

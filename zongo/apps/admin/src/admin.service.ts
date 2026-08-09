@@ -1571,6 +1571,7 @@ export class AdminService {
     if (Array.isArray(value))
       return value.map((entry) => this.maskAdminData(entry));
     if (typeof value === 'bigint') return value.toString();
+    if (value instanceof Date) return value.toISOString();
     if (value === null || typeof value !== 'object') return value;
     return Object.fromEntries(
       Object.entries(value).flatMap(([key, entry]) => {

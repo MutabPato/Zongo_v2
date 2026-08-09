@@ -109,6 +109,7 @@ describe('AdminService', () => {
           reference: 'ZNG-2026-0001',
           partnerReference: 'pretium-secret-ref',
           senderPhoneNumber: '+254700000001',
+          createdAt: new Date('2026-08-09T08:00:00.000Z'),
         }),
       },
     } as unknown as PrismaService;
@@ -121,6 +122,7 @@ describe('AdminService', () => {
         reference: 'ZNG-2026-0001',
         partnerReference: '[MASKED]',
         senderPhoneNumber: '[MASKED]',
+        createdAt: '2026-08-09T08:00:00.000Z',
       }),
     );
     const result = await new AdminService(prisma).searchTransaction(

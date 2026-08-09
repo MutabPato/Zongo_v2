@@ -256,6 +256,164 @@ export function parseReason(input: unknown): AlertReasonBody {
   return { reason: requiredString(body.reason, 'reason') };
 }
 
+export function parseRetryPayout(input: unknown): RetryPayoutBody {
+  const body = objectBody(input);
+  if (body.correctedBeneficiaryId === undefined) return {};
+  return {
+    correctedBeneficiaryId: requiredString(
+      body.correctedBeneficiaryId,
+      'correctedBeneficiaryId',
+    ),
+  };
+}
+
+export function parseReconciliationAssignment(
+  input: unknown,
+): ReconciliationAssignmentBody {
+  const body = objectBody(input);
+  return {
+    ownerIdentityId: requiredString(body.ownerIdentityId, 'ownerIdentityId'),
+    reason: requiredString(body.reason, 'reason'),
+    ...(body.escalate === undefined
+      ? {}
+      : { escalate: requiredBoolean(body.escalate, 'escalate') }),
+  };
+}
+
+export function parseVerificationReview(
+  input: unknown,
+): VerificationReviewBody {
+  const body = objectBody(input);
+  const decision = requiredString(
+    body.decision,
+    'decision',
+  ) as VerificationReviewBody['decision'];
+  if (!['APPROVED', 'REJECTED', 'ESCALATED'].includes(decision))
+    throw new BadRequestException('decision is invalid');
+  return {
+    decision,
+    decisionReason: requiredString(body.decisionReason, 'decisionReason'),
+  };
+}
+
+export function parseUserBlock(input: unknown): UserBlockBody {
+  const body = objectBody(input);
+  return {
+    userId: requiredString(body.userId, 'userId'),
+    blocked: requiredBoolean(body.blocked, 'blocked'),
+    ...(body.reason === undefined
+      ? {}
+      : { reason: requiredString(body.reason, 'reason') }),
+  };
+}
+
+export function parseTierOneCaps(input: unknown): TierOneCapsBody {
+  const body = objectBody(input);
+  return {
+    perTransferLimitMinor: parseDecimal(
+      body.perTransferLimitMinor,
+      'perTransferLimitMinor',
+    ),
+    dailyLimitMinor: parseDecimal(body.dailyLimitMinor, 'dailyLimitMinor'),
+  };
+}
+
+export function parsePilotControl(input: unknown): PilotControlBody {
+  const body = objectBody(input);
+  return {
+    key: requiredString(body.key, 'key'),
+    state: requiredString(body.state, 'state'),
+    reason: requiredString(body.reason, 'reason'),
+  };
+}
+
+export function parsePilotAllowlist(input: unknown): PilotAllowlistBody {
+  const body = objectBody(input);
+  return {
+    senderProfileId: requiredString(body.senderProfileId, 'senderProfileId'),
+    enabled: requiredBoolean(body.enabled, 'enabled'),
+    reason: requiredString(body.reason, 'reason'),
+  };
+}
+
+export function parseExposurePolicy(input: unknown): ExposurePolicyBody {
+  const body = objectBody(input);
+  const numberField = (field: keyof ExposurePolicyBody) =>
+    body[field] === undefined || body[field] === null
+      ? (body[field] as number | null | undefined)
+      : requiredFiniteNumber(body[field], field);
+  const decimalField = (field: keyof ExposurePolicyBody) =>
+    body[field] === undefined || body[field] === null
+      ? (body[field] as string | null | undefined)
+      : parseDecimal(body[field], field);
+  return {
+    ...(body.allowlistRequired === undefined
+      ? {}
+      : {
+          allowlistRequired: requiredBoolean(
+            body.allowlistRequired,
+            'allowlistRequired',
+          ),
+        }),
+    maxPendingTransfers: numberField('maxPendingTransfers'),
+    maxAmbiguousTransfers: numberField('maxAmbiguousTransfers'),
+    maxPartnerSettlementMinor: decimalField('maxPartnerSettlementMinor'),
+    maxRecoveryCapacity: numberField('maxRecoveryCapacity'),
+    globalDailySendMinor: decimalField('globalDailySendMinor'),
+  };
+}
+
+export function parsePilotApproval(input: unknown): PilotApprovalBody {
+  const body = objectBody(input);
+  return {
+    role: requiredString(body.role, 'role'),
+    note: requiredString(body.note, 'note'),
+  };
+}
+
+export function parsePilotStage(input: unknown): PilotStageBody {
+  const body = objectBody(input);
+  return {
+    stage: requiredString(body.stage, 'stage'),
+    evidenceRefs: parseStringRecord(body.evidenceRefs, 'evidenceRefs'),
+    ...(body.approvedCohort === undefined
+      ? {}
+      : { approvedCohort: parseRecord(body.approvedCohort, 'approvedCohort') }),
+    ...(body.numericLimits === undefined
+      ? {}
+      : { numericLimits: parseRecord(body.numericLimits, 'numericLimits') }),
+    ...(body.releaseConfiguration === undefined
+      ? {}
+      : {
+          releaseConfiguration: parseRecord(
+            body.releaseConfiguration,
+            'releaseConfiguration',
+          ),
+        }),
+    ...(body.rollbackPlan === undefined
+      ? {}
+      : { rollbackPlan: requiredString(body.rollbackPlan, 'rollbackPlan') }),
+  };
+}
+
+export function parsePilotPublish(input: unknown): PilotPublishBody {
+  const body = objectBody(input);
+  return {
+    approvedCohort: parseRecord(body.approvedCohort, 'approvedCohort'),
+    numericLimits: parseRecord(body.numericLimits, 'numericLimits'),
+    releaseConfiguration: parseRecord(
+      body.releaseConfiguration,
+      'releaseConfiguration',
+    ),
+    rollbackPlan: requiredString(body.rollbackPlan, 'rollbackPlan'),
+    evidenceRefs: parseStringRecord(body.evidenceRefs, 'evidenceRefs'),
+    noWaiverConfirmed: requiredBoolean(
+      body.noWaiverConfirmed,
+      'noWaiverConfirmed',
+    ),
+  };
+}
+
 export function parseDecimal(value: unknown, field: string): string {
   const decimal = requiredString(value, field);
   if (!/^\d+$/.test(decimal))
@@ -272,4 +430,29 @@ export function parseRecord(
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new BadRequestException(`${field} must be an object`);
   return value as Record<string, unknown>;
+}
+
+function requiredBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean')
+    throw new BadRequestException(`${field} must be a boolean`);
+  return value;
+}
+
+function requiredFiniteNumber(value: unknown, field: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0)
+    throw new BadRequestException(`${field} must be a non-negative number`);
+  return value;
+}
+
+function parseStringRecord(
+  value: unknown,
+  field: string,
+): Record<string, string> {
+  const record = parseRecord(value, field);
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entry]) => [
+      key,
+      requiredString(entry, `${field}.${key}`),
+    ]),
+  );
 }

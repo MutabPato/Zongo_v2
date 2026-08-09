@@ -19,5 +19,8 @@ Passed:
 - A server-side Support request to `/admin/v1/reconciliation` returned safe `403 ADMIN_403` with a correlation id.
 - A state-changing request without `X-CSRF-Token` returned safe `403 ADMIN_403` with a correlation id.
 - `infra/admin-panel/verify-preview.sh http://127.0.0.1:4173` passed.
+- Fresh browser smoke against the rebuilt image rendered Beneficiary review/search and Admin controls, including the structured policy snapshot and reason-gated control forms.
+- Fresh browser smoke confirmed policy/readiness timestamps are serialized as ISO strings rather than object placeholders.
+- Browser console was clean after the expected unauthenticated `/admin/v1/auth/session` probe during initial page load.
 
 Not release-complete: this is local evidence only. The full three-role parity matrix, deployed preview/isolated Playwright evidence, rollback rehearsal, observation window, and operations-owner approvals remain required before AdminJS removal.

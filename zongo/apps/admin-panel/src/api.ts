@@ -99,19 +99,28 @@ export async function webauthnLoginVerify(
   );
 }
 
-export async function webauthnRegistrationOptions() {
+export async function webauthnRegistrationOptions(csrfToken: string) {
   return request<Record<string, unknown>>(
     '/admin/v1/auth/webauthn/registration/options',
-    { method: 'POST', body: JSON.stringify({}) },
+    {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({}),
+    },
   );
 }
 
 export async function webauthnRegistrationVerify(
   response: Record<string, unknown>,
+  csrfToken: string,
 ) {
   return request<Record<string, unknown>>(
     '/admin/v1/auth/webauthn/registration/verify',
-    { method: 'POST', body: JSON.stringify({ response }) },
+    {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ response }),
+    },
   );
 }
 
@@ -191,6 +200,13 @@ export async function queueReconciliation(
 ) {
   return mutate<Record<string, unknown>>(
     `/admin/v1/operations/transactions/${encodeURIComponent(reference)}/reconciliation`,
+    csrfToken,
+  );
+}
+
+export async function revealSender(profileId: string, csrfToken: string) {
+  return mutate<Record<string, unknown>>(
+    `/admin/v1/operations/senders/${encodeURIComponent(profileId)}/reveal`,
     csrfToken,
   );
 }

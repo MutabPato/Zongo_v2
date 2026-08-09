@@ -43,4 +43,25 @@ describe('AdminV1Controller', () => {
     ).resolves.toEqual({ token: 'csrf-token' });
     expect(admin.actorFromSession).toHaveBeenCalledWith('session-token');
   });
+
+  it('requires the session-bound CSRF token for WebAuthn registration verification', async () => {
+    const admin = {
+      csrfToken: jest.fn().mockReturnValue('csrf-token'),
+      actorFromSession: jest.fn().mockResolvedValue({ id: 'ops_1' }),
+    };
+    const webauthn = {
+      verifyRegistration: jest.fn().mockResolvedValue({ verified: true }),
+    };
+    const controller = new AdminV1Controller(admin as never, webauthn as never);
+
+    await expect(
+      controller.verifyHardwareKeyRegistration(
+        {
+          headers: { cookie: 'zongo_admin_session=session-token' },
+        } as never,
+        { response: { id: 'credential' } } as never,
+      ),
+    ).rejects.toThrow();
+    expect(webauthn.verifyRegistration).not.toHaveBeenCalled();
+  });
 });

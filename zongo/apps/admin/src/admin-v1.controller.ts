@@ -25,11 +25,21 @@ import { AdminV1ExceptionFilter } from './admin-v1-exception.filter';
 import * as AdminV1Dto from './admin-v1.dto';
 import {
   parseBreakGlass,
-  parseDecimal,
+  parseExposurePolicy,
   parseLogin,
   parseNote,
+  parsePilotAllowlist,
+  parsePilotApproval,
+  parsePilotControl,
+  parsePilotPublish,
+  parsePilotStage,
+  parseReconciliationAssignment,
   parseReason,
+  parseRetryPayout,
+  parseTierOneCaps,
+  parseUserBlock,
   parseUserId,
+  parseVerificationReview,
 } from './admin-v1.dto';
 
 const SESSION_COOKIE = 'zongo_admin_session';
@@ -104,8 +114,12 @@ export class AdminV1Controller {
   }
 
   @Post('auth/webauthn/registration/options')
-  async hardwareKeyRegistrationOptions(@Req() request: Request) {
-    const actor = await this.actor(request);
+  async hardwareKeyRegistrationOptions(
+    @Req() request: Request,
+    @Headers('x-csrf-token') csrfToken?: string,
+  ) {
+    const accessToken = this.mutationToken(request, csrfToken);
+    const actor = await this.adminService.actorFromSession(accessToken);
     return this.webauthn.registrationOptions(actor.id);
   }
 
@@ -121,8 +135,10 @@ export class AdminV1Controller {
     @Req() request: Request,
     @Body()
     body: AdminV1Dto.WebAuthnRegistrationBody,
+    @Headers('x-csrf-token') csrfToken?: string,
   ) {
-    const actor = await this.actor(request);
+    const accessToken = this.mutationToken(request, csrfToken);
+    const actor = await this.adminService.actorFromSession(accessToken);
     return this.webauthn.verifyRegistration(actor.id, body.response);
   }
 
@@ -234,10 +250,11 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
+    const input = parseRetryPayout(body);
     return this.adminService.retryFailedPayout(
       actor.id,
       reference,
-      body.correctedBeneficiaryId,
+      input.correctedBeneficiaryId,
     );
   }
 
@@ -299,14 +316,13 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (!body.ownerIdentityId || !body.reason?.trim())
-      throw new ForbiddenException('Owner and reason are required');
+    const input = parseReconciliationAssignment(body);
     return this.adminService.assignReconciliation(
       actor.id,
       id,
-      body.ownerIdentityId,
-      body.reason.trim(),
-      body.escalate,
+      input.ownerIdentityId,
+      input.reason,
+      input.escalate,
     );
   }
 
@@ -330,15 +346,10 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (
-      !['APPROVED', 'REJECTED', 'ESCALATED'].includes(body.decision) ||
-      !body.decisionReason?.trim()
-    )
-      throw new ForbiddenException('A valid decision and reason are required');
+    const input = parseVerificationReview(body);
     return this.adminService.reviewVerification(actor.id, {
       verificationId: id,
-      ...body,
-      decisionReason: body.decisionReason.trim(),
+      ...input,
     });
   }
 
@@ -416,20 +427,19 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (!body.reason?.trim())
-      throw new ForbiddenException('A reason is required');
+    const input = parsePilotControl(body);
     if (
-      !Object.values(PilotControlKey).includes(body.key as PilotControlKey) ||
+      !Object.values(PilotControlKey).includes(input.key as PilotControlKey) ||
       !Object.values(PilotControlState).includes(
-        body.state as PilotControlState,
+        input.state as PilotControlState,
       )
     )
       throw new ForbiddenException('Invalid pilot control');
     return this.adminService.setPilotControl(
       actor.id,
-      body.key as PilotControlKey,
-      body.state as PilotControlState,
-      body.reason.trim(),
+      input.key as PilotControlKey,
+      input.state as PilotControlState,
+      input.reason,
     );
   }
 
@@ -442,13 +452,12 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (!body.userId || typeof body.blocked !== 'boolean')
-      throw new ForbiddenException('User and block state are required');
+    const input = parseUserBlock(body);
     return this.adminService.setUserBlocked(
       actor.id,
-      body.userId,
-      body.blocked,
-      body.reason,
+      input.userId,
+      input.blocked,
+      input.reason,
     );
   }
 
@@ -461,10 +470,11 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
+    const input = parseTierOneCaps(body);
     return this.adminService.setTier1TransferCaps(
       actor.id,
-      BigInt(parseDecimal(body.perTransferLimitMinor, 'perTransferLimitMinor')),
-      BigInt(parseDecimal(body.dailyLimitMinor, 'dailyLimitMinor')),
+      BigInt(input.perTransferLimitMinor),
+      BigInt(input.dailyLimitMinor),
     );
   }
 
@@ -477,19 +487,12 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    if (
-      !body.senderProfileId ||
-      typeof body.enabled !== 'boolean' ||
-      !body.reason?.trim()
-    )
-      throw new ForbiddenException(
-        'Allowlist target, state, and reason are required',
-      );
+    const input = parsePilotAllowlist(body);
     return this.adminService.setPilotAllowlist(
       actor.id,
-      body.senderProfileId,
-      body.enabled,
-      body.reason.trim(),
+      input.senderProfileId,
+      input.enabled,
+      input.reason,
     );
   }
 
@@ -502,16 +505,17 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
+    const input = parseExposurePolicy(body);
     return this.adminService.setPilotExposurePolicy(actor.id, {
-      ...body,
+      ...input,
       maxPartnerSettlementMinor:
-        body.maxPartnerSettlementMinor == null
-          ? body.maxPartnerSettlementMinor
-          : BigInt(body.maxPartnerSettlementMinor as unknown as string),
+        input.maxPartnerSettlementMinor == null
+          ? input.maxPartnerSettlementMinor
+          : BigInt(input.maxPartnerSettlementMinor),
       globalDailySendMinor:
-        body.globalDailySendMinor == null
-          ? body.globalDailySendMinor
-          : BigInt(body.globalDailySendMinor as unknown as string),
+        input.globalDailySendMinor == null
+          ? input.globalDailySendMinor
+          : BigInt(input.globalDailySendMinor),
     });
   }
 
@@ -524,10 +528,11 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
+    const input = parsePilotApproval(body);
     return this.adminService.recordPilotApproval(
       actor.id,
-      body.role,
-      body.note ?? '',
+      input.role,
+      input.note,
     );
   }
 
@@ -541,10 +546,11 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
+    const input = parsePilotStage(body);
     return this.adminService.recordPilotReadinessStage(
       actor.id,
-      body.stage,
-      body,
+      input.stage,
+      input,
     );
   }
 
@@ -557,7 +563,10 @@ export class AdminV1Controller {
   ) {
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
-    return this.adminService.publishPilotReadiness(actor.id, body);
+    return this.adminService.publishPilotReadiness(
+      actor.id,
+      parsePilotPublish(body),
+    );
   }
 
   private async actor(request: Request) {

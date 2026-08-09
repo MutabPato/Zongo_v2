@@ -331,17 +331,19 @@ export class AdminService {
 
   async dashboard(actorId: string): Promise<unknown> {
     const actor = await this.requireActor(actorId, AdminRole.SUPPORT);
-    const canOperate =
+    const canViewOperations = true;
+    const canViewReconciliation = true;
+    const canViewAlerts =
       actor.role === AdminRole.OPS || actor.role === AdminRole.ADMIN;
     const canAdminister = actor.role === AdminRole.ADMIN;
-    const failed = canOperate
+    const failed = canViewOperations
       ? await this.prisma.transferTransaction.findMany({
           where: { status: { in: ['COLLECTION_FAILED', 'PAYOUT_FAILED'] } },
           orderBy: { updatedAt: 'desc' },
           take: 25,
         })
       : [];
-    const pending = canOperate
+    const pending = canViewOperations
       ? await this.prisma.transferTransaction.findMany({
           where: {
             status: {
@@ -352,7 +354,7 @@ export class AdminService {
           take: 25,
         })
       : [];
-    const reconciliation = canOperate
+    const reconciliation = canViewReconciliation
       ? await this.prisma.transactionReconciliation.findMany({
           where: {
             status: {
@@ -367,14 +369,14 @@ export class AdminService {
           take: 25,
         })
       : [];
-    const sensitiveActions = canOperate
+    const sensitiveActions = canViewAlerts
       ? await this.prisma.auditEvent.findMany({
           where: { actorType: 'ADMIN' },
           orderBy: { createdAt: 'desc' },
           take: 25,
         })
       : [];
-    const alerts = canOperate
+    const alerts = canViewAlerts
       ? await this.prisma.adminAlertDelivery.findMany({
           orderBy: { updatedAt: 'desc' },
           take: 25,

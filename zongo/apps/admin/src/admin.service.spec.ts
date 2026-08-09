@@ -6,7 +6,7 @@ import {
 } from '@app/observability';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { PilotControlKey, PilotControlState } from '@prisma/client';
+import { AdminRole, PilotControlKey, PilotControlState } from '@prisma/client';
 
 describe('AdminService', () => {
   it.each([
@@ -72,6 +72,45 @@ describe('AdminService', () => {
     await expect(
       new AdminService(prisma).actorFromSession('token'),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('returns Support-visible operation and reconciliation queues without alert data', async () => {
+    const failed = [{ id: 'failed_1', amountMinor: 125n }];
+    const pending = [{ id: 'pending_1', amountMinor: 200n }];
+    const reconciliation = [{ id: 'reconciliation_1' }];
+    const transferFindMany = jest
+      .fn()
+      .mockResolvedValueOnce(failed)
+      .mockResolvedValueOnce(pending);
+    const reconciliationFindMany = jest.fn().mockResolvedValue(reconciliation);
+    const alertFindMany = jest.fn();
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'support_1',
+          userId: 'support@example.test',
+          role: AdminRole.SUPPORT,
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+      },
+      transferTransaction: { findMany: transferFindMany },
+      transactionReconciliation: { findMany: reconciliationFindMany },
+      auditEvent: { findMany: alertFindMany },
+      adminAlertDelivery: { findMany: alertFindMany },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).dashboard('support_1'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        failed: [{ id: 'failed_1', amountMinor: '125' }],
+        pending: [{ id: 'pending_1', amountMinor: '200' }],
+        reconciliation,
+        alerts: [],
+      }),
+    );
+    expect(alertFindMany).not.toHaveBeenCalled();
   });
 
   it('revokes an active session with an auditable reason', async () => {

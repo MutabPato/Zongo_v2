@@ -306,7 +306,7 @@ function Overview({ session }: { session: api.AdminSession }) {
         ),
       );
   }, []);
-  const cards = data
+  const cards: Array<[string, string, string]> = data
     ? [
         ['Failed transfers', String(data.failed.length), 'Needs review'],
         ['Pending transfers', String(data.pending.length), 'Monitor'],
@@ -315,7 +315,15 @@ function Overview({ session }: { session: api.AdminSession }) {
           String(data.reconciliation.length),
           'Assigned work',
         ],
-        ['Alert deliveries', String(data.alerts.length), 'Healthy'],
+        ...(session.capabilities.viewAlerts
+          ? [
+              ['Alert deliveries', String(data.alerts.length), 'Healthy'] as [
+                string,
+                string,
+                string,
+              ],
+            ]
+          : []),
       ]
     : [];
   return (

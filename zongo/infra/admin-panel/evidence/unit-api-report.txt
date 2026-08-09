@@ -2,8 +2,9 @@ Release: custom-admin-panel-20260809-1231-local
 
 Verified locally:
 - pnpm lint: 0 errors, 28 pre-existing warnings
-- pnpm test: 53 passed suites, 224 passed tests, 3 skipped tests
+- pnpm test: 53 passed suites, 225 passed tests, 3 skipped tests
 - WebAuthn envelope validation: 4 focused DTO/controller assertions passed
+- Role-aware Overview read model: Support queue visibility regression passed
 - pnpm typecheck: passed
 - pnpm --filter @zongo/admin-panel build: passed
 - verify-contract-smoke.sh: passed against current local containers

@@ -8,8 +8,8 @@
 
 **Implementation note:** Role-filtered beneficiary review is exposed through `/admin/v1/beneficiaries`; deployed workflow evidence remains.
 
-- [ ] Beneficiary search/list/detail use explicit workflow DTOs, approved filters, pagination, and safe errors.
-- [ ] Phone and payout-account values, ciphertexts, and blind indexes remain masked or excluded by default.
-- [ ] Role capability and not-found/forbidden behavior do not leak restricted beneficiary existence.
-- [ ] Exact money values and references are rendered without unsafe numeric conversion.
+- [x] Beneficiary search/list/detail use explicit workflow DTOs, approved filters, pagination, and safe errors.
+- [x] Phone and payout-account values, ciphertexts, and blind indexes remain masked or excluded by default.
+- [x] Role capability and not-found/forbidden behavior do not leak restricted beneficiary existence.
+- [x] Exact money values and references are rendered without unsafe numeric conversion.
 - [ ] API contract and deployed browser tests cover masked review, pagination, and denied access.

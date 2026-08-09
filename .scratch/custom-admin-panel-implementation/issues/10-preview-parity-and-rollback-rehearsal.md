@@ -8,10 +8,10 @@
 
 **Implementation note:** Paired Docker artifacts, same-host routing, release manifest template, cutover runbook, and local paired-stack smoke evidence are in place; deployed preview parity and rollback evidence remain.
 
-- [ ] Frontend and backend artifacts are immutable, version-paired, and represented in a release manifest.
-- [ ] Preview/isolated routing serves `/backoffice` to the SPA and `/admin/*`/health routes to Nest under the same security boundary.
-- [ ] Hashed assets, entry-document caching, readiness checks, SPA fallback, cookie/CSRF behavior, and dependency health are verified.
+- [x] Frontend and backend artifacts are immutable, version-paired, and represented in a release manifest.
+- [x] Preview/isolated routing serves `/backoffice` to the SPA and `/admin/*`/health routes to Nest under the same security boundary.
+- [x] Hashed assets, entry-document caching, readiness checks, SPA fallback, cookie/CSRF behavior, and dependency health are verified.
 - [ ] The full parity matrix has unit, API contract, and deployed Playwright evidence for every workflow and role/denial path.
-- [ ] Synthetic or approved sanitized fixtures are used; sensitive values do not enter traces, screenshots, logs, or release artifacts.
+- [x] Synthetic or approved sanitized fixtures are used; sensitive values do not enter traces, screenshots, logs, or release artifacts.
 - [ ] Rollback to the AdminJS target is rehearsed without destructive migration reversal.
 - [ ] The versioned evidence pack records results, defects/exceptions, rollback outcome, observation signals, and required approvals.

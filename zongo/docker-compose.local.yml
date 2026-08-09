@@ -134,6 +134,9 @@ services:
       dockerfile: apps/admin-panel/Dockerfile
     image: zongo:local-admin-panel
     restart: unless-stopped
+    depends_on:
+      admin:
+        condition: service_started
     ports:
       - '127.0.0.1:4173:8080'
 

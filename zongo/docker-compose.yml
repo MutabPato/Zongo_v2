@@ -134,6 +134,9 @@ services:
       - 'traefik.http.routers.zongo-admin-panel.tls=true'
       - 'traefik.http.routers.zongo-admin-panel.priority=100'
       - 'traefik.http.services.zongo-admin-panel.loadbalancer.server.port=8080'
+    depends_on:
+      admin:
+        condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', 'wget -q -O /dev/null http://localhost:8080/backoffice/ || exit 1']
       interval: 15s

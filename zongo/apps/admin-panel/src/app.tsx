@@ -552,7 +552,11 @@ function Operations({ title }: { title: string }) {
   );
 }
 
-function TransactionInvestigation({ role }: { role: api.AdminRole }) {
+function TransactionInvestigation({
+  capabilities,
+}: {
+  capabilities: api.AdminCapabilities;
+}) {
   const { reference = '' } = useParams();
   const [data, setData] = useState<api.TransactionInvestigation>();
   const [csrf, setCsrf] = useState<string>();
@@ -644,7 +648,7 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
             {String(sender.email ?? '[MASKED]')}
           </Typography>
         )}
-        {role !== 'SUPPORT' && senderProfileId && !revealedSender && (
+        {capabilities.revealSender && senderProfileId && !revealedSender && (
           <Button
             color="warning"
             variant="outlined"
@@ -718,7 +722,7 @@ function TransactionInvestigation({ role }: { role: api.AdminRole }) {
           spacing={1.5}
           sx={{ mt: 2 }}
         >
-          {role !== 'SUPPORT' && (
+          {capabilities.recoverTransactions && (
             <>
               <Button
                 variant="outlined"
@@ -954,7 +958,11 @@ function BeneficiaryWorkspace() {
   );
 }
 
-function AdminControlsWorkspace({ role }: { role: api.AdminRole }) {
+function AdminControlsWorkspace({
+  capabilities,
+}: {
+  capabilities: api.AdminCapabilities;
+}) {
   const [snapshot, setSnapshot] = useState<Record<string, unknown>>();
   const [userId, setUserId] = useState('');
   const [userReason, setUserReason] = useState('');
@@ -990,7 +998,7 @@ function AdminControlsWorkspace({ role }: { role: api.AdminRole }) {
     void load();
   }, []);
 
-  if (role !== 'ADMIN')
+  if (!capabilities.manageAdminControls)
     return (
       <Alert severity="error">Admin role is required for this workspace.</Alert>
     );
@@ -1623,12 +1631,12 @@ function PilotReadinessWorkspace() {
 function WorkflowPage({
   title,
   endpoint,
-  role,
+  capabilities,
   detailEndpoint,
 }: {
   title: string;
   endpoint: string;
-  role: api.AdminRole;
+  capabilities: api.AdminCapabilities;
   detailEndpoint?: string;
 }) {
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
@@ -1857,7 +1865,7 @@ function WorkflowPage({
                   {displayValue(row)}
                 </Box>
               )}
-              {endpoint === '/admin/v1/alerts' && role !== 'SUPPORT' && (
+              {endpoint === '/admin/v1/alerts' && capabilities.handleAlerts && (
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                   <Button
                     size="small"
@@ -1874,36 +1882,37 @@ function WorkflowPage({
                   </Button>
                 </Stack>
               )}
-              {endpoint === '/admin/v1/verification' && role !== 'SUPPORT' && (
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                  <Button
-                    size="small"
-                    color="success"
-                    onClick={() =>
-                      verificationAction(String(row.id), 'APPROVED')
-                    }
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    size="small"
-                    color="error"
-                    onClick={() =>
-                      verificationAction(String(row.id), 'REJECTED')
-                    }
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() =>
-                      verificationAction(String(row.id), 'ESCALATED')
-                    }
-                  >
-                    Escalate
-                  </Button>
-                </Stack>
-              )}
+              {endpoint === '/admin/v1/verification' &&
+                capabilities.reviewVerification && (
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Button
+                      size="small"
+                      color="success"
+                      onClick={() =>
+                        verificationAction(String(row.id), 'APPROVED')
+                      }
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() =>
+                        verificationAction(String(row.id), 'REJECTED')
+                      }
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        verificationAction(String(row.id), 'ESCALATED')
+                      }
+                    >
+                      Escalate
+                    </Button>
+                  </Stack>
+                )}
               {endpoint === '/admin/v1/reconciliation' && (
                 <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
                   <Button
@@ -1914,7 +1923,7 @@ function WorkflowPage({
                   >
                     Add note
                   </Button>
-                  {role !== 'SUPPORT' && (
+                  {capabilities.assignReconciliation && (
                     <>
                       <Button
                         size="small"
@@ -1938,7 +1947,7 @@ function WorkflowPage({
                 </Stack>
               )}
               {endpoint === '/admin/v1/admin-controls' &&
-                role === 'ADMIN' &&
+                capabilities.managePilotControls &&
                 Boolean(row.key) && (
                   <Button
                     size="small"
@@ -2014,17 +2023,13 @@ function Shell({
     [location.pathname],
   );
   const visibleNavigation = navigation.filter(([, path]) => {
-    if (session.role === 'ADMIN') return true;
-    if (session.role === 'SUPPORT')
-      return [
-        '/',
-        '/transactions',
-        '/reconciliation',
-        '/beneficiaries',
-        '/pilot',
-        '/audit',
-      ].includes(path);
-    return path !== '/admin-controls';
+    if (path === '/alerts') return session.capabilities.viewAlerts;
+    if (path === '/verification') return session.capabilities.viewVerification;
+    if (path === '/admin-controls')
+      return session.capabilities.viewAdminControls;
+    if (path === '/audit') return session.capabilities.viewAudit;
+    if (path === '/pilot') return session.capabilities.viewPilotReadiness;
+    return true;
   });
   async function signOut() {
     setLoggingOut(true);
@@ -2183,48 +2188,57 @@ function Shell({
           />
           <Route
             path="/transactions/:reference"
-            element={<TransactionInvestigation role={session.role} />}
+            element={
+              <TransactionInvestigation capabilities={session.capabilities} />
+            }
           />
           <Route path="/beneficiaries" element={<BeneficiaryWorkspace />} />
           <Route
             path="/admin-controls"
-            element={<AdminControlsWorkspace role={session.role} />}
+            element={
+              <AdminControlsWorkspace capabilities={session.capabilities} />
+            }
           />
           <Route path="/pilot" element={<PilotReadinessWorkspace />} />
-          {navigation.slice(2).map(([label, path]) => (
-            <Route
-              key={path}
-              path={path}
-              element={
-                <WorkflowPage
-                  title={label}
-                  role={session.role}
-                  endpoint={
-                    path === '/reconciliation'
-                      ? '/admin/v1/reconciliation'
-                      : path === '/verification'
-                        ? '/admin/v1/verification'
-                        : path === '/alerts'
-                          ? '/admin/v1/alerts'
-                          : path === '/audit'
-                            ? '/admin/v1/audit'
-                            : '/admin/v1/pilot/readiness'
-                  }
-                  detailEndpoint={
-                    path === '/reconciliation'
-                      ? '/admin/v1/reconciliations'
-                      : path === '/verification'
-                        ? '/admin/v1/verification'
-                        : path === '/alerts'
-                          ? '/admin/v1/alerts'
-                          : path === '/audit'
-                            ? '/admin/v1/audit'
-                            : undefined
-                  }
-                />
-              }
-            />
-          ))}
+          {navigation
+            .slice(2)
+            .filter(
+              ([, path]) => path !== '/pilot' && path !== '/admin-controls',
+            )
+            .map(([label, path]) => (
+              <Route
+                key={path}
+                path={path}
+                element={
+                  <WorkflowPage
+                    title={label}
+                    capabilities={session.capabilities}
+                    endpoint={
+                      path === '/reconciliation'
+                        ? '/admin/v1/reconciliation'
+                        : path === '/verification'
+                          ? '/admin/v1/verification'
+                          : path === '/alerts'
+                            ? '/admin/v1/alerts'
+                            : path === '/audit'
+                              ? '/admin/v1/audit'
+                              : '/admin/v1/pilot/readiness'
+                    }
+                    detailEndpoint={
+                      path === '/reconciliation'
+                        ? '/admin/v1/reconciliations'
+                        : path === '/verification'
+                          ? '/admin/v1/verification'
+                          : path === '/alerts'
+                            ? '/admin/v1/alerts'
+                            : path === '/audit'
+                              ? '/admin/v1/audit'
+                              : undefined
+                    }
+                  />
+                }
+              />
+            ))}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Box>

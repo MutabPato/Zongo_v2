@@ -1,5 +1,24 @@
 export type AdminRole = 'SUPPORT' | 'OPS' | 'ADMIN';
 
+export type AdminCapabilities = {
+  viewOperations: boolean;
+  viewReconciliation: boolean;
+  addReconciliationNotes: boolean;
+  assignReconciliation: boolean;
+  viewBeneficiaries: boolean;
+  viewAlerts: boolean;
+  handleAlerts: boolean;
+  viewVerification: boolean;
+  reviewVerification: boolean;
+  revealSender: boolean;
+  recoverTransactions: boolean;
+  viewAudit: boolean;
+  viewPilotReadiness: boolean;
+  managePilotControls: boolean;
+  viewAdminControls: boolean;
+  manageAdminControls: boolean;
+};
+
 export type AdminSession = {
   id: string;
   userId: string;
@@ -9,6 +28,7 @@ export type AdminSession = {
   expiresAt?: string;
   lastUsedAt?: string | null;
   source?: string;
+  capabilities: AdminCapabilities;
 };
 
 export type Overview = {

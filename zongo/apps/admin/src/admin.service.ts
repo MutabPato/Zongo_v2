@@ -161,9 +161,39 @@ export class AdminService {
       role: actor.role,
       mfaVerifiedAt: actor.mfaVerifiedAt,
       blockedAt: actor.blockedAt,
+      capabilities: this.capabilitiesFor(actor.role),
       expiresAt: session.expiresAt,
       lastUsedAt: session.lastUsedAt,
       source: session.source,
+    };
+  }
+
+  private capabilitiesFor(role: AdminRole) {
+    const rank: Record<AdminRole, number> = {
+      CUSTOMER: 0,
+      SUPPORT: 1,
+      OPS: 2,
+      ADMIN: 3,
+    };
+    const isOps = rank[role] >= rank[AdminRole.OPS];
+    const isAdmin = rank[role] >= rank[AdminRole.ADMIN];
+    return {
+      viewOperations: true,
+      viewReconciliation: true,
+      addReconciliationNotes: true,
+      assignReconciliation: isOps,
+      viewBeneficiaries: true,
+      viewAlerts: isOps,
+      handleAlerts: isOps,
+      viewVerification: isOps,
+      reviewVerification: isOps,
+      revealSender: isOps,
+      recoverTransactions: isOps,
+      viewAudit: true,
+      viewPilotReadiness: true,
+      managePilotControls: isOps,
+      viewAdminControls: isAdmin,
+      manageAdminControls: isAdmin,
     };
   }
 

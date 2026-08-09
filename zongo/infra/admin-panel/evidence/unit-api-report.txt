@@ -1,0 +1,12 @@
+Release: custom-admin-panel-20260809-1231-local
+
+Verified locally:
+- pnpm lint: 0 errors, 28 pre-existing warnings
+- pnpm test: 53 passed suites, 217 passed tests, 3 skipped tests
+- pnpm typecheck: passed
+- pnpm --filter @zongo/admin-panel build: passed
+- verify-contract-smoke.sh: passed against current local containers
+- verify-preview.sh: passed against current local containers
+- verify-role-matrix.sh: passed for Support, Ops, and Admin
+
+These local results do not substitute for deployed browser parity or rollback evidence.

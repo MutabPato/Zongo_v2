@@ -7,6 +7,8 @@ import {
   parsePilotPublish,
   parseReconciliationAssignment,
   parseTierOneCaps,
+  parseWebAuthnLogin,
+  parseWebAuthnRegistration,
 } from './admin-v1.dto';
 
 describe('admin v1 DTO validation', () => {
@@ -24,6 +26,21 @@ describe('admin v1 DTO validation', () => {
         reason: ' ',
       }),
     ).toThrow(BadRequestException);
+  });
+
+  it('validates WebAuthn envelopes before the authenticator service boundary', () => {
+    expect(
+      parseWebAuthnLogin({ userId: 'ops', response: { id: 'credential' } }),
+    ).toEqual({ userId: 'ops', response: { id: 'credential' } });
+    expect(
+      parseWebAuthnRegistration({ response: { id: 'credential' } }),
+    ).toEqual({ response: { id: 'credential' } });
+    expect(() => parseWebAuthnLogin({ userId: 'ops' })).toThrow(
+      BadRequestException,
+    );
+    expect(() => parseWebAuthnRegistration({ response: 'credential' })).toThrow(
+      BadRequestException,
+    );
   });
 
   it('keeps money values as validated decimal strings', () => {

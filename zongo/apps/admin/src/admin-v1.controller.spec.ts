@@ -63,6 +63,7 @@ describe('AdminV1Controller', () => {
     ).resolves.toEqual(
       expect.objectContaining({
         role: 'OPS',
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         capabilities: expect.objectContaining({
           viewAlerts: true,
           manageAdminControls: false,
@@ -136,5 +137,19 @@ describe('AdminV1Controller', () => {
       } as never),
     ).rejects.toThrow('Invalid transaction status filter');
     expect(admin.searchOperations).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed WebAuthn login envelopes before verification', async () => {
+    const admin = { loginWithHardwareKey: jest.fn() };
+    const webauthn = { verifyAuthentication: jest.fn() };
+    const controller = new AdminV1Controller(admin as never, webauthn as never);
+
+    await expect(
+      controller.verifyHardwareKeyLogin(
+        { userId: 'ops' } as never,
+        { cookie: jest.fn() } as never,
+      ),
+    ).rejects.toThrow();
+    expect(webauthn.verifyAuthentication).not.toHaveBeenCalled();
   });
 });

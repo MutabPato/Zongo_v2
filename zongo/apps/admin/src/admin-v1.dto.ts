@@ -277,6 +277,29 @@ export function parseUserId(input: unknown): UserIdBody {
   return { userId: requiredString(body.userId, 'userId') };
 }
 
+export function parseWebAuthnLogin(input: unknown): WebAuthnLoginBody {
+  const body = objectBody(input);
+  return {
+    userId: requiredString(body.userId, 'userId'),
+    response: parseRecord(
+      body.response,
+      'response',
+    ) as unknown as WebAuthnLoginBody['response'],
+  };
+}
+
+export function parseWebAuthnRegistration(
+  input: unknown,
+): WebAuthnRegistrationBody {
+  const body = objectBody(input);
+  return {
+    response: parseRecord(
+      body.response,
+      'response',
+    ) as unknown as WebAuthnRegistrationBody['response'],
+  };
+}
+
 export function parseNote(input: unknown): NoteBody {
   const body = objectBody(input);
   return { body: requiredString(body.body, 'body') };

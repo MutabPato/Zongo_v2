@@ -39,6 +39,8 @@ import {
   parseTierOneCaps,
   parseUserBlock,
   parseUserId,
+  parseWebAuthnLogin,
+  parseWebAuthnRegistration,
   parseVerificationReview,
 } from './admin-v1.dto';
 
@@ -100,10 +102,10 @@ export class AdminV1Controller {
     },
   })
   async verifyHardwareKeyLogin(
-    @Body()
-    body: AdminV1Dto.WebAuthnLoginBody,
+    @Body() input: AdminV1Dto.WebAuthnLoginBody,
     @Res({ passthrough: true }) response: BrowserResponse,
   ) {
+    const body = parseWebAuthnLogin(input);
     const identityId = await this.webauthn.verifyAuthentication(
       body.userId,
       body.response,
@@ -133,10 +135,10 @@ export class AdminV1Controller {
   })
   async verifyHardwareKeyRegistration(
     @Req() request: Request,
-    @Body()
-    body: AdminV1Dto.WebAuthnRegistrationBody,
+    @Body() input: AdminV1Dto.WebAuthnRegistrationBody,
     @Headers('x-csrf-token') csrfToken?: string,
   ) {
+    const body = parseWebAuthnRegistration(input);
     const accessToken = this.mutationToken(request, csrfToken);
     const actor = await this.adminService.actorFromSession(accessToken);
     return this.webauthn.verifyRegistration(actor.id, body.response);

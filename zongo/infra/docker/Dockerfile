@@ -43,8 +43,12 @@ RUN mkdir -p node_modules/@app \
   && ln -s /app/dist/apps/admin/libs/beneficiary/src node_modules/@app/beneficiary \
   && ln -s /app/dist/apps/admin/libs/db/src node_modules/@app/db \
   && ln -s /app/dist/apps/admin/libs/domain/src node_modules/@app/domain \
+  && ln -s /app/dist/apps/admin/libs/ledger/src node_modules/@app/ledger \
+  && ln -s /app/dist/apps/admin/libs/observability/src node_modules/@app/observability \
   && ln -s /app/dist/apps/admin/libs/partner/src node_modules/@app/partner \
-  && ln -s /app/dist/apps/admin/libs/profile/src node_modules/@app/profile
+  && ln -s /app/dist/apps/admin/libs/profile/src node_modules/@app/profile \
+  && ln -s /app/dist/apps/admin/libs/security/src node_modules/@app/security \
+  && ln -s /app/dist/apps/admin/libs/whatsapp/src node_modules/@app/whatsapp
 
 # AdminJS builds its runtime asset bundle here when the Admin service starts.
 RUN mkdir -p /app/.adminjs \

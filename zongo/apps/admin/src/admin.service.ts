@@ -709,6 +709,10 @@ export class AdminService {
       throw new ForbiddenException(
         'A blocked identity cannot own a discrepancy',
       );
+    if (owner.role === AdminRole.CUSTOMER)
+      throw new ForbiddenException(
+        'A customer identity cannot own a discrepancy',
+      );
     const reconciliation = await this.prisma.transactionReconciliation.update({
       where: { id: reconciliationId },
       data: {
@@ -925,6 +929,16 @@ export class AdminService {
         blockedAt: blocked ? new Date() : null,
         blockedById: actor.id,
         blockedReason: blocked ? (reason ?? 'Administrative action') : null,
+      },
+      select: {
+        id: true,
+        userId: true,
+        displayName: true,
+        role: true,
+        blockedAt: true,
+        blockedReason: true,
+        blockedById: true,
+        mfaVerifiedAt: true,
       },
     });
     await this.record(

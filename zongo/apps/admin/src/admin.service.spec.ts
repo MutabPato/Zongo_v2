@@ -6,7 +6,7 @@ import {
 } from '@app/observability';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { AdminRole, PilotControlKey, PilotControlState } from '@prisma/client';
+import { PilotControlKey, PilotControlState } from '@prisma/client';
 
 describe('AdminService', () => {
   it.each([
@@ -89,7 +89,7 @@ describe('AdminService', () => {
         findUniqueOrThrow: jest.fn().mockResolvedValue({
           id: 'support_1',
           userId: 'support@example.test',
-          role: AdminRole.SUPPORT,
+          role: 'SUPPORT',
           mfaVerifiedAt: new Date(),
           blockedAt: null,
         }),
@@ -1157,6 +1157,83 @@ describe('AdminService', () => {
     );
     expect(audit.append).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'admin.reconciliation.escalated' }),
+    );
+  });
+
+  it('rejects customer identities as reconciliation owners', async () => {
+    const update = jest.fn();
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValueOnce({
+            id: 'ops_1',
+            role: 'OPS',
+            mfaVerifiedAt: new Date(),
+            blockedAt: null,
+          })
+          .mockResolvedValueOnce({
+            id: 'customer_1',
+            role: 'CUSTOMER',
+            blockedAt: null,
+          }),
+      },
+      transactionReconciliation: { update },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).assignReconciliation(
+        'ops_1',
+        'recon_1',
+        'customer_1',
+        'Invalid owner',
+      ),
+    ).rejects.toThrow('A customer identity cannot own a discrepancy');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('returns a safe projection when blocking an identity', async () => {
+    const upsert = jest.fn().mockResolvedValue({
+      id: 'customer_1',
+      userId: 'customer@example.test',
+      role: 'CUSTOMER',
+      blockedAt: new Date(),
+      blockedReason: 'fraud review',
+      blockedById: 'admin_1',
+      mfaVerifiedAt: null,
+    });
+    const prisma = {
+      platformIdentity: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'admin_1',
+          role: 'ADMIN',
+          mfaVerifiedAt: new Date(),
+          blockedAt: null,
+        }),
+        upsert,
+      },
+    } as unknown as PrismaService;
+
+    await expect(
+      new AdminService(prisma).setUserBlocked(
+        'admin_1',
+        'customer@example.test',
+        true,
+        'fraud review',
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'customer_1',
+        blockedReason: 'fraud review',
+      }),
+    );
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.not.objectContaining({
+          totpSecret: expect.anything(),
+          hardwareKeyCredentialId: expect.anything(),
+        }),
+      }),
     );
   });
 

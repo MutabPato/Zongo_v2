@@ -123,4 +123,20 @@ describe('WhatsAppWebhookController', () => {
     });
     expect(sessions.acceptInbound).not.toHaveBeenCalled();
   });
+
+  it('returns a retryable 503 when Postgres is unavailable', async () => {
+    (signatures.verify as jest.Mock).mockReturnValue(true);
+    (sessions.acceptInbound as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1'), {
+        name: 'PrismaClientInitializationError',
+      }),
+    );
+
+    await expect(
+      controller.receive({ rawBody: '{}' }, 'sha256=valid', {
+        id: 'event-database-down',
+        from: '+243800000001',
+      }),
+    ).rejects.toMatchObject({ status: HttpStatus.SERVICE_UNAVAILABLE });
+  });
 });

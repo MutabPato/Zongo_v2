@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import type {
   PretiumWebhookService,
   PretiumWebhookSignatureService,
@@ -72,5 +76,21 @@ describe('PretiumWebhookController', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(callbacks.apply).not.toHaveBeenCalled();
+  });
+
+  it('returns a retryable 503 when Postgres is unavailable', async () => {
+    (signatures.verify as jest.Mock).mockReturnValue(true);
+    (callbacks.apply as jest.Mock).mockRejectedValue(
+      Object.assign(new Error('database connection refused'), {
+        name: 'PrismaClientInitializationError',
+      }),
+    );
+
+    await expect(
+      controller.receive({ rawBody: '{}' }, 'sha256=valid', {
+        transaction_code: 'pt-database-down',
+        status: 'COMPLETE',
+      }),
+    ).rejects.toMatchObject({ status: HttpStatus.SERVICE_UNAVAILABLE });
   });
 });

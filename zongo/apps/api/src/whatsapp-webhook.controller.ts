@@ -7,7 +7,9 @@ import {
   Req,
   UnauthorizedException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { isDatabaseUnavailableError } from '@app/db';
 import {
   WhatsAppIngressThrottleService,
   WhatsAppSessionService,
@@ -46,22 +48,30 @@ export class WhatsAppWebhookController {
     );
     if (!externalEventId || !chatId || !senderPhoneNumber)
       throw new BadRequestException('Webhook event identity is incomplete');
-    if (this.throttle) {
-      const throttleResult = await this.throttle.consume({
+    try {
+      if (this.throttle) {
+        const throttleResult = await this.throttle.consume({
+          chatId,
+          senderPhoneNumber,
+        });
+        this.throttle.assertAllowed(throttleResult);
+      }
+
+      const result = await this.sessions.acceptInbound({
+        externalEventId,
         chatId,
         senderPhoneNumber,
+        payloadRedacted: { type: body.type, messageId: body.message_id },
+        messageText: this.stringValue(body.text ?? body.message),
       });
-      this.throttle.assertAllowed(throttleResult);
+      return { received: true, ...result };
+    } catch (error) {
+      if (isDatabaseUnavailableError(error))
+        throw new ServiceUnavailableException(
+          'Database is temporarily unavailable; retry the webhook',
+        );
+      throw error;
     }
-
-    const result = await this.sessions.acceptInbound({
-      externalEventId,
-      chatId,
-      senderPhoneNumber,
-      payloadRedacted: { type: body.type, messageId: body.message_id },
-      messageText: this.stringValue(body.text ?? body.message),
-    });
-    return { received: true, ...result };
   }
 
   private stringValue(value: unknown): string | undefined {

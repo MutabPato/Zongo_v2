@@ -6,7 +6,9 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { isDatabaseUnavailableError } from '@app/db';
 import {
   PretiumWebhookService,
   PretiumWebhookSignatureService,
@@ -45,6 +47,14 @@ export class PretiumWebhookController {
       throw new BadRequestException(
         'Pretium callback identity or status is incomplete',
       );
-    return this.callbacks.apply({ partnerReference, providerStatus });
+    try {
+      return await this.callbacks.apply({ partnerReference, providerStatus });
+    } catch (error) {
+      if (isDatabaseUnavailableError(error))
+        throw new ServiceUnavailableException(
+          'Database is temporarily unavailable; retry the callback',
+        );
+      throw error;
+    }
   }
 }

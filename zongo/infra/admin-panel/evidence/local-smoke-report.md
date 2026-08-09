@@ -21,6 +21,7 @@ Passed:
 - `infra/admin-panel/verify-preview.sh http://127.0.0.1:4173` passed.
 - Fresh browser smoke against the rebuilt image rendered Beneficiary review/search and Admin controls, including the structured policy snapshot and reason-gated control forms.
 - Fresh browser smoke confirmed policy/readiness timestamps are serialized as ISO strings rather than object placeholders.
+- Rebuilt runtime session responses include server-derived capabilities; Support is denied alert/review/reveal/admin-control mutation affordances while Admin receives them.
 - Browser console was clean after the expected unauthenticated `/admin/v1/auth/session` probe during initial page load.
 - Entry-document caching is `no-cache`, while hashed panel assets return `immutable` long-lived caching.
 - Reference search remains functional in the local image without optional blind-index environment keys; encrypted-field search falls back to approved non-sensitive reference/name criteria.
